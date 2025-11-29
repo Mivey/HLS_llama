@@ -1,0 +1,32 @@
+ai_engine_0:
+    ip_name: ai_engine
+    supported_os:
+    - aie_runtime
+psv_cortexa72_0:
+    ip_name: psv_cortexa72
+    supported_os:
+    - standalone
+    - freertos
+psv_cortexa72_1:
+    ip_name: psv_cortexa72
+    supported_os:
+    - standalone
+    - freertos
+psv_cortexr5_0:
+    ip_name: psv_cortexr5
+    supported_os:
+    - standalone
+    - freertos
+psv_cortexr5_1:
+    ip_name: psv_cortexr5
+    supported_os:
+    - standalone
+    - freertos
+psv_pmc_0:
+    ip_name: psv_pmc
+    supported_os:
+    - standalone
+psv_psm_0:
+    ip_name: psv_psm
+    supported_os:
+    - standalone

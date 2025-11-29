@@ -1,0 +1,7 @@
+[
+  {
+    "command": "/bin/gcc -DVITIS_MAJOR_VERSION\u003dVitis -DVITIS_MINOR_VERSION\u003dVitis -DVITIS_VERSION\u003dVitis -D__USE_XOPEN2K8 -I/tools/Xilinx/2025.2/Vitis/include -I/opt/xilinx/xrt/include -I/tools/Xilinx/2025.2/Vitis/aietools/include -g -Wall -Wextra -O0 -g3 -fopenmp -o CMakeFiles/app_component.dir/runq.c.o -c /home/lolwut/proj/2025/plat/forward/app_component/runq.c",
+    "file": "/home/lolwut/proj/2025/plat/forward/app_component/runq.c",
+    "directory": "/home/lolwut/proj/2025/plat/forward/app_component"
+  }
+]

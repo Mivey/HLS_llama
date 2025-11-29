@@ -1,0 +1,90 @@
+{
+  "name": "TE0950_plat",
+  "type": "PLATFORM",
+  "configuration": {
+    "description": "",
+    "xsa": "/home/lolwut/proj/2025/plat/forward/hw/TE_0950_ex_emb_pl_hw.xsa",
+    "xsaPathInPlatform": "TE0950_plat/hw/TE_0950_ex_emb_pl_hw.xsa",
+    "emulationXsa": "",
+    "emulationXsaPathInPlatform": "",
+    "isCustomFSBL": false,
+    "fsblPath": "",
+    "pmufwElf": "",
+    "flow": "EMBEDDED_ACCEL",
+    "processorsMap": {
+      "psv_cortexa72_0": "psv_cortexa72",
+      "psv_cortexa72_1": "psv_cortexa72",
+      "psv_cortexr5_0": "psv_cortexr5",
+      "psv_cortexr5_1": "psv_cortexr5",
+      "psv_pmc_0": "psv_pmc",
+      "psv_psm_0": "psv_psm",
+      "ai_engine": "ai_engine"
+    },
+    "supportedOS": [
+      "aie_runtime",
+      "linux",
+      "standalone",
+      "freertos"
+    ],
+    "supportedFamily": "versal",
+    "stdGenHookList": [
+      {
+        "key": "VITIS_SDT_REPO",
+        "value": ""
+      },
+      {
+        "key": "VITIS_SDT_BOARD_DTS",
+        "value": ""
+      },
+      {
+        "key": "VITIS_SDT_INCLUDE_DTS",
+        "value": "/home/lolwut/proj/common/TE0950.dtsi"
+      },
+      {
+        "key": "-dt_zocl",
+        "value": "1"
+      },
+      {
+        "key": "-dt_overlay",
+        "value": "0"
+      },
+      {
+        "key": "custom_dtsi",
+        "value": ""
+      }
+    ],
+    "componentType": "PLATFORM",
+    "domains": [
+      {
+        "name": "linux_psv_cortexa72",
+        "displayName": "linux_psv_cortexa72",
+        "processor": "psv_cortexa72",
+        "cpuType": "cortex-a72",
+        "cpuInstance": "psv_cortexa72",
+        "os": "linux",
+        "qemuData": "",
+        "qemuArgsFile": "resources/linux_psv_cortexa72/qemu/qemu_args.txt",
+        "pmcQemuArgsFile": "resources/linux_psv_cortexa72/qemu/pmc_args.txt",
+        "bifFile": "resources/linux_psv_cortexa72/linux.bif",
+        "bootDirectory": "../xilinx-versal-common-v2025.2",
+        "sdCardDirectory": "../data",
+        "customDtb": "hw/linux_dt/system.dtb",
+        "hw_boot_bin": ""
+      },
+      {
+        "name": "aie",
+        "displayName": "aie",
+        "qemuData": "resources/aie/qemu",
+        "qemuArgsFile": "resources/aie/qemu/qemu_args.txt",
+        "pmcQemuArgsFile": "resources/aie/qemu/pmc_args.txt",
+        "processor": "ai_engine",
+        "cpuType": "ai_engine",
+        "cpuInstance": "ai_engine",
+        "os": "aie_runtime"
+      }
+    ],
+    "emptyToolchainConfiguration": []
+  },
+  "useSysrootToolchain": false,
+  "templateFlow": "VITIS"
+}

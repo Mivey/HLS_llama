@@ -1,0 +1,35 @@
+{
+  "name": "besty_test",
+  "type": "HOST",
+  "platform": "TE0950_plat",
+  "domain": "linux_psv_cortexa72",
+  "cpuInstance": "cortex-a72",
+  "cpuType": "cortex-a72",
+  "os": "linux",
+  "sysroot": "/home/lolwut/proj/2025/plat/forward/xilinx-versal-common-v2025.2/sysroots/cortexa72-cortexa53-amd-linux",
+  "configuration": {
+    "componentType": "HOST",
+    "hostToolchainConfigurations": [
+      {
+        "configId": "default",
+        "compilerSymbols": [],
+        "compilerIncludes": [],
+        "compilerOptions": [],
+        "linkerLibraries": [],
+        "linkerLibraryPaths": [],
+        "linkerOptions": [],
+        "x86CompilerSymbols": [],
+        "x86CompilerIncludes": [],
+        "x86CompilerOptions": [],
+        "x86LinkerLibraries": [],
+        "x86LinkerLibraryPaths": [],
+        "x86LinkerOptions": []
+      }
+    ]
+  },
+  "domainRealName": "linux_psv_cortexa72",
+  "useSysrootToolchain": false,
+  "sysrootToolchain": "",
+  "applicationFlow": "EMBEDDED_ACCEL",
+  "templateFlow": "VITIS"
+}

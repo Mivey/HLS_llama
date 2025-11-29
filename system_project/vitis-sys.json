@@ -1,0 +1,83 @@
+{
+  "modelVersion": "1.0",
+  "projectName": "system_project",
+  "platform": "TE0950_plat",
+  "externalComponentRefs": [
+    "accel_llama/accelerated_llama/dataflow_forward"
+  ],
+  "components": [
+    {
+      "name": "package",
+      "type": "PACKAGE",
+      "configuration": {
+        "componentType": "PACKAGE",
+        "packageConfigurations": [
+          {
+            "configId": "package.default",
+            "options": []
+          }
+        ],
+        "configFiles": [
+          "package/package.cfg"
+        ]
+      },
+      "useSysrootToolchain": false,
+      "templateFlow": "VITIS"
+    },
+    {
+      "name": "hw_link",
+      "type": "HW_LINKER",
+      "configuration": {
+        "componentType": "HW_LINKER",
+        "containers": [
+          {
+            "name": "data_f",
+            "kernels": {
+              "top": "accel_llama/accelerated_llama/dataflow_forward"
+            },
+            "userXoKernels": {},
+            "aieComponents": [],
+            "userAieLibadfList": [],
+            "userVssList": [],
+            "cfgFiles": [
+              "hw_link/data_f-link.cfg"
+            ]
+          }
+        ],
+        "vppLinkerConfigurations": [
+          {
+            "configId": "hw_link.default",
+            "options": [],
+            "containerOptions": {},
+            "buildDatafiles": []
+          }
+        ]
+      },
+      "useSysrootToolchain": false,
+      "templateFlow": "VITIS"
+    }
+  ],
+  "buildConfigurations": [
+    {
+      "id": "default",
+      "name": "Default",
+      "supportedTargets": [
+        "HW"
+      ],
+      "componentConfigMap": {
+        "package": "package.default",
+        "hw_link": "hw_link.default"
+      }
+    }
+  ],
+  "activeBuildConfigId": "default",
+  "prePackageCommand": "",
+  "postPackageCommand": "",
+  "preLinkerCommand": "",
+  "postLinkerCommand": "",
+  "hostMode": "x86",
+  "isDirty": true,
+  "applicationFlow": "EMBEDDED_ACCEL",
+  "templateFlow": "VITIS",
+  "buildOutputType": "UNKNOWN"
+}

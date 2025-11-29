@@ -1,0 +1,17 @@
+[
+  {
+    "command": "/bin/g++ -DVITIS_MAJOR_VERSION\u003dVitis -DVITIS_MINOR_VERSION\u003dVitis -DVITIS_VERSION\u003dVitis -D__USE_XOPEN2K8 -I/tools/Xilinx/2025.2/Vitis/include -I/opt/xilinx/xrt/include -I/tools/Xilinx/2025.2/Vitis/aietools/include -I/home/lolwut/proj/2025/plat/forward/besty_test/src -g -Wall -Wextra -O0 -g3 -std\u003dc++17 -o CMakeFiles/besty_test.dir/src/cmdlineparser.cpp.o -c /home/lolwut/proj/2025/plat/forward/besty_test/src/cmdlineparser.cpp",
+    "file": "/home/lolwut/proj/2025/plat/forward/besty_test/src/cmdlineparser.cpp",
+    "directory": "/home/lolwut/proj/2025/plat/forward/besty_test"
+  },
+  {
+    "command": "/bin/g++ -DVITIS_MAJOR_VERSION\u003dVitis -DVITIS_MINOR_VERSION\u003dVitis -DVITIS_VERSION\u003dVitis -D__USE_XOPEN2K8 -I/tools/Xilinx/2025.2/Vitis/include -I/opt/xilinx/xrt/include -I/tools/Xilinx/2025.2/Vitis/aietools/include -I/home/lolwut/proj/2025/plat/forward/besty_test/src -g -Wall -Wextra -O0 -g3 -std\u003dc++17 -o CMakeFiles/besty_test.dir/src/logger.cpp.o -c /home/lolwut/proj/2025/plat/forward/besty_test/src/logger.cpp",
+    "file": "/home/lolwut/proj/2025/plat/forward/besty_test/src/logger.cpp",
+    "directory": "/home/lolwut/proj/2025/plat/forward/besty_test"
+  },
+  {
+    "command": "/bin/g++ -DVITIS_MAJOR_VERSION\u003dVitis -DVITIS_MINOR_VERSION\u003dVitis -DVITIS_VERSION\u003dVitis -D__USE_XOPEN2K8 -I/tools/Xilinx/2025.2/Vitis/include -I/opt/xilinx/xrt/include -I/tools/Xilinx/2025.2/Vitis/aietools/include -I/home/lolwut/proj/2025/plat/forward/besty_test/src -g -Wall -Wextra -O0 -g3 -std\u003dc++17 -o CMakeFiles/besty_test.dir/src/host.cpp.o -c /home/lolwut/proj/2025/plat/forward/besty_test/src/host.cpp",
+    "file": "/home/lolwut/proj/2025/plat/forward/besty_test/src/host.cpp",
+    "directory": "/home/lolwut/proj/2025/plat/forward/besty_test"
+  }
+]
