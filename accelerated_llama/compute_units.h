@@ -2,6 +2,7 @@
 #include "xrt/xrt_device.h"
 #include "xrt/xrt_kernel.h"
 #include "xrt/xrt_bo.h"
+#include "experimental/xrt_ip.h"
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -34,6 +35,33 @@ class MatMultClass{
 		//Run sequential Method - Start and wait for CU to complete
 		//void matmult_kernel(mfdata_v_t *out, mfdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int READ_OFFSET, const int WRITE_OFFSET)
 		void run(xrt::bo &output, xrt::bo &input, xrt::bo &sf_bo, xrt::bo &w_bo, const int n_dim, const int m_dim, const int read_os, const int wwrite_os){
+			auto run = kernel(output, input, sf_bo, w_bo, n_dim, m_dim, read_os, wwrite_os);
+			run.wait();
+		}
+		//Run parallel Method - Start multiple CU's 
+		xrt::run start(xrt::bo &output, xrt::bo &input, xrt::bo &sf_bo, xrt::bo &w_bo, const int n_dim, const int m_dim, const int read_os, const int wwrite_os){
+			return kernel(output, input, sf_bo, w_bo, n_dim, m_dim, read_os, wwrite_os);
+		}
+
+		// Wait parallel Method - wait for the handles to return
+		void wait(xrt::run &run_handle){
+			run_handle.wait();
+		}
+
+	private:
+		xrt::device device;
+		xrt::uuid uuid;
+		xrt::kernel kernel;
+};
+class GeMVClass{
+	public:
+	//Matrix Multiply Init
+		GeMVClass(xrt::device &d, xrt::uuid &u): device(d), uuid(u){
+			kernel = xrt::kernel(device, uuid, "GeMV_kernel");
+		}
+		//Run sequential Method - Start and wait for CU to complete
+// void GeMV_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
+		void run(xrt::bo &output_bo, xrt::bo &fl_tok_bo, xrt::bo &sf_bo, xrt::bo &w_bo, const int n_dim, const int m_dim, const int CURR_LAYER, const int W_Off){
 			auto run = kernel(output, input, sf_bo, w_bo, n_dim, m_dim, read_os, wwrite_os);
 			run.wait();
 		}

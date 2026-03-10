@@ -1,5 +1,5 @@
 #include "mha.h"
-#include "../forward.h"
+// #include "forward.h"
 #include "rope.h"
 #include <algorithm>
 #include <fenv.h>
@@ -307,11 +307,11 @@ void mha_kernel(mfdata_v_t *tokens, //6 mha_kernel
 	constexpr int LOGITS_SF_DEPTH =  MODEL_ELEMENTS * MODEL_TOKENS / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
 	constexpr int LOGITS_DEPTH = MODEL_TOKENS / MAX_FL_ELEM;
 
-	#pragma HLS INTERFACE mode=m_axi port=value_cache			bundle=vc_gemm		depth=CACHE_DEPTH			offset=slave max_read_burst_length=128		max_write_burst_length=64
-	#pragma HLS INTERFACE mode=m_axi port=key_cache				bundle=kc_gemm		depth=CACHE_DEPTH			offset=slave max_read_burst_length=128		max_write_burst_length=64
-	#pragma HLS INTERFACE mode=m_axi port=value_cache_in	bundle=token_gemm		depth=TOK_DEPTH			offset=slave max_read_burst_length=128
-	#pragma HLS INTERFACE mode=m_axi port=key_cache_in		bundle=token_gemm		depth=TOK_DEPTH			offset=slave max_read_burst_length=128
-	#pragma HLS INTERFACE mode=m_axi port=tokens					bundle=token_gemm	depth=TOK_DEPTH		offset=slave	max_write_burst_length=64  max_read_burst_length=128
+	#pragma HLS INTERFACE mode=m_axi port=value_cache			bundle=vc_gemm		depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)		max_write_burst_length=(4096/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=key_cache				bundle=kc_gemm		depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)		max_write_burst_length=(4096/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=value_cache_in	bundle=token_gemm		depth=TOK_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=key_cache_in		bundle=token_gemm		depth=TOK_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=tokens					bundle=token_gemm	depth=TOK_DEPTH				offset=slave max_write_burst_length=(4096/MAX_DW * 8)  max_read_burst_length=(4096/MAX_DW * 8)
 	/* **********************************************************************************/
 	#pragma HLS INTERFACE mode=s_axilite port=tokens				 					bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=value_cache 						bundle=control
@@ -329,15 +329,15 @@ void mha_kernel(mfdata_v_t *tokens, //6 mha_kernel
 
   #pragma HLS STABLE variable=POS
   #pragma HLS STABLE variable=CURR_LAYER
-  #pragma HLS STREAM variable=xb_ws_q depth=48
-  #pragma HLS STREAM variable=tokens depth=48
+  #pragma HLS STREAM variable=xb_ws_q depth=MODEL_ELEMENTS / MAX_FL_ELEM
+  #pragma HLS STREAM variable=tokens depth=MODEL_ELEMENTS / MAX_FL_ELEM
 
-	#pragma HLS STREAM variable=s_key_cache_in depth=48
-	#pragma HLS STREAM variable=s_key_cache_in_r depth=48
-	#pragma HLS STREAM variable=s_value_cache_in depth=48
-	#pragma HLS STREAM variable=s_query depth=48
-	#pragma HLS STREAM variable=s_query_r depth=48
-	#pragma HLS STREAM variable=xb_ws_q depth=48
+	#pragma HLS STREAM variable=s_key_cache_in depth=MODEL_ELEMENTS / MAX_FL_ELEM
+	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_ELEMENTS / MAX_FL_ELEM
+	#pragma HLS STREAM variable=s_value_cache_in depth=MODEL_ELEMENTS / MAX_FL_ELEM
+	#pragma HLS STREAM variable=s_query depth=MODEL_ELEMENTS / MAX_FL_ELEM
+	#pragma HLS STREAM variable=s_query_r depth=MODEL_ELEMENTS / MAX_FL_ELEM
+	#pragma HLS STREAM variable=xb_ws_q depth=MODEL_ELEMENTS / MAX_FL_ELEM
 	
 	#pragma HLS BIND_STORAGE variable=s_key_cache_in type=fifo impl=bram
 	#pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo impl=bram

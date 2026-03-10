@@ -2,9 +2,9 @@
 
 void swiglu_kernel(fdata_v_t *output, fdata_v_t *w1, fdata_v_t *w3){
 
-	#pragma HLS INTERFACE mode=m_axi port=w1					bundle=sg_in_out		depth=(MODEL_HIDDEN_DIM * 2)	offset=slave max_read_burst_length=128
-	#pragma HLS INTERFACE mode=m_axi port=w3					bundle=sg_in_out		depth=(MODEL_HIDDEN_DIM * 2)	offset=slave max_read_burst_length=128
-	#pragma HLS INTERFACE mode=m_axi port=output			bundle=sg_in_out		depth=MODEL_HIDDEN_DIM				offset=slave max_write_burst_length=128
+	#pragma HLS INTERFACE mode=m_axi port=w1					bundle=sg_in_out		depth=MODEL_HIDDEN_DIM	offset=slave max_read_burst_length=(4096/SM_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=w3					bundle=sg_in_out		depth=MODEL_HIDDEN_DIM	offset=slave max_read_burst_length=(4096/SM_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=output			bundle=sg_in_out		depth=MODEL_HIDDEN_DIM	offset=slave max_write_burst_length=(4096/SM_DW * 8)
 	#pragma HLS INTERFACE mode=s_axilite port=w1			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=w3			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=output	bundle=control

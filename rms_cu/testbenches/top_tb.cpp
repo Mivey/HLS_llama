@@ -59,6 +59,10 @@ int top_tb(){
 
 	std::vector<fdata_v_t> tokens_arr(tokens_cnt);
 
+	std::vector<fdata_v_t> tokens_out(tokens_cnt);
+	
+	std::vector<fdata_v_t> diff_in(tokens_cnt);
+
 	std::vector<fdata_v_t> rms_w_arr(rms_w_cnt);
 
 	std::vector<fdata_v_t> tokesns_out_gold(tokens_cnt);
@@ -68,6 +72,7 @@ int top_tb(){
 	input_tokens_dat.read(reinterpret_cast<char *>(tokens_arr.data()), tokens_size);
 	rms_att_w.read(reinterpret_cast<char *>(rms_w_arr.data()), rms_w_size);
 	rms_tokens_out.read(reinterpret_cast<char *>(tokesns_out_gold.data()), tokens_size);
+	memset(diff_in.data(), 0, tokens_size);
 	
 	std::cout<<"Loaded the files into memory"<<std::endl;
 
@@ -85,10 +90,11 @@ int curr_pos = 150;
 
 	std::cout<<"first one done"<<std::endl;
 
-	rmsnorm_kernel(tokens_arr.data(), rms_w_arr.data(), 0);
+	// rmsnorm_kernel(tokens_arr.data(), rms_w_arr.data(), 0);
+	rmsnorm_kernel(tokens_out.data(), tokens_arr.data(), diff_in.data(), rms_w_arr.data(), 0);
 	
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
-	parse_results<fdata_v_t, float>(tokesns_out_gold, tokens_arr);
+	parse_results<fdata_v_t, float>(tokesns_out_gold, tokens_out);
 
 	return 0;
 

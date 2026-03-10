@@ -2,6 +2,8 @@
 #include "matmult.h"
 #include <cstddef>
 #include <cstdint>
+#include <hls_math.h>
+#include <memory>
 // #include "forward.h"
 #include "hls_task.h"
 
@@ -10,7 +12,7 @@ constexpr size_t TOK_SF_MAX = (MODEL_HIDDEN_DIM / (MODEL_SCALING_FACTOR * SM_FL_
 constexpr int UF = 1;
 
 void quantizer_kernel(s_fdata_v_t &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM){
-	
+	/********************************* WILL NEED TO FIX CREATE_QUANT_VAL IF MAX_FL_ELEM != 16 *******************************/
 	const size_t SF_COUNT = N_DIM / MODEL_SCALING_FACTOR;
 	const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
 	const my_float_t Q_MAX = 127.0f;
@@ -18,54 +20,72 @@ void quantizer_kernel(s_fdata_v_t &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t
 	fdata_v_t tok_arr[TOK_COUNT];
 	#pragma HLS ARRAY_PARTITION variable=tok_arr dim=1 type=complete 
 	fdata_v_t tmp_sf_out;
-	
-	quantizer_main_loop:
+	int wout = 0;
+	quantizer_main:
 	for (size_t i = 0; i < SF_COUNT; i++) {
+		
 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR
 		my_float_t max_val = 0.0f;
-		
-		group_scaling_loop:
+		my_float_t c_val[TOK_COUNT] = {0.0f};
+			#pragma HLS ARRAY_PARTITION variable=c_val dim=1 type=complete 
+		group_scaling:
 		for (size_t j = 0; j < TOK_COUNT; j++) {
-			// #pragma HLS PIPELINE II=1
+			#pragma HLS PIPELINE II=1
 			
 			fdata_v_t val = tokens.read();
 			tok_arr[j] = val;
+			my_float_t a_val[SM_FL_ELEM];
+			#pragma HLS ARRAY_PARTITION variable=a_val dim=1 type=complete 
 
-			quantizer_abs_val_loop:
-			for (size_t k = 0; k < SM_FL_ELEM; k++) {	
-				#pragma HLS PIPELINE
-				my_float_t a_val = hls::absf(val[k]);
-				if (max_val < a_val) {max_val = a_val; }
+			for (int k = 0; k < SM_FL_ELEM; k++) {
+				a_val[k] = hls::absf(val[k]);
+			}
+
+			for (int stride = (SM_FL_ELEM >> 1); stride > 0; stride >>=1) {
+				#pragma HLS UNROLL
+				for (int k = 0; k < stride; k++) {
+				a_val[k] = (a_val[k] < a_val[k + stride]) ? a_val[k + stride] : a_val[k];
+				}
+			}
+			c_val[j] = a_val[0];		
+		}
+
+		for (int stride = (TOK_COUNT >> 1); stride > 0; stride >>=1) {
+			#pragma HLS UNROLL
+			for (int j = 0; j < stride; j++) {
+			c_val[j] = (c_val[j] < c_val[j + stride]) ? c_val[j + stride] : c_val[j];
 			}
 		}
+		max_val = c_val[0];
 		
-		my_float_t dscale = max_val / Q_MAX; 
-		my_float_t scale = Q_MAX / max_val;
-		idata_v_t quant_tmp_arr[MODEL_SCALING_FACTOR / MAX_QUANT_ELEM]; // not an array anymore
-	#pragma HLS ARRAY_PARTITION variable=quant_tmp_arr dim=1 type=complete 
+		my_float_t dscale = max_val * ( 1.0f / Q_MAX); 
+		my_float_t scale = hls::recipf(dscale);//Q_MAX / max_val;
+		idata_v_t quant_tmp; // not an array anymore
+		// idata_v_t quant_tmp_arr[MODEL_SCALING_FACTOR / MAX_QUANT_ELEM];
+	#pragma HLS ARRAY_PARTITION variable=quant_tmp dim=1 type=complete 
 		
-		create_quant_val_loop:
+		int n = 0;
+		create_quant_val:
 		for (size_t j = 0; j < TOK_COUNT; j++) {
-			fdata_v_t proc_tok = tok_arr[j];// * scale;
-			int n = (SM_FL_ELEM * j) % MAX_QUANT_ELEM; 
-			int t = (SM_FL_ELEM * j ) / MAX_QUANT_ELEM;
-				
+			fdata_v_t proc_tok = tok_arr[j];
+			
 			create_quant_val_pipeline_loop:	
 			for (size_t k = 0; k < SM_FL_ELEM; k++) {
 			#pragma HLS PIPELINE
 			#pragma HLS UNROLL factor=2
-				quant_tmp_arr[t][n + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);
+				quant_tmp[n + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);
 			}
+			n += SM_FL_ELEM;
 		}
-		for (size_t p = 0; p < (MODEL_SCALING_FACTOR / MAX_QUANT_ELEM); p++) {
-			#pragma HLS UNROLL
-			tok_out.write(quant_tmp_arr[p]);
-		}
-			
-		tmp_sf_out[i % SM_FL_ELEM] = dscale;
 		
-		if ((i % SM_FL_ELEM) == (SM_FL_ELEM - 1)) {
+		tok_out.write(quant_tmp);
+			
+		tmp_sf_out[wout] = dscale;
+		wout++;
+		
+		if (wout == SM_FL_ELEM) {
 			tok_sf_out.write(tmp_sf_out);
+			wout = 0;
 		}
 	}
 }
@@ -95,14 +115,6 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 			arr[i * (SM_FL_ELEM) + j] = tok.read();
 		}
 	}
-
-
-	// amm_tok:
-	// for(size_t i = 0; i < (TOK_ARR_SIZE); i++){
-	// 	#pragma HLS PIPELINE II=1
-	// 	#pragma HLS LOOP_TRIPCOUNT max = TOK_QUANT_MAX min=MODEL_ELEMENTS/(MAX_QUANT_ELEM)  
-	// 	arr[i] = tok.read();
-	// }	
 	
 	amm_calc:
 	for (size_t i = 0; i < M_DIM; i++) {
@@ -145,7 +157,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 }
 
 
-void double_matmult_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
+void GeMV_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
 
 	constexpr int HD_QUANT_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS  / MAX_QUANT_ELEM;
 	constexpr int HD_SF_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
@@ -156,7 +168,7 @@ void double_matmult_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, i
 	#pragma HLS INTERFACE mode=m_axi port=out 		bundle=D_TOK_W_SF 	depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=(4096/SM_DW * 8)	
 	#pragma HLS INTERFACE mode=m_axi port=fl_tok 	bundle=D_TOK_W_SF 	depth=TOK_DEPTH 			offset=slave max_read_burst_length=(4096/SM_DW * 8)	
 	#pragma HLS INTERFACE mode=m_axi port=w_sf 		bundle=D_TOK_W_SF 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/SM_DW * 8)	
-	#pragma HLS INTERFACE mode=m_axi port=w 			bundle=D_W_GEMM 	depth=HD_QUANT_DEPTH	offset=slave max_read_burst_length=(4096/MAX_DW * 8)
+#pragma HLS INTERFACE mode=m_axi port=w bundle=D_W_GEMM depth=HD_QUANT_DEPTH max_read_burst_length=(4096/MAX_DW*8) num_read_outstanding=32 offset=slave
 
 
 	#pragma HLS INTERFACE mode=s_axilite port=out 				bundle=control
@@ -178,9 +190,11 @@ void double_matmult_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, i
 	s_fdata_v_t tokens("tokens");
 	#pragma HLS STREAM variable=tokens depth = 16// MODEL_HIDDEN_DIM/MAX_FL_ELEM
 	s_fdata_v_t s_wsf("s_wsf");
+#pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=uram
+	#pragma HLS STREAM variable=s_wsf type=fifo depth=4096
 	s_idata_v_t s_w("s_w");
-	#pragma HLS BIND_STORAGE variable=s_w type=fifo impl=srl
-	#pragma HLS STREAM variable=s_w type=fifo depth=16
+#pragma HLS BIND_STORAGE variable=s_w type=fifo impl=uram
+	#pragma HLS STREAM variable=s_w type=fifo depth=4096
 	s_fdata_v_t dist_wsf[mm_thr];
 	s_idata_v_t dist_w[mm_thr];
 	
@@ -200,7 +214,8 @@ void double_matmult_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, i
 	s_idata_v_t d_w[mm_thr];
 	#pragma HLS STREAM variable=d_wsf depth = 16// MODEL_HIDDEN_DIM/MAX_FL_ELEM
 	#pragma HLS STREAM variable=d_w depth = 16// MODEL_HIDDEN_DIM/MAX_FL_ELEM
-	#pragma HLS BIND_STORAGE variable=d_w type=fifo impl=srl
+#pragma HLS BIND_STORAGE variable=d_w type=fifo impl=srl
+#pragma HLS BIND_STORAGE variable=d_wsf type=fifo impl=srl
 	s_fdata_v_t s_out("s_out");
 	
 

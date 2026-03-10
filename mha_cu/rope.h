@@ -1,6 +1,7 @@
 #ifndef MARK_ROPE
 #define MARK_ROPE
-#include "../forward.h"
+// #include "../forward.h"
+#include "mha.h"
 #include <cstddef>
 
 template<int HEAD>
