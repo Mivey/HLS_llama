@@ -9,6 +9,7 @@
 #include <hls_math.h>
 #include <hls_vector.h>
 #include "hls_fence.h"
+// #include "mha_cu/mha.h"
 // #include <ap_float.h>
 
 #define DATAWIDTH 32
@@ -31,7 +32,7 @@ typedef float my_float_t;
 typedef int8_t my_quant_data_t;
 /* ************************************* */
 
-constexpr size_t MAX_DW = 128;
+constexpr size_t MAX_DW = 256;
 constexpr size_t QUANT_MODIFIER = 1;//(MAX_DW == 512) ? 2 : 1;
 constexpr size_t SM_DW = 128;
 constexpr size_t MAX_FL_ELEM = (MAX_DW / (sizeof(my_float_t) * 8));
@@ -98,6 +99,7 @@ void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vEl
 	}
 }
 
+
 template<typename T, typename S, int N>
 void rr_merge(hls::stream<S> &out, hls::stream<T> (&in)[N], const int vCount){
 	S data;
@@ -142,7 +144,7 @@ void mm2s_input_data(hls::stream<T> &out, T *in, const size_t COUNT, const size_
 
 template<typename T>
 void s2mm_output_data(T *out, hls::stream<T> &in,const size_t COUNT, const size_t W_Off){
-
+	//remember to calculate W_Off before passing it here. T could be any size, lterally. 
 	S2MM_output:
 	for (int i = 0; i < COUNT; i++) {
 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
@@ -154,6 +156,7 @@ void s2mm_output_data(T *out, hls::stream<T> &in,const size_t COUNT, const size_
 
 template<typename T, int N>
 void s2mm_output_data(hls::vector<T, N> *out, hls::stream<T> &in ,const size_t COUNT, const size_t W_Off){
+	//remember to calculate W_Off before passing it here. T could be any size, lterally. 
 
 	S2MM_output:
 	for (int i = 0; i < COUNT / N; i++) {
@@ -171,6 +174,7 @@ void s2mm_output_data(hls::vector<T, N> *out, hls::stream<T> &in ,const size_t C
 
 template<typename T, int M>
 void s2mm_output_data(T *out, hls::stream<T> (&in)[M] ,const size_t COUNT, const size_t W_Off){
+	//remember to calculate W_Off before passing it here. T could be any size, lterally. 
 
 	// T arr[M-1][COUNT];
 	for (int j = 0; j < M; j++) {
@@ -295,3 +299,4 @@ void mm_tok_load_input(s_idata_v_t &out, idata_v_t *in, const int vCount, const 
 void mm_load_input(s_fdata_v_t &out, fdata_v_t *in, const int vCount, const int CURR_LAYER);
 
 #endif
+

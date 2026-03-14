@@ -9,6 +9,7 @@
 #include <hls_math.h>
 #include <hls_vector.h>
 #include "hls_fence.h"
+// #include "mha_cu/mha.h"
 // #include <ap_float.h>
 
 #define DATAWIDTH 32
@@ -97,6 +98,7 @@ void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vEl
 		}
 	}
 }
+
 
 template<typename T, typename S, int N>
 void rr_merge(hls::stream<S> &out, hls::stream<T> (&in)[N], const int vCount){

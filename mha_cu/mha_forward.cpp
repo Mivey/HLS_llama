@@ -1,4 +1,4 @@
-#include "forward.h"
+#include "mha_forward.h"
 #include "hls_fence.h"
 
 
