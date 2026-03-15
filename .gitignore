@@ -54,6 +54,10 @@ matmult_cu/testbenches/weights/
 matmult_cu/testbenches/seed_42069/
 
 mha_cu/_ide
+mha_cu/mha
+mha_cu/testbench/seed_42069/
+mha_cu/testbench/seed_42069_conv/
+mha_cu/testbench/weights/
 swiglu_cu/_ide
 rms_cu/_ide
 accelerated_llama/_ide
@@ -66,3 +70,4 @@ GeMV/*.json
 _ide/
 GeMV/testbenches/weights/
 GeMV/testbenches/seed_42069/
+mha/*
