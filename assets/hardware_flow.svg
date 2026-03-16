@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1000" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #ffffff;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#868e96" />
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <style>
+    .node-rect { rx: 8; ry: 8; filter: url(#shadow); }
+    .node-text-title { fill: #ffffff; font-size: 16px; font-weight: 600; text-anchor: middle; }
+    .node-text-sub { fill: #e9ecef; font-size: 12px; font-family: monospace; text-anchor: middle; }
+    .edge { fill: none; stroke: #868e96; stroke-width: 2; marker-end: url(#arrow); }
+    .edge-line { fill: none; stroke: #868e96; stroke-width: 2; stroke-dasharray: 4 4; }
+    .loop-box { fill: none; stroke: #dee2e6; stroke-width: 2; stroke-dasharray: 8 8; rx: 12; ry: 12; }
+    .loop-text { fill: #adb5bd; font-size: 14px; font-weight: 500; font-family: monospace; }
+  </style>
+
+  <rect x="70" y="160" width="660" height="700" class="loop-box" />
+  <text x="90" y="185" class="loop-text">Hardware Layer Loop (AXI-Stream Pipeline)</text>
+
+  <g transform="translate(250, 40)">
+    <rect width="300" height="60" fill="#343a40" class="node-rect" />
+    <text x="150" y="26" class="node-text-title">Software to Hardware Handoff</text>
+    <text x="150" y="44" class="node-text-sub">(Token Input &amp; Embedding Lookup)</text>
+  </g>
+
+  <g transform="translate(50, 205)">
+    <rect width="130" height="40" fill="#868e96" class="node-rect" />
+    <text x="65" y="25" fill="#ffffff" font-size="13" font-weight="bold" text-anchor="middle">Initial Input = 0</text>
+  </g>
+  <path class="edge" d="M 180 225 L 250 225" />
+
+  <g transform="translate(250, 200)">
+    <rect width="300" height="50" fill="#6741d9" class="node-rect" />
+    <text x="150" y="30" class="node-text-title">RMSNorm + Residual Connection</text>
+  </g>
+
+  <g transform="translate(250, 290)">
+    <rect width="300" height="50" fill="#1971c2" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">Quantizer + GeMV</text>
+    <text x="150" y="38" class="node-text-sub">(Q, K, V Projections)</text>
+  </g>
+
+  <g transform="translate(250, 380)">
+    <rect width="300" height="50" fill="#d9480f" class="node-rect" />
+    <text x="150" y="30" class="node-text-title">RoPE + MHA</text>
+  </g>
+
+  <g transform="translate(250, 470)">
+    <rect width="300" height="50" fill="#1971c2" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">Quantizer + GeMV</text>
+    <text x="150" y="38" class="node-text-sub">(Output Projection)</text>
+  </g>
+
+  <g transform="translate(250, 560)">
+    <rect width="300" height="50" fill="#6741d9" class="node-rect" />
+    <text x="150" y="30" class="node-text-title">RMSNorm + Residual Connection</text>
+  </g>
+
+  <g transform="translate(250, 650)">
+    <rect width="300" height="50" fill="#1971c2" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">Quantizer + GeMV</text>
+    <text x="150" y="38" class="node-text-sub">(W1, W3 Projections)</text>
+  </g>
+
+  <g transform="translate(250, 740)">
+    <rect width="300" height="40" fill="#087f5b" class="node-rect" />
+    <text x="150" y="25" class="node-text-title">SwiGLU</text>
+  </g>
+
+  <g transform="translate(250, 810)">
+    <rect width="300" height="50" fill="#1971c2" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">Quantizer + GeMV</text>
+    <text x="150" y="38" class="node-text-sub">(W2 Projection)</text>
+  </g>
+
+  <g transform="translate(250, 910)">
+    <rect width="300" height="60" fill="#343a40" class="node-rect" />
+    <text x="150" y="26" class="node-text-title">Hardware to Software Handoff</text>
+    <text x="150" y="44" class="node-text-sub">(Final Norm &amp; Logit Classifier)</text>
+  </g>
+
+  <path class="edge" d="M 400 100 L 400 200" />
+  <path class="edge" d="M 400 250 L 400 290" />
+  <path class="edge" d="M 400 340 L 400 380" />
+  <path class="edge" d="M 400 430 L 400 470" />
+  <path class="edge" d="M 400 520 L 400 560" />
+  <path class="edge" d="M 400 610 L 400 650" />
+  <path class="edge" d="M 400 700 L 400 740" />
+  <path class="edge" d="M 400 780 L 400 810" />
+  
+  <path class="edge" d="M 400 860 L 400 910" />
+
+  <path class="edge-line" d="M 250 835 L 210 835 L 210 225" />
+</svg>

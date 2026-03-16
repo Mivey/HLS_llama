@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1480" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #ffffff;">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#868e96" />
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <style>
+    .node-rect { rx: 8; ry: 8; filter: url(#shadow); }
+    .node-text-title { fill: #ffffff; font-size: 16px; font-weight: 600; text-anchor: middle; }
+    .node-text-sub { fill: #e9ecef; font-size: 12px; font-family: monospace; text-anchor: middle; }
+    .edge { fill: none; stroke: #868e96; stroke-width: 2; marker-end: url(#arrow); }
+    .edge-line { fill: none; stroke: #868e96; stroke-width: 2; }
+    .loop-box { fill: none; stroke: #dee2e6; stroke-width: 2; stroke-dasharray: 8 8; rx: 12; ry: 12; }
+    .loop-text { fill: #adb5bd; font-size: 14px; font-weight: 500; font-family: monospace; }
+  </style>
+
+  <rect x="70" y="270" width="660" height="1020" class="loop-box" />
+  <text x="90" y="295" class="loop-text">for l = 0 ... p->n_layers - 1</text>
+  <text x="90" y="1280" class="loop-text">end layer loop</text>
+
+  <g transform="translate(250, 40)">
+    <rect width="300" height="50" fill="#343a40" class="node-rect" />
+    <text x="150" y="30" class="node-text-title">Token Input</text>
+  </g>
+  <g transform="translate(250, 120)">
+    <rect width="300" height="50" fill="#343a40" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">Token Embedding Lookup</text>
+    <text x="150" y="38" class="node-text-sub">x = token_embedding_table[token]</text>
+  </g>
+
+  <g transform="translate(250, 290)">
+    <rect width="300" height="50" fill="#6741d9" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">RMSNorm (Attention)</text>
+    <text x="150" y="38" class="node-text-sub">rmsnorm(xb, x)</text>
+  </g>
+
+  <g transform="translate(250, 370)">
+    <rect width="300" height="40" fill="#0ca678" class="node-rect" />
+    <text x="150" y="25" class="node-text-title">Quantizer (float → int8)</text>
+  </g>
+
+  <g transform="translate(120, 440)">
+    <rect width="160" height="50" fill="#1971c2" class="node-rect" />
+    <text x="80" y="22" class="node-text-title">Q Projection</text>
+    <text x="80" y="38" class="node-text-sub">matmul_q(q, xb, wq)</text>
+  </g>
+  <g transform="translate(320, 440)">
+    <rect width="160" height="50" fill="#1971c2" class="node-rect" />
+    <text x="80" y="22" class="node-text-title">K Projection</text>
+    <text x="80" y="38" class="node-text-sub">matmul_q(k, xb, wk)</text>
+  </g>
+  <g transform="translate(520, 440)">
+    <rect width="160" height="50" fill="#1971c2" class="node-rect" />
+    <text x="80" y="22" class="node-text-title">V Projection</text>
+    <text x="80" y="38" class="node-text-sub">matmul_q(v, xb, wv)</text>
+  </g>
+
+  <g transform="translate(250, 520)">
+    <rect width="300" height="50" fill="#d9480f" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">RoPE + KV Cache Write</text>
+    <text x="150" y="38" class="node-text-sub">apply_rope(q, k)</text>
+  </g>
+  <g transform="translate(250, 600)">
+    <rect width="300" height="50" fill="#d9480f" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">Multi-Head Attention</text>
+    <text x="150" y="38" class="node-text-sub">softmax(Q·Kᵀ / √d) · V → xb</text>
+  </g>
+
+  <g transform="translate(250, 680)">
+    <rect width="300" height="40" fill="#0ca678" class="node-rect" />
+    <text x="150" y="25" class="node-text-title">Quantizer (float → int8)</text>
+  </g>
+
+  <g transform="translate(250, 750)">
+    <rect width="300" height="50" fill="#1971c2" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">Output Projection</text>
+    <text x="150" y="38" class="node-text-sub">matmul_q(xb2, xb, wo)</text>
+  </g>
+
+  <g transform="translate(250, 830)">
+    <rect width="300" height="40" fill="#845ef7" class="node-rect" />
+    <text x="150" y="25" class="node-text-title">Residual Add (x += xb2)</text>
+  </g>
+
+  <g transform="translate(250, 900)">
+    <rect width="300" height="50" fill="#6741d9" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">RMSNorm (FFN)</text>
+    <text x="150" y="38" class="node-text-sub">rmsnorm(xb, x)</text>
+  </g>
+
+  <g transform="translate(250, 980)">
+    <rect width="300" height="40" fill="#0ca678" class="node-rect" />
+    <text x="150" y="25" class="node-text-title">Quantizer (float → int8)</text>
+  </g>
+
+  <g transform="translate(250, 1050)">
+    <rect width="300" height="50" fill="#1971c2" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">W1, W3 Projections</text>
+    <text x="150" y="38" class="node-text-sub">matmul_q</text>
+  </g>
+  <g transform="translate(250, 1130)">
+    <rect width="300" height="40" fill="#087f5b" class="node-rect" />
+    <text x="150" y="25" class="node-text-title">SwiGLU Activation</text>
+  </g>
+
+  <g transform="translate(250, 1200)">
+    <rect width="300" height="50" fill="#1971c2" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">W2 Projection</text>
+    <text x="150" y="38" class="node-text-sub">matmul_q(xb, xb2, w2)</text>
+  </g>
+
+  <g transform="translate(250, 1310)">
+    <rect width="300" height="50" fill="#6741d9" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">Final RMSNorm</text>
+  </g>
+  <g transform="translate(250, 1390)">
+    <rect width="300" height="50" fill="#1971c2" class="node-rect" />
+    <text x="150" y="22" class="node-text-title">Classifier LM Head</text>
+    <text x="150" y="38" class="node-text-sub">matmul_q(logits, x, w.wcls)</text>
+  </g>
+
+  <path class="edge" d="M 400 90 L 400 120" />
+  <path class="edge" d="M 400 170 L 400 290" />
+  <path class="edge" d="M 400 340 L 400 370" />
+  
+  <path class="edge-line" d="M 400 410 L 400 425" />
+  <path class="edge" d="M 400 425 L 200 425 L 200 440" />
+  <path class="edge" d="M 400 425 L 400 440" />
+  <path class="edge" d="M 400 425 L 600 425 L 600 440" />
+
+  <path class="edge-line" d="M 200 490 L 200 505" />
+  <path class="edge-line" d="M 600 490 L 600 505" />
+  <path class="edge-line" d="M 400 490 L 400 505" />
+  <path class="edge" d="M 200 505 L 400 505 L 400 520" />
+  <path class="edge" d="M 600 505 L 400 505 L 400 520" />
+
+  <path class="edge" d="M 400 570 L 400 600" />
+  <path class="edge" d="M 400 650 L 400 680" />
+  <path class="edge" d="M 400 720 L 400 750" />
+  <path class="edge" d="M 400 800 L 400 830" />
+  <path class="edge" d="M 400 870 L 400 900" />
+  <path class="edge" d="M 400 950 L 400 980" />
+  <path class="edge" d="M 400 1020 L 400 1050" />
+  <path class="edge" d="M 400 1100 L 400 1130" />
+  <path class="edge" d="M 400 1170 L 400 1200" />
+  <path class="edge" d="M 400 1250 L 400 1310" />
+  <path class="edge" d="M 400 1360 L 400 1390" />
+</svg>

@@ -26,7 +26,8 @@ void quantizer_kernel(s_fdata_v_t &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t
 		
 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR
 		my_float_t max_val = 0.0f;
-		my_float_t c_val[TOK_COUNT] = {0.0f};
+		my_float_t c_val[MODEL_SCALING_FACTOR] = {0.0f};
+		// my_float_t c_val[TOK_COUNT] = {0.0f};
 			#pragma HLS ARRAY_PARTITION variable=c_val dim=1 type=complete 
 		group_scaling:
 		for (size_t j = 0; j < TOK_COUNT; j++) {
@@ -38,22 +39,26 @@ void quantizer_kernel(s_fdata_v_t &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t
 			#pragma HLS ARRAY_PARTITION variable=a_val dim=1 type=complete 
 
 			for (int k = 0; k < SM_FL_ELEM; k++) {
-				a_val[k] = hls::absf(val[k]);
+				c_val[j * SM_FL_ELEM + k] = hls::absf(val[k]);
+				// a_val[k] = hls::absf(val[k]);
 			}
 
-			for (int stride = (SM_FL_ELEM >> 1); stride > 0; stride >>=1) {
-				#pragma HLS UNROLL
-				for (int k = 0; k < stride; k++) {
-				a_val[k] = (a_val[k] < a_val[k + stride]) ? a_val[k + stride] : a_val[k];
-				}
-			}
-			c_val[j] = a_val[0];		
+			// for (int stride = (SM_FL_ELEM >> 1); stride > 0; stride >>=1) {
+			// 	#pragma HLS UNROLL
+			// 	for (int k = 0; k < stride; k++) {
+			// 		#pragma HLS UNROLL
+			// 	a_val[k] = (a_val[k] < a_val[k + stride]) ? a_val[k + stride] : a_val[k];
+			// 	}
+			// }
+			// c_val[j] = a_val[0];		
 		}
-
-		for (int stride = (TOK_COUNT >> 1); stride > 0; stride >>=1) {
+		big_comp_tree:
+		for (int stride = (MODEL_SCALING_FACTOR >> 1); stride > 0; stride >>=1) {
+		// for (int stride = (TOK_COUNT >> 1); stride > 0; stride >>=1) {
 			#pragma HLS UNROLL
 			for (int j = 0; j < stride; j++) {
-			c_val[j] = (c_val[j] < c_val[j + stride]) ? c_val[j + stride] : c_val[j];
+				#pragma HLS UNROLL
+				c_val[j] = (c_val[j] < c_val[j + stride]) ? c_val[j + stride] : c_val[j];
 			}
 		}
 		max_val = c_val[0];
@@ -127,9 +132,10 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 			fdata_v_t vec_tok_sf = arr_sf[j];
 			fdata_v_t vec_w_sf = w_sf.read();
 			// my_float_t tmp_sum = 0.0f;
+			amm_k_calc:
 			for (size_t k = 0; k < SM_FL_ELEM; k++) {
 				//do our calculations
-				#pragma HLS PIPELINE 
+				#pragma HLS PIPELINE II=1
 				
 				my_float_t cur_tok_sf = vec_tok_sf[k];
 				my_float_t cur_w_sf = vec_w_sf[k];

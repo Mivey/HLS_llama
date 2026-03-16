@@ -71,3 +71,6 @@ _ide/
 GeMV/testbenches/weights/
 GeMV/testbenches/seed_42069/
 mha/*
+transformer_cu/.cache/
+transformer_cu/.cache/
+transformer_cu/combo_cu/

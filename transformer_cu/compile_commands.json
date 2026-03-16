@@ -1,0 +1,93 @@
+[
+  {
+    "directory": "/home/lolwut/project/2026/HLS/combo/combo_cu",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=combo_cu",
+      "-c",
+      "/home/lolwut/project/2026/HLS/combo/combo_cu/mha_forward.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/combo/combo_cu/mha_forward.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/combo/combo_cu",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=combo_cu",
+      "-c",
+      "/home/lolwut/project/2026/HLS/combo/combo_cu/swiglu_kernel.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/combo/combo_cu/swiglu_kernel.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/combo/combo_cu",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=combo_cu",
+      "-c",
+      "/home/lolwut/project/2026/HLS/combo/combo_cu/quantizer.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/combo/combo_cu/quantizer.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/combo/combo_cu",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=combo_cu",
+      "-c",
+      "/home/lolwut/project/2026/HLS/combo/combo_cu/rmsnorm.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/combo/combo_cu/rmsnorm.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/combo/combo_cu",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=combo_cu",
+      "-c",
+      "/home/lolwut/project/2026/HLS/combo/combo_cu/matmult.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/combo/combo_cu/matmult.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/combo/combo_cu",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=combo_cu",
+      "-c",
+      "/home/lolwut/project/2026/HLS/combo/combo_cu/mha.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/combo/combo_cu/mha.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/combo/combo_cu",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=combo_cu",
+      "-c",
+      "/home/lolwut/project/2026/HLS/combo/combo_cu/Combined_cu.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/combo/combo_cu/Combined_cu.cpp"
+  }
+]

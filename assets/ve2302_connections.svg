@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 660" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #ffffff;">
+  
+  <defs>
+    <marker id="arrow-data" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2b8a3e" />
+    </marker>
+    
+    <marker id="arrow-ctrl" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#c92a2a" />
+    </marker>
+
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+
+  <style>
+    .node-rect { rx: 8; ry: 8; filter: url(#shadow); }
+    .node-title { fill: #ffffff; font-size: 15px; font-weight: 600; text-anchor: middle; }
+    .node-sub { fill: #e9ecef; font-size: 11px; font-family: monospace; text-anchor: middle; }
+    .data-edge { fill: none; stroke: #2b8a3e; stroke-width: 3; marker-end: url(#arrow-data); marker-start: url(#arrow-data); }
+    .ctrl-edge { fill: none; stroke: #c92a2a; stroke-width: 2; stroke-dasharray: 6 4; marker-end: url(#arrow-ctrl); }
+    .edge-label-data { fill: #2b8a3e; font-size: 12px; font-weight: 600; font-family: monospace; }
+    .edge-label-ctrl { fill: #c92a2a; font-size: 12px; font-weight: 600; font-family: monospace; }
+    .nmu-nsu-rect { fill: #fcc419; rx: 4; ry: 4; stroke: #e67700; stroke-width: 2;}
+    .nmu-nsu-text { fill: #212529; font-size: 10px; font-weight: 800; text-anchor: middle; font-family: monospace;}
+  </style>
+
+  <text x="500" y="40" font-size="22" font-weight="bold" fill="#343a40" text-anchor="middle">Versal Edge AI VE2302 Connection Diagram</text>
+
+  <g transform="translate(80, 80)">
+    <rect width="200" height="70" fill="#343a40" class="node-rect" />
+    <text x="100" y="30" class="node-title">Versal CIPS (PS)</text>
+    <text x="100" y="50" class="node-sub">ARM Cortex-A72 Host</text>
+  </g>
+
+  <g transform="translate(720, 80)">
+    <rect width="200" height="70" fill="#343a40" class="node-rect" />
+    <text x="100" y="30" class="node-title">External DDR Memory</text>
+    <text x="100" y="50" class="node-sub">Integrated Memory Controller</text>
+  </g>
+
+  <g transform="translate(80, 200)">
+    <rect width="840" height="60" fill="#868e96" class="node-rect" />
+    <text x="420" y="35" class="node-title" font-size="18">Versal Network on Chip (NoC)</text>
+  </g>
+
+  <g transform="translate(80, 340)">
+    <rect width="840" height="40" fill="#adb5bd" class="node-rect" />
+    <text x="420" y="25" fill="#343a40" font-size="16" font-weight="600" text-anchor="middle">PL Fabric (AXI4-Lite SmartConnect)</text>
+  </g>
+
+  <g transform="translate(50, 480)">
+    <rect width="140" height="60" fill="#6741d9" class="node-rect" />
+    <text x="70" y="28" class="node-title">RMSNorm CU</text>
+    <text x="70" y="46" class="node-sub">Top: rmsnorm_cu</text>
+  </g>
+
+  <g transform="translate(230, 480)">
+    <rect width="140" height="60" fill="#d9480f" class="node-rect" />
+    <text x="70" y="28" class="node-title">RoPE + MHA CU</text>
+    <text x="70" y="46" class="node-sub">Top: mha_cu</text>
+  </g>
+
+  <g transform="translate(410, 480)">
+    <rect width="140" height="60" fill="#1971c2" class="node-rect" />
+    <text x="70" y="28" class="node-title">GeMV CU 0</text>
+    <text x="70" y="46" class="node-sub">Top: matmult_cu</text>
+  </g>
+
+  <g transform="translate(590, 480)">
+    <rect width="140" height="60" fill="#1971c2" class="node-rect" />
+    <text x="70" y="28" class="node-title">GeMV CU 1</text>
+    <text x="70" y="46" class="node-sub">Top: matmult_cu</text>
+  </g>
+
+  <g transform="translate(770, 480)">
+    <rect width="140" height="60" fill="#087f5b" class="node-rect" />
+    <text x="70" y="28" class="node-title">SwiGLU CU</text>
+    <text x="70" y="46" class="node-sub">Top: swiglu_cu</text>
+  </g>
+
+  <path class="ctrl-edge" d="M 180 150 L 180 340" />
+  <text x="190" y="290" class="edge-label-ctrl">AXI4-Lite (M_AXI_HPM)</text>
+
+  <path class="data-edge" d="M 820 200 L 820 150" />
+  <text x="835" y="180" class="edge-label-data">AXI4 (m_axi_gmem)</text>
+  
+  <g transform="translate(800, 190)">
+    <rect width="40" height="20" class="nmu-nsu-rect" />
+    <text x="20" y="14" class="nmu-nsu-text">NSU</text>
+  </g>
+
+  <path class="ctrl-edge" d="M 100 380 L 100 480" />
+  <text x="105" y="420" class="edge-label-ctrl" transform="rotate(-90, 105, 420)">s_axilite</text>
+
+  <path class="ctrl-edge" d="M 280 380 L 280 480" />
+  <text x="285" y="420" class="edge-label-ctrl" transform="rotate(-90, 285, 420)">s_axilite</text>
+
+  <path class="ctrl-edge" d="M 460 380 L 460 480" />
+  <text x="465" y="420" class="edge-label-ctrl" transform="rotate(-90, 465, 420)">s_axilite</text>
+
+  <path class="ctrl-edge" d="M 640 380 L 640 480" />
+  <text x="645" y="420" class="edge-label-ctrl" transform="rotate(-90, 645, 420)">s_axilite</text>
+
+  <path class="ctrl-edge" d="M 820 380 L 820 480" />
+  <text x="825" y="420" class="edge-label-ctrl" transform="rotate(-90, 825, 420)">s_axilite</text>
+
+
+  <path class="data-edge" d="M 140 480 L 140 260" />
+  <text x="145" y="420" class="edge-label-data" transform="rotate(-90, 145, 420)">m_axi</text>
+  <g transform="translate(120, 250)">
+    <rect width="40" height="20" class="nmu-nsu-rect" />
+    <text x="20" y="14" class="nmu-nsu-text">NMU</text>
+  </g>
+
+  <path class="data-edge" d="M 320 480 L 320 260" />
+  <text x="325" y="420" class="edge-label-data" transform="rotate(-90, 325, 420)">m_axi</text>
+  <g transform="translate(300, 250)">
+    <rect width="40" height="20" class="nmu-nsu-rect" />
+    <text x="20" y="14" class="nmu-nsu-text">NMU</text>
+  </g>
+
+  <path class="data-edge" d="M 500 480 L 500 260" />
+  <text x="505" y="420" class="edge-label-data" transform="rotate(-90, 505, 420)">m_axi</text>
+  <g transform="translate(480, 250)">
+    <rect width="40" height="20" class="nmu-nsu-rect" />
+    <text x="20" y="14" class="nmu-nsu-text">NMU</text>
+  </g>
+
+  <path class="data-edge" d="M 680 480 L 680 260" />
+  <text x="685" y="420" class="edge-label-data" transform="rotate(-90, 685, 420)">m_axi</text>
+  <g transform="translate(660, 250)">
+    <rect width="40" height="20" class="nmu-nsu-rect" />
+    <text x="20" y="14" class="nmu-nsu-text">NMU</text>
+  </g>
+
+  <path class="data-edge" d="M 860 480 L 860 260" />
+  <text x="865" y="420" class="edge-label-data" transform="rotate(-90, 865, 420)">m_axi</text>
+  <g transform="translate(840, 250)">
+    <rect width="40" height="20" class="nmu-nsu-rect" />
+    <text x="20" y="14" class="nmu-nsu-text">NMU</text>
+  </g>
+
+  <g transform="translate(50, 580)">
+    <rect width="330" height="60" fill="#f8f9fa" rx="4" stroke="#ced4da" stroke-width="1"/>
+    <text x="10" y="20" font-size="12" font-weight="bold" fill="#495057">Legend:</text>
+    
+    <line x1="10" y1="35" x2="40" y2="35" stroke="#2b8a3e" stroke-width="3" marker-end="url(#arrow-data)"/>
+    <text x="50" y="39" font-size="12" fill="#495057">Data Plane (m_axi via NMU/NSU)</text>
+    
+    <line x1="10" y1="50" x2="40" y2="50" stroke="#c92a2a" stroke-width="2" stroke-dasharray="4 2" marker-end="url(#arrow-ctrl)"/>
+    <text x="50" y="54" font-size="12" fill="#495057">Control Plane (s_axilite via PL)</text>
+  </g>
+
+</svg>
