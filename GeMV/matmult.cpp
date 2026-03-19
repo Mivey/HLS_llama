@@ -11,89 +11,184 @@ constexpr size_t TOK_QUANT_MAX =  (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM);
 constexpr size_t TOK_SF_MAX = (MODEL_HIDDEN_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM));
 constexpr int UF = 1;
 
-void quantizer_kernel(s_fdata_v_t &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM){
-	/********************************* WILL NEED TO FIX CREATE_QUANT_VAL IF MAX_FL_ELEM != 16 *******************************/
-	const size_t SF_COUNT = N_DIM / MODEL_SCALING_FACTOR;
-	const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
-	const my_float_t Q_MAX = 127.0f;
+// void quantizer_kernel(s_fdata_v_t &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM){
+// 	/********************************* WILL NEED TO FIX CREATE_QUANT_VAL IF MAX_FL_ELEM != 16 *******************************/
+// 	const size_t SF_COUNT = N_DIM / MODEL_SCALING_FACTOR;
+// 	const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
+// 	const my_float_t Q_MAX = 127.0f;
 	
-	fdata_v_t tok_arr[TOK_COUNT];
-	#pragma HLS ARRAY_PARTITION variable=tok_arr dim=1 type=complete 
-	fdata_v_t tmp_sf_out;
-	int wout = 0;
-	quantizer_main:
-	for (size_t i = 0; i < SF_COUNT; i++) {
+// 	fdata_v_t tok_arr[TOK_COUNT];
+// 	#pragma HLS ARRAY_PARTITION variable=tok_arr dim=1 type=complete 
+// 	fdata_v_t tmp_sf_out;
+// 	int wout = 0;
+// 	quantizer_main:
+// 	for (size_t i = 0; i < SF_COUNT; i++) {
 		
-		#pragma HLS LOOP_TRIPCOUNT max=MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR
-		my_float_t max_val = 0.0f;
-		my_float_t c_val[MODEL_SCALING_FACTOR] = {0.0f};
-		// my_float_t c_val[TOK_COUNT] = {0.0f};
-			#pragma HLS ARRAY_PARTITION variable=c_val dim=1 type=complete 
-		group_scaling:
-		for (size_t j = 0; j < TOK_COUNT; j++) {
-			#pragma HLS PIPELINE II=1
+// 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR
+// 		my_float_t max_val = 0.0f;
+// 		my_float_t c_val[MODEL_SCALING_FACTOR] = {0.0f};
+// 		// my_float_t c_val[TOK_COUNT] = {0.0f};
+// 			#pragma HLS ARRAY_PARTITION variable=c_val dim=1 type=complete 
+// 		group_scaling:
+// 		for (size_t j = 0; j < TOK_COUNT; j++) {
+// 			#pragma HLS PIPELINE II=1
 			
-			fdata_v_t val = tokens.read();
-			tok_arr[j] = val;
-			my_float_t a_val[SM_FL_ELEM];
-			#pragma HLS ARRAY_PARTITION variable=a_val dim=1 type=complete 
+// 			fdata_v_t val = tokens.read();
+// 			tok_arr[j] = val;
+// 			my_float_t a_val[SM_FL_ELEM];
+// 			#pragma HLS ARRAY_PARTITION variable=a_val dim=1 type=complete 
 
-			for (int k = 0; k < SM_FL_ELEM; k++) {
-				c_val[j * SM_FL_ELEM + k] = hls::absf(val[k]);
-				// a_val[k] = hls::absf(val[k]);
-			}
+// 			for (int k = 0; k < SM_FL_ELEM; k++) {
+// 				c_val[j * SM_FL_ELEM + k] = hls::absf(val[k]);
+// 				// a_val[k] = hls::absf(val[k]);
+// 			}
 
-			// for (int stride = (SM_FL_ELEM >> 1); stride > 0; stride >>=1) {
-			// 	#pragma HLS UNROLL
-			// 	for (int k = 0; k < stride; k++) {
-			// 		#pragma HLS UNROLL
-			// 	a_val[k] = (a_val[k] < a_val[k + stride]) ? a_val[k + stride] : a_val[k];
-			// 	}
-			// }
-			// c_val[j] = a_val[0];		
-		}
-		big_comp_tree:
-		for (int stride = (MODEL_SCALING_FACTOR >> 1); stride > 0; stride >>=1) {
-		// for (int stride = (TOK_COUNT >> 1); stride > 0; stride >>=1) {
-			#pragma HLS UNROLL
-			for (int j = 0; j < stride; j++) {
-				#pragma HLS UNROLL
-				c_val[j] = (c_val[j] < c_val[j + stride]) ? c_val[j + stride] : c_val[j];
-			}
-		}
-		max_val = c_val[0];
+// 			// for (int stride = (SM_FL_ELEM >> 1); stride > 0; stride >>=1) {
+// 			// 	#pragma HLS UNROLL
+// 			// 	for (int k = 0; k < stride; k++) {
+// 			// 		#pragma HLS UNROLL
+// 			// 	a_val[k] = (a_val[k] < a_val[k + stride]) ? a_val[k + stride] : a_val[k];
+// 			// 	}
+// 			// }
+// 			// c_val[j] = a_val[0];		
+// 		}
+// 		big_comp_tree:
+// 		for (int stride = (MODEL_SCALING_FACTOR >> 1); stride > 0; stride >>=1) {
+// 		// for (int stride = (TOK_COUNT >> 1); stride > 0; stride >>=1) {
+// 			#pragma HLS UNROLL
+// 			for (int j = 0; j < stride; j++) {
+// 				#pragma HLS UNROLL
+// 				c_val[j] = (c_val[j] < c_val[j + stride]) ? c_val[j + stride] : c_val[j];
+// 			}
+// 		}
+// 		max_val = c_val[0];
 		
-		my_float_t dscale = max_val * ( 1.0f / Q_MAX); 
-		my_float_t scale = hls::recipf(dscale);//Q_MAX / max_val;
-		idata_v_t quant_tmp; // not an array anymore
-		// idata_v_t quant_tmp_arr[MODEL_SCALING_FACTOR / MAX_QUANT_ELEM];
-	#pragma HLS ARRAY_PARTITION variable=quant_tmp dim=1 type=complete 
+// 		my_float_t dscale = max_val * ( 1.0f / Q_MAX); 
+// 		my_float_t scale = hls::recipf(dscale);//Q_MAX / max_val;
+// 		idata_v_t quant_tmp; // not an array anymore
+// 		// idata_v_t quant_tmp_arr[MODEL_SCALING_FACTOR / MAX_QUANT_ELEM];
+// 	#pragma HLS ARRAY_PARTITION variable=quant_tmp dim=1 type=complete 
 		
-		int n = 0;
-		create_quant_val:
-		for (size_t j = 0; j < TOK_COUNT; j++) {
-			fdata_v_t proc_tok = tok_arr[j];
+// 		int n = 0;
+// 		create_quant_val:
+// 		for (size_t j = 0; j < TOK_COUNT; j++) {
+// 			fdata_v_t proc_tok = tok_arr[j];
 			
-			create_quant_val_pipeline_loop:	
-			for (size_t k = 0; k < SM_FL_ELEM; k++) {
-			#pragma HLS PIPELINE
-			#pragma HLS UNROLL factor=2
-				quant_tmp[n + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);
-			}
-			n += SM_FL_ELEM;
-		}
+// 			create_quant_val_pipeline_loop:	
+// 			for (size_t k = 0; k < SM_FL_ELEM; k++) {
+// 			#pragma HLS PIPELINE
+// 			#pragma HLS UNROLL factor=2
+// 				quant_tmp[n + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);
+// 			}
+// 			n += SM_FL_ELEM;
+// 		}
 		
-		tok_out.write(quant_tmp);
+// 		tok_out.write(quant_tmp);
 			
-		tmp_sf_out[wout] = dscale;
-		wout++;
+// 		tmp_sf_out[wout] = dscale;
+// 		wout++;
 		
-		if (wout == SM_FL_ELEM) {
-			tok_sf_out.write(tmp_sf_out);
-			wout = 0;
+// 		if (wout == SM_FL_ELEM) {
+// 			tok_sf_out.write(tmp_sf_out);
+// 			wout = 0;
+// 		}
+// 	}
+// }
+
+
+
+void abs_intake(s_fdata_v_t &tokens_out, s_fdata_v_t &abs_tokens, s_fdata_v_t &tokens_in){
+	
+	const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
+	my_float_t max_val = 0.0f;
+	
+	group_scaling:
+	for (size_t j = 0; j < TOK_COUNT; j++) {
+		#pragma HLS PIPELINE II=1
+		
+		fdata_v_t val = tokens_in.read();
+		tokens_out.write(val);
+		
+		fdata_v_t c_val;
+		for (int k = 0; k < SM_FL_ELEM; k++) {
+			c_val[k] = hls::absf(val[k]);
+		}		
+		abs_tokens.write(c_val);
+	}
+	
+}
+
+void max_finder(hls::stream<my_float_t> &max_val, s_fdata_v_t & abs_tokens){
+	
+	const my_float_t Q_MAX = 1.0f / 127.0f;
+	const int cnt = MODEL_SCALING_FACTOR / SM_FL_ELEM;
+	my_float_t c_val[MODEL_SCALING_FACTOR];
+	#pragma HLS ARRAY_PARTITION variable=c_val dim=1 type=complete
+	
+	mf_intake:
+	for (int i = 0; i < cnt; i++) {
+		#pragma HLS PIPELINE II=1
+		fdata_v_t val = abs_tokens.read();
+		for (int k = 0; k < SM_FL_ELEM; k++) {
+			c_val[i * SM_FL_ELEM + k] = val[k];
 		}
 	}
+
+	for (int stride = (MODEL_SCALING_FACTOR>>1); stride > 0; stride >>=1) {
+		#pragma HLS UNROLL
+		for (int i = 0; i < stride; i++) {
+			#pragma HLS UNROLL
+			c_val[i] = (c_val[i]  > c_val[i + stride] ) ? c_val[i] : c_val[i + stride];
+		}
+	}	
+	max_val.write(c_val[0] * Q_MAX);
 }
+
+
+void quant_out( hls::stream<my_float_t> &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens_in, hls::stream<my_float_t> &max_val){
+	
+	const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
+	my_float_t dscale = max_val.read(); 
+	my_float_t scale = hls::recipf(dscale);//Q_MAX / max_val;
+	idata_v_t quant_tmp; // not an array anymore
+	// fdata_v_t tok_arr[TOK_COUNT];
+	
+	create_quant_val:
+	for (size_t j = 0; j < TOK_COUNT; j++) {
+		#pragma HLS PIPELINE
+		fdata_v_t proc_tok = tokens_in.read();
+		
+		create_quant_val_pipeline_loop:	
+		for (size_t k = 0; k < SM_FL_ELEM; k++) {
+			#pragma HLS UNROLL
+			quant_tmp[j * SM_FL_ELEM + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);
+		}
+	}
+	
+	tok_out.write(quant_tmp);
+	tok_sf_out.write(dscale);
+}
+
+void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM){
+	
+	const size_t SF_COUNT = N_DIM / MODEL_SCALING_FACTOR;
+	const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
+	// #pragma HLS STREAM variable=tok_out depth=64
+	// #pragma HLS STREAM variable=tok_sf_out depth=64
+	for (int i = 0; i < SF_COUNT; i++) {
+		#pragma HLS DATAFLOW
+		hls::stream<my_float_t> max_val;
+		s_fdata_v_t tokens_out, abs_tokens;
+		#pragma HLS STREAM variable=tokens_out depth=64
+		#pragma HLS STREAM variable=max_val depth=TOK_COUNT
+		#pragma HLS STREAM variable=abs_tokens depth=64
+		
+		abs_intake(tokens_out, abs_tokens, tokens);
+		max_finder(max_val, abs_tokens);
+		quant_out(tok_sf_out, tok_out, tokens_out, max_val);
+	}
+}
+
 
 void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t &w_sf, \
 											s_idata_v_t &tok, s_fdata_v_t &tok_sf, const int N_DIM, const int M_DIM){
@@ -194,7 +289,7 @@ void GeMV_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *
 	const int qCount = N_DIM / MAX_QUANT_ELEM;
 	
 	s_fdata_v_t tokens("tokens");
-	#pragma HLS STREAM variable=tokens depth = 16// MODEL_HIDDEN_DIM/MAX_FL_ELEM
+	#pragma HLS STREAM variable=tokens depth = MODEL_HIDDEN_DIM/MAX_FL_ELEM
 	s_fdata_v_t s_wsf("s_wsf");
 #pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=bram
 	#pragma HLS STREAM variable=s_wsf type=fifo depth=16
@@ -205,6 +300,7 @@ void GeMV_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *
 	s_idata_v_t dist_w[mm_thr];
 	
 	s_fdata_v_t tok_sf;
+	hls::stream<my_float_t> tmp_tok_sf;
   // #pragma HLS BIND_STORAGE variable=tok_sf type=ram_2p impl=bram
 	s_idata_v_t tok;
 	#pragma HLS STREAM variable=tok type=fifo depth=32
@@ -229,8 +325,8 @@ void GeMV_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *
 	// tok_load_input(tokens, fl_tok, N_DIM);
 	mm2s_input_data(tokens, fl_tok, N_DIM / SM_FL_ELEM);
 	
-	quantizer_kernel(tok_sf, tok, tokens, N_DIM);
-	inf_split_tee(d_tok_sf, tok_sf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
+	quantizer_kernel(tmp_tok_sf, tok, tokens, N_DIM);
+	inf_split_tee(d_tok_sf, tmp_tok_sf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
 	inf_split_tee(d_tok, tok, (N_DIM / MAX_QUANT_ELEM));
 	
 	mm_load_input(s_wsf, w_sf, num_sf, CURR_LAYER);

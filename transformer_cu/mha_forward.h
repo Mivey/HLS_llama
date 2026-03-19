@@ -82,6 +82,26 @@ void inf_split_tee(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vCoun
 	}
 }
 
+template<typename T, size_t N, size_t M>
+void inf_split_tee(hls::stream<hls::vector<T, M>> (&out)[N], hls::stream<T> &in, const int vCount){
+	
+	hls::vector<T, M> tmp;
+  for (int i = 0; i < vCount; i++) {
+		#pragma HLS LOOP_TRIPCOUNT max= (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM)
+    #pragma HLS PIPELINE II=1
+    // T data = in.read();
+
+		for (int i = 0 ; i < M; i++) {
+			tmp[i] = in.read();
+		}
+		for (int j = 0; j < N; j++) {
+			#pragma HLS UNROLL
+			out[j].write(tmp);
+		}
+	}
+}
+
+
 template<typename T, int N>
 void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vElem, const int vCount){
 	
@@ -147,6 +167,17 @@ void mm2s_input_data(hls::stream<T> &out, T *in, const size_t COUNT, const size_
 }
 
 template<typename T>
+void mm2s_input_data(hls::stream<T> &out, T *in, const size_t COUNT, const size_t CURR_LAYER, const int offset){
+	
+	const int tot_off = CURR_LAYER * COUNT + offset;
+	AXI4_to_STREAM:
+	for (int i = 0; i < COUNT; i++) {
+		#pragma HLS PIPELINE II=1
+		out.write(in[i + tot_off]);
+	}
+}
+
+template<typename T>
 void s2mm_output_data(T *out, hls::stream<T> &in,const size_t COUNT, const size_t W_Off){
 	//remember to calculate W_Off before passing it here. T could be any size, lterally. 
 	S2MM_output:
@@ -192,6 +223,41 @@ void s2mm_output_data(T *out, hls::stream<T> (&in)[M] ,const size_t COUNT, const
 	}
 }
 
+template<typename T, int M, size_t N>
+void s2arr_output_data(hls::vector<T, N> *out, hls::stream<hls::vector<T, N> > (&in)[M] ,const size_t COUNT, const size_t W_Off, const int AXI_SEL){
+	//remember to calculate W_Off before passing it here. T could be any size, lterally. 
+	const int tot_cnt = COUNT / (N * M);
+	if (AXI_SEL == 0) {
+	
+		S2MM_output:
+		for (int i = 0; i < tot_cnt; i++) {
+			#pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
+			#pragma HLS PIPELINE II=1
+			for (int j = 0; j < M; j++) {
+				out[tot_cnt * j + i + W_Off] = in[j].read();
+			}
+		}
+	}
+}
+
+template<typename T, size_t N>
+void s_mm_output_sel(hls::vector<T, N> *mm_out, hls::stream<hls::vector<T, N>> &s_out, hls::stream<hls::vector<T, N>> &s_in, const int COUNT, const size_t W_Off, const int AXI_SEL){
+	
+	if (AXI_SEL == 1) {
+		for (int i = 0; i < COUNT; i++) {
+			#pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
+			#pragma HLS PIPELINE II=1
+			mm_out[i + W_Off] = s_in.read();
+		}
+	}else {
+		for (int i = 0; i < COUNT; i++) {
+			#pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
+			#pragma HLS PIPELINE II=1
+			s_out.write(s_in.read());
+		}
+	}
+}
+
 template<typename T>
 void store_output(T *out, hls::stream<T> &in , const int vSize){
 
@@ -232,38 +298,6 @@ const int NUM = vSize / elem;
 	}
 }
 
-// template<typename T>
-// void rms_load_input(hls::stream<T> &out, T *in, const int CURR_LAYER){
-//   // load_input<(MODEL_ELEMENTS / MAX_W_F)>(out, in);
-// 	int elem = sizeof(T) / sizeof(float);
-// 	const int offset = CURR_LAYER * MODEL_ELEMENTS / elem;
-// 	fw_rms_load_loop:
-// 	for (int i = 0; i < (MODEL_ELEMENTS/elem); i++) {
-// 		#pragma HLS PIPELINE II=1
-// 		T data = in[i + offset];
-// 		out.write(data);
-// 	}
-// }
-
-// template<typename T>
-// void tok_load_input(hls::stream<T> &out, T *in){
-// 	int elem = sizeof(T) / sizeof(float);
-// 	fw_token_load_loop:
-// 	for (int i = 0; i < (MODEL_ELEMENTS/elem); i++) {
-// 		#pragma HLS PIPELINE II=1
-// 		out.write(in[i]);
-// 	}
-// }
-
-// template<typename T>
-// void tok_load_input(hls::stream<T> &out, T *in, const int N_DIM){
-// 	int elem = sizeof(T) / sizeof(float);
-// 	fw_token_load_loop:
-// 	for (int i = 0; i < (N_DIM/elem); i++) {
-// 		#pragma HLS PIPELINE II=1
-// 		out.write(in[i]);
-// 	}
-// }
 
 /* *************************** SWIGLU FUNCTION *************************************/
 template<typename T>
@@ -297,6 +331,12 @@ void resid_conn(hls::stream<T> &tokens_out, hls::stream<T> &tokens_in, hls::stre
 	}
 }
 void mha_WAR_store_load(adata_v_t *cache, s_adata_v_t &output, s_adata_v_t &input, const int CURR_LAYER, const int POS);
-
+void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_thr],
+								fdata_v_t *out_0, fdata_v_t *w_sf_0, idata_v_t *w_0, 
+								fdata_v_t *out_1, fdata_v_t *w_sf_1, idata_v_t *w_1, 
+								fdata_v_t *diff, fdata_v_t *weights, fdata_v_t *w1w3, 
+								adata_v_t *tokens, adata_v_t *key_cache, adata_v_t *value_cache, 
+								const int POS, const int CURR_LAYER, const int SEL, const int INIT,
+								const int N_DIM, const int M_DIM);
 #endif
 

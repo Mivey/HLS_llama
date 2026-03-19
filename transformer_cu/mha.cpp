@@ -245,19 +245,20 @@ void mha_kernel(s_fdata_v_t &output,
 	s_adata_v_t xb_ws_q("WS to Quantizer for XB Stream");
 	s_adata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
 	s_adata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
-	s_adata_v_t s_key_cache_in, s_value_cache_in, s_query, s_query_r, s_key_cache_in_r, s_xb;
+	s_adata_v_t s_value_cache_in, s_query_r, s_key_cache_in_r;
+	s_adata_v_t s_key_cache_in, s_query, s_value_cache_in_u;
 	// s_mfdata_v_t sm_query, sm_kc, sm_vc;
 
   #pragma HLS STABLE variable=POS
   #pragma HLS STABLE variable=CURR_LAYER
-  #pragma HLS STREAM variable=xb_ws_q depth=MODEL_ELEMENTS / MAX_FL_ELEM
-  #pragma HLS STREAM variable=tokens depth=MODEL_ELEMENTS / MAX_FL_ELEM
+  #pragma HLS STREAM variable=xb_ws_q depth=MODEL_ELEMENTS / MID_FL_ELEM
+  // #pragma HLS STREAM variable=tokens depth=MODEL_ELEMENTS / MAX_FL_ELEM
 
 	#pragma HLS STREAM variable=s_key_cache_in depth=8 //good
-	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_ELEMENTS / MAX_FL_ELEM //good
+	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_ELEMENTS / MID_FL_ELEM //good
 	#pragma HLS STREAM variable=s_value_cache_in depth=8 //good
-	#pragma HLS STREAM variable=s_query depth=MODEL_ELEMENTS / MAX_FL_ELEM //good
-	#pragma HLS STREAM variable=s_query_r depth=MODEL_ELEMENTS / MAX_FL_ELEM //good
+	#pragma HLS STREAM variable=s_query depth=MODEL_ELEMENTS / MID_FL_ELEM //good
+	#pragma HLS STREAM variable=s_query_r depth=MODEL_ELEMENTS / MID_FL_ELEM //good
 	#pragma HLS STREAM variable=xb_ws_q depth=8 //good
 	#pragma HLS STREAM variable=s_key_cache_to_kernel depth=4096 //good
 	#pragma HLS STREAM variable=s_value_cache_to_kernel depth=4096 //good
@@ -278,9 +279,10 @@ void mha_kernel(s_fdata_v_t &output,
 	
 	rope_kernel(s_query, s_query_r, POS);
 	rope_kernel(s_key_cache_in, s_key_cache_in_r, POS);
+	vec_up_converter(s_value_cache_in_u, s_value_cache_in, MODEL_ELEMENTS/MID_FL_ELEM);
 
 	mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS);
-	mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, CURR_LAYER, POS);
+	mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in_u, CURR_LAYER, POS);
 	
 	wide_mha_kernel(xb_ws_q, s_key_cache_to_kernel, s_value_cache_to_kernel, s_query, POS + 1);
 	

@@ -14,7 +14,7 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_EL
   for (int i = 0; i < (MODEL_ELEMENTS / SM_FL_ELEM); i++) {
     #pragma HLS PIPELINE
 
-		if (INIT == 0) {
+		if (INIT == 1) {
 			x[i] = d.read();
 		}else {
 			x[i] += d.read();
@@ -43,7 +43,7 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_EL
 }
 
 
-void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t internal_tokens[MODEL_ELEMENTS/SM_FL_ELEM], fdata_v_t *diff, fdata_v_t *weights, const int CURR_LAYER, const int INIT){
+void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t internal_tokens[MODEL_ELEMENTS/SM_FL_ELEM], fdata_v_t *diff, fdata_v_t *weights, const int CURR_LAYER, const int INIT, const int offset){
 
 	#pragma HLS DATAFLOW
 	s_fdata_v_t s_weights, s_tokens, s_diff_out, s_diff, s_res_rms;
@@ -57,13 +57,13 @@ void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t internal_tokens[MODEL_E
 	#pragma HLS BIND_STORAGE variable=s_tokens type=fifo impl=bram
 	#pragma HLS BIND_STORAGE variable=s_diff type=fifo impl=bram
 	#pragma HLS BIND_STORAGE variable=s_tokens_out type=fifo impl=bram
-	#pragma HLS BIND_STORAGE variable=s_diff_out type=fifo impl=bram
+	#pragma HLS BIND_STORAGE variable=s_diff_out type=fifo impl=bram 
 	#pragma HLS BIND_STORAGE variable=s_weights type=fifo impl=bram
 	
 	mm2s_input_data(s_diff, diff, MODEL_ELEMENTS / SM_FL_ELEM);
 	// rms_load_input(s_weights, weights, CURR_LAYER);
-	mm2s_input_data(s_weights, weights, MODEL_ELEMENTS/SM_FL_ELEM, CURR_LAYER);
+	mm2s_input_data(s_weights, weights, MODEL_ELEMENTS/SM_FL_ELEM, CURR_LAYER, offset);
 
-	rmsnorm(s_tokens_out, s_diff_out, internal_tokens, s_weights, INIT);
+	rmsnorm(s_tokens_out, s_diff, internal_tokens, s_weights, INIT);
 	return;
 }

@@ -79,7 +79,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 }
 
 
-void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
+void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &xb_out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
 
 	constexpr int mm_thr = 2;
 	// const int num = N_DIM * M_DIM ;
@@ -89,6 +89,7 @@ void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_
 	const int sfCount = N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
 	const int qCount = N_DIM / MAX_QUANT_ELEM;
 	
+	#pragma HLS DATAFLOW
 	s_fdata_v_t tokens("tokens");
 	#pragma HLS STREAM variable=tokens depth = 16// MODEL_HIDDEN_DIM/MAX_FL_ELEM
 	s_fdata_v_t s_wsf("s_wsf");
@@ -118,7 +119,6 @@ void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_
 	s_fdata_v_t s_out("s_out");
 	
 
-	#pragma HLS DATAFLOW
 	// tok_load_input(tokens, fl_tok, N_DIM);
 	inf_split_tee(d_tok_sf, tok_sf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
 	inf_split_tee(d_tok, tok_q, (N_DIM / MAX_QUANT_ELEM));
@@ -136,5 +136,6 @@ void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_
 	
 	rr_merge(s_out, out_thread, M_DIM / SM_FL_ELEM);
 	s2mm_output_data(out, s_out, M_DIM / SM_FL_ELEM, (W_Off / SM_FL_ELEM));
+	// s_mm_output_sel(out, xb_out, s_out, M_DIM/SM_FL_ELEM, (W_Off / SM_FL_ELEM), AXI_SEL);
 	return;
 }
