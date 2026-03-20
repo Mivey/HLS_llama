@@ -78,6 +78,25 @@ void inf_split_tee(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vCoun
 	}
 }
 
+template<typename T, size_t N, size_t M>
+void inf_split_tee(hls::stream<hls::vector<T, M>> (&out)[N], hls::stream<T> &in, const int vCount){
+	
+	hls::vector<T, M> tmp;
+  for (int i = 0; i < vCount; i++) {
+		#pragma HLS LOOP_TRIPCOUNT max= (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM)
+    #pragma HLS PIPELINE II=1
+    // T data = in.read();
+
+		for (int i = 0 ; i < M; i++) {
+			tmp[i] = in.read();
+		}
+		for (int j = 0; j < N; j++) {
+			#pragma HLS UNROLL
+			out[j].write(tmp);
+		}
+	}
+}
+
 template<typename T, int N>
 void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vElem, const int vCount){
 	

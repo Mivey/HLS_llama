@@ -79,7 +79,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 }
 
 
-void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &xb_out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
+void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
 
 	constexpr int mm_thr = 2;
 	// const int num = N_DIM * M_DIM ;

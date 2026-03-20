@@ -116,7 +116,8 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 								const int FF_w1w3_W, const int FF_w1w3_sf_W,
 								const int FF_w2_W, const int FF_w2_sf_W, 
 								const int Embed_W, const int Embed_sf_W, 
-								const int rms_att_W, const int rms_ffn_W, const int rms_final_W){
+								const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
+								const int faker){
 	
 	constexpr int RMS_DEPTH = MODEL_ELEMENTS / SM_FL_ELEM;
 	constexpr int CACHE_DEPTH = MODEL_ELEMENTS * MODEL_SEQUENCE_LEN * MODEL_NUM_LAYERS / MAX_FL_ELEM;
@@ -157,6 +158,7 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 	#pragma HLS INTERFACE mode=s_axilite port=POS 					bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=N_DIM 				bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=M_DIM 				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=faker 				bundle=control
 	
 	#pragma HLS INTERFACE mode=s_axilite port=QKV_W					bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=QKV_sf_W			bundle=control
@@ -206,7 +208,7 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 	// mm2s_input_data(foo, tokens, MODEL_ELEMENTS/SM_FL_ELEM);
 	// s2mm_output_data(internal_diff, foo, MODEL_ELEMENTS / SM_FL_ELEM, 0);
 
-	for(int ii = 0; ii < (4 * MODEL_NUM_LAYERS + 1); ii++) {
+	for(int ii = 0; ii < faker; ii++) {
 		s_fdata_v_t s_tokens;
 		#pragma HLS STREAM variable=s_tokens depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		cu_selecter(s_tokens, internal_tokens, weights, tokens, mha_tokens, w1w3, key_cache, value_cache, POS, runner, tt);

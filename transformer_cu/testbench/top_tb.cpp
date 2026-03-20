@@ -1,6 +1,8 @@
 // #include "../forward.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <hls_math.h>
@@ -15,106 +17,38 @@
 #include "tb_main.h"
 
 
+struct axi_reg{
+	int POS;
+	int N_DIM;
+	int M_DIM; 
+	int QKV_W;
+	int QKV_sf_W;
+	int Out_W;
+	int Out_sf_W;
+	int FF_w1w3_W;
+	int FF_w1w3_sf_W;
+	int FF_w2_W;
+	int FF_w2_sf_W; 
+	int Embed_W;
+	int Embed_sf_W; 
+	int rms_att_W;
+	int rms_ffn_W; 
+	int rms_final_W;
+};
+
 int top_tb(){
 	std::cout<<"starting First Third testbench"<<std::endl;
-	/* ===================== open neede files =========================== */
-
-	/* ========== input files ============================= */
-	std::ifstream input_tokens_dat("seed_42069/150_input_tokens.bin", std::ios::binary);
-
-	std::ifstream wq_sf_dat("weights/query_sf.bin", std::ios::binary);
-	std::ifstream wq_q_dat("weights/query_q.bin", std::ios::binary);
-	std::ifstream wk_sf_dat("weights/key_sf.bin", std::ios::binary);
-	std::ifstream wk_q_dat("weights/key_q.bin", std::ios::binary);
-	std::ifstream wv_sf_dat("weights/value_sf.bin", std::ios::binary);
-	std::ifstream wv_q_dat("weights/value_q.bin", std::ios::binary);
 	
-	std::ifstream w1_sf_dat("weights/MLP_1_sf.bin", std::ios::binary);
-	std::ifstream w1_q_dat("weights/MLP_1_q.bin", std::ios::binary);
+	axi_reg axi_reg;
+	std::cout<<"Opened all the files sucessfully"<<std::endl;
 
-	std::ifstream w3_sf_dat("weights/MLP_3_sf.bin", std::ios::binary);
-	std::ifstream w3_q_dat("weights/MLP_3_q.bin", std::ios::binary);
-	std::ifstream rms_w_dat("weights/rms_att_w.bin", std::ios::binary);
 
-	std::ifstream w2_sf_dat("weights/MLP_2_sf.bin", std::ios::binary);
-	std::ifstream w2_q_dat("weights/MLP_2_q.bin", std::ios::binary);
-	std::ifstream mha_tok_dat("seed_42069/Post_MHA_tokens.bin", std::ios::binary);
-	/* =========================== output data ===================== */
-
+	std::string checkpoint = "weights/stories110M_q8.bin";
+	std::ifstream file(checkpoint, std::ios::binary | std::ios::ate);
 	std::ifstream out_value_dat("seed_42069_conv/150_output_value_cache_head_maj.bin", std::ios::binary);
 	std::ifstream out_key_dat("seed_42069_conv/150_output_key_cache_head_maj.bin", std::ios::binary);
-	
-	std::ifstream key_cache_dat("seed_42069/150_output_k_tokens.bin", std::ios::binary);
-	std::ifstream value_cache_dat("seed_42069/150_output_v_tokens.bin", std::ios::binary);
-	std::ifstream query_input("seed_42069/150_output_q_tokens.bin", std::ios::binary);
-	std::ifstream w1_output("seed_42069/150_output_w1_tokens.bin", std::ios::binary);
-	std::ifstream w3_output("seed_42069/150_output_w3_tokens.bin", std::ios::binary);
-	std::ifstream qkv_tokens("seed_42069/qkv_tokens.bin", std::ios::binary);
-	std::ifstream w1w3_tokens("seed_42069/w1w3_tokens.bin", std::ios::binary);
-
-	// std::ifstream logits_output("seed_42069/150_logits_output.bin", std::ios::binary);
 
 
-/* =================== check if files opened successfully */
-	if (!mha_tok_dat.is_open() ) {
-	std::cout<<"mha_tok_dat. Already off to a bad start. boop."<<std::endl;
-	exit(EXIT_FAILURE);
-	}	if (!input_tokens_dat.is_open() ) {
-	std::cout<<"input_tokens_dat. Already off to a bad start. boop."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!key_cache_dat.is_open() ) {
-	std::cout<<"key_cache_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!value_cache_dat.is_open() ) {
-	std::cout<<"value_cache_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!query_input.is_open() ) {
-	std::cout<<"query_input. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!w1_output.is_open() ) {
-	std::cout<<"w1_output. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!qkv_tokens.is_open() ) {
-	std::cout<<"qkv_tokens. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!w1w3_tokens.is_open() ) {
-	std::cout<<"w1w3_tokens. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	
-	if (!wq_sf_dat.is_open() ) {
-	std::cout<<"wq_sf_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!wq_q_dat.is_open() ) {
-	std::cout<<"wq_q_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-
-	if (!wk_sf_dat.is_open() ) {
-	std::cout<<"wk_sf_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!wk_q_dat.is_open() ) {
-	std::cout<<"wk_q_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	
-	if (!wv_sf_dat.is_open() ) {
-	std::cout<<"wv_sf_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!wv_q_dat.is_open() ) {
-	std::cout<<"wv_q_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	
 	if (!out_value_dat.is_open() ) {
 	std::cout<<"out_value_dat. Already off to a bad start."<<std::endl;
 	exit(EXIT_FAILURE);
@@ -123,35 +57,135 @@ int top_tb(){
 	std::cout<<"out_key_dat. Already off to a bad start."<<std::endl;
 	exit(EXIT_FAILURE);
 	}
+
+	if (!file.is_open() ) {
+	std::cout<<"No. Already off to a bad start."<<std::endl;
+	exit(EXIT_FAILURE);
+	}
+//todo: chedk if file is open
+
+
+	size_t rms_att_size = (MODEL_ELEMENTS * 12 * sizeof(my_float_t));
+	size_t rms_ffn_size = rms_att_size;
+	size_t rms_final_size = MODEL_ELEMENTS * sizeof(my_float_t);
 	
-	if (!w1_sf_dat.is_open() ) {
-	std::cout<<"w1_sf_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!w1_q_dat.is_open() ) {
-	std::cout<<"w1_q_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
+	size_t nn_size = MODEL_ELEMENTS * MODEL_ELEMENTS;
+	size_t nn_sf_size = nn_size * sizeof(float) / MODEL_SCALING_FACTOR;
+	
+	size_t nm_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM;
+	size_t nm_sf_size = nm_size * sizeof(float) / MODEL_SCALING_FACTOR;
+	
+	size_t embed_size = MODEL_ELEMENTS * MODEL_TOKENS * sizeof(int8_t);
+	size_t embed_sf_size = MODEL_ELEMENTS * MODEL_TOKENS * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
+	size_t qkv_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 3 * sizeof(int8_t);
+	size_t qkv_sf_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 3 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
+	size_t o_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 1 * sizeof(int8_t);
+	size_t o_sf_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 1 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
+	size_t w1w3_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 2 * sizeof(int8_t);
+	size_t w1w3_sf_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 2 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
+	size_t w2_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(int8_t);
+	size_t w2_sf_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
+
+
+
+	
+	size_t file_size = file.tellg();
+	file.seekg(0, std::ios::beg);
+	
+	size_t q_size = (MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3 ) * MODEL_NUM_LAYERS + MODEL_TOKENS)) * sizeof(int8_t);
+	size_t rms_size = (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)) * sizeof(my_float_t);
+	size_t sf_size = (q_size * sizeof(my_float_t) / (sizeof(int8_t) * MODEL_SCALING_FACTOR));
+	
+	std::vector<idata_v_t> quant_w_arr(q_size / sizeof(idata_v_t));
+	std::vector<fdata_v_t> sf_w_arr(sf_size / sizeof(fdata_v_t));
+	std::vector<fdata_v_t> rms_w_arr(rms_size / sizeof(fdata_v_t));
+	
+	char * q_ptr = reinterpret_cast<char*>(quant_w_arr.data());
+	char *sf_ptr = reinterpret_cast<char*>(sf_w_arr.data());
+	char *rms_ptr = reinterpret_cast<char*>(rms_w_arr.data());
+
+	size_t file_ptr = 256;
+	size_t rms_idx = 0;
+	file.seekg(file_ptr, std::ios::beg);
+	
+	axi_reg.rms_att_W = 0;
+	file.read(rms_ptr + rms_idx, rms_att_size);
+	rms_idx += rms_att_size;
+	
+	axi_reg.rms_ffn_W = axi_reg.rms_att_W + rms_att_size;
+	file.read(rms_ptr + rms_idx, rms_ffn_size);
+	rms_idx += rms_ffn_size;
+	
+	axi_reg.rms_final_W = axi_reg.rms_ffn_W + rms_ffn_size;
+	file.read(rms_ptr + rms_idx, rms_final_size);
+	file_ptr = file.tellg();
+	
+	size_t q_idx = 0;
+	size_t sf_idx = 0;
+	
+	axi_reg.Embed_W = 0;
+	file.read(q_ptr + q_idx, embed_size);
+	q_idx += embed_size;
+	
+	axi_reg.Embed_sf_W = 0;
+	file.read(sf_ptr + sf_idx, embed_sf_size);
+	sf_idx += embed_sf_size;
+	
+	// read QKV
+	axi_reg.QKV_sf_W = sf_idx;
+	axi_reg.QKV_W = q_idx;
+	
+	file_ptr = file_ptr + embed_sf_size + embed_size;
+	
+	for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
+	
+		for (int j = 0; j < 3; j++) {
+			file.seekg((file_ptr + j * (nn_size + nn_sf_size) * (MODEL_NUM_LAYERS - 0)), std::ios::beg);
+			file.read(q_ptr + q_idx, nn_size);
+			q_idx += nn_size;
+			file.read(sf_ptr + sf_idx, nn_sf_size);
+			sf_idx += nn_sf_size;
+		}
+		file_ptr += (nn_sf_size + nn_size);
 	}
 	
-	if (!w3_sf_dat.is_open() ) {
-	std::cout<<"w3_sf_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
+	axi_reg.Out_sf_W = sf_idx;
+	axi_reg.Out_W = q_idx;
+	//already at Output
+	for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
+		
+		file.read(q_ptr + q_idx, nn_size);
+		q_idx += nn_size;
+		file.read(sf_ptr + sf_idx, nn_sf_size);
+		sf_idx += nn_sf_size;
 	}
-	if (!w3_q_dat.is_open() ) {
-	std::cout<<"w3_q_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
+	file_ptr = file.tellg();
 	
-	if (!w2_sf_dat.is_open() ) {
-	std::cout<<"w2_sf_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!w2_q_dat.is_open() ) {
-	std::cout<<"w2_q_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
+	axi_reg.FF_w1w3_sf_W = sf_idx;
+	axi_reg.FF_w1w3_W = q_idx;
+	//now at w1
+	for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
 	
-	std::cout<<"Opened all the files sucessfully"<<std::endl;
+		for (int j = 0; j < 2; j++) {
+			file.seekg((file_ptr + j * 2 * (nm_size + nm_sf_size) * (MODEL_NUM_LAYERS - 0)), std::ios::beg); // skip over FFN2
+			file.read(q_ptr + q_idx, nm_size);
+			q_idx += nm_size;
+			file.read(sf_ptr + sf_idx, nm_sf_size);
+			sf_idx += nm_sf_size;
+		}
+		file_ptr += (nm_size + nm_sf_size);
+	}
+
+	axi_reg.FF_w2_W = q_idx;
+	axi_reg.FF_w2_sf_W = sf_idx;
+	file.seekg(file_ptr, std::ios::beg);
+	for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
+		
+		file.read(q_ptr + q_idx, nm_size);
+		q_idx += nm_size;
+		file.read(sf_ptr + sf_idx, nm_sf_size);
+		sf_idx += nm_sf_size;
+	}
 
 	/* ============================== constants related to tb ===================================== */
 	int pos = 150;
@@ -202,46 +236,14 @@ int top_tb(){
 
 /* ===================================== declare our vectors ===================================== */
 
-	std::vector<mfdata_v_t> tokens_arr(tokens_cnt * 3);
+	std::vector<fdata_v_t> tokens_arr(tokens_cnt * 3);
+	std::vector<fdata_v_t> swiglu_arr(hd_tok_cnt * 2);
+	std::vector<adata_v_t> mha_tokens_arr((tokens_size / (sizeof(adata_v_t))));
+	std::vector<fdata_v_t> output_arr(logits_cnt);
 	// std::vector<mfdata_v_t> val_in_rope_arr(tokens_cnt);
 	// std::vector<mfdata_v_t> key_in_rope_arr(tokens_cnt);
 
 
-	std::vector<mfdata_v_t> rms_final_arr(rms_w_cnt);
-
-	std::vector<idata_v_t> wq_q_arr(quant_data_cnt);
-	std::vector<fdata_v_t> wq_sf_arr(sf_data_cnt);
-
-
-	std::vector<idata_v_t> wcls_q_arr(logits_q_cnt);
-	std::vector<fdata_v_t> wcls_sf_arr(logits_sf_cnt);
-
-	std::vector<idata_v_t> wk_q_arr(quant_data_cnt);
-	std::vector<fdata_v_t> wk_sf_arr(sf_data_cnt);
-
-	std::vector<idata_v_t> wv_q_arr(quant_data_cnt);
-	std::vector<fdata_v_t> wv_sf_arr(sf_data_cnt);
-
-	std::vector<idata_v_t> wo_q_arr(quant_data_cnt);
-	std::vector<fdata_v_t> wo_sf_arr(sf_data_cnt);
-
-	std::vector<mfdata_v_t> key_in_arr(tokens_cnt * 3);
-	std::vector<mfdata_v_t> value_in_arr(tokens_cnt * 3);
-	std::vector<adata_v_t> key_arr_a(cache_cnt);
-	std::vector<adata_v_t> value_arr_a(cache_cnt);
-
-	std::vector<mfdata_v_t> rms_ffn_arr(rms_w_cnt);
-	std::vector<mfdata_v_t> mha_tok_gold(tokens_cnt);
-	std::vector<mfdata_v_t> mha_tok_act(tokens_cnt);
-
-	std::vector<idata_v_t> w1_q_arr(hd_tok_cnt);
-	std::vector<fdata_v_t> w1_sf_arr(hd_sf_cnt);
-
-	std::vector<idata_v_t> w3_q_arr(hd_tok_cnt);
-	std::vector<fdata_v_t> w3_sf_arr(hd_sf_cnt);
-
-	std::vector<idata_v_t> w2_q_arr(hd_tok_cnt);
-	std::vector<fdata_v_t> w2_sf_arr(hd_sf_cnt);
 
 	// std::vector<std::vector<fdata_v_t>> query_arr(2, std::vector<fdata_v_t>(out_data_cnt));
 	std::vector<std::vector<mfdata_v_t>> key_arr(2, std::vector<mfdata_v_t>(cache_cnt));
@@ -252,64 +254,11 @@ int top_tb(){
 	std::vector<std::vector<my_float_t>> att_score_arr(2, std::vector<my_float_t>(MODEL_ELEMENTS));
 
 
+	std::vector<mfdata_v_t> key_in_arr(tokens_cnt * 3);
+	std::vector<mfdata_v_t> value_in_arr(tokens_cnt * 3);
+	std::vector<mfdata_v_t> key_arr_a(cache_cnt);
+	std::vector<mfdata_v_t> value_arr_a(cache_cnt);
 
-
-
-	std::vector<idata_v_t> comb_q_arr(slice_w_data_cnt * 3);
-	std::vector<fdata_v_t> comb_sf_arr(slice_sf_data_cnt * 3);
-	std::vector<fdata_v_t> actual_arr(tokens_cnt * 3);
-	std::vector<fdata_v_t> golden_arr(tokens_cnt * 3);
-	std::vector<fdata_v_t> rms_tokens_arr(tokens_cnt);
-	std::vector<fdata_v_t> rms_w_arr(rms_w_cnt);
-	std::vector<fdata_v_t> w1w3_arr(tok_w1_cnt * 2);
-	/* ================================== read data into array =================================== */
-
-// 	key_output
-// w1_output
-// qkv_tokens
-// w1w3_tokens		mha_tok_dat
-	query_input.read(reinterpret_cast<char *>(tokens_arr.data()), tokens_size);
-	wq_q_dat.read(reinterpret_cast<char *>(comb_q_arr.data()), slice_w_data_size);
-	wk_q_dat.read(reinterpret_cast<char *>(comb_q_arr.data() + slice_w_data_cnt), slice_w_data_size);
-	wv_q_dat.read(reinterpret_cast<char *>(comb_q_arr.data() + slice_w_data_cnt * 2), slice_w_data_size);
-	
-	wq_sf_dat.read(reinterpret_cast<char *>(comb_sf_arr.data()), slice_sf_data_size);
-	wk_sf_dat.read(reinterpret_cast<char *>(comb_sf_arr.data() + slice_sf_data_cnt), slice_sf_data_size);
-	wv_sf_dat.read(reinterpret_cast<char *>(comb_sf_arr.data() + slice_sf_data_cnt * 2), slice_sf_data_size);
-	query_input.seekg(0);
-	query_input.read(reinterpret_cast<char *>(golden_arr.data()), tokens_size);
-	key_cache_dat.read(reinterpret_cast<char *>(golden_arr.data() + tokens_cnt), tokens_size);
-	value_cache_dat.read(reinterpret_cast<char *>(golden_arr.data() + tokens_cnt * 2), tokens_size);
-	
-	input_tokens_dat.read(reinterpret_cast<char *>(rms_tokens_arr.data()), tokens_size);
-	rms_w_dat.read(reinterpret_cast<char *>(rms_w_arr.data()), rms_w_size);
-
-	w1_output.read(reinterpret_cast<char*>(w1w3_arr.data()), tok_w1_size);
-	w3_output.read(reinterpret_cast<char*>(w1w3_arr.data() + tok_w1_cnt), tok_w1_size);
-
-	
-	// wq_q_dat.read(reinterpret_cast<char *>(wq_q_arr.data()), quant_data_size);
-	// wq_sf_dat.read(reinterpret_cast<char *>(wq_sf_arr.data()), sf_data_size);
-
-	// wk_q_dat.read(reinterpret_cast<char *>(wk_q_arr.data()), quant_data_size);
-	// wk_sf_dat.read(reinterpret_cast<char *>(wk_sf_arr.data()), sf_data_size);
-
-	// wv_q_dat.read(reinterpret_cast<char *>(wv_q_arr.data()), quant_data_size);
-	// wv_sf_dat.read(reinterpret_cast<char *>(wv_sf_arr.data()), sf_data_size);
-
-	// w1_q_dat.read(reinterpret_cast<char *>(w1_q_arr.data()), hd_tok_size);
-	// w1_sf_dat.read(reinterpret_cast<char *>(w1_sf_arr.data()), hd_sf_size);
-	mha_tok_dat.read(reinterpret_cast<char *>(mha_tok_gold.data()), tokens_size);
-
-	// w3_q_dat.read(reinterpret_cast<char *>(w3_q_arr.data()), hd_tok_size);
-	// w3_sf_dat.read(reinterpret_cast<char *>(w3_sf_arr.data()), hd_sf_size);
-
-	// w2_q_dat.read(reinterpret_cast<char *>(w2_q_arr.data()), hd_tok_size);
-	// w2_sf_dat.read(reinterpret_cast<char *>(w2_sf_arr.data()), hd_sf_size);
-	
-
-	key_cache_dat.read(reinterpret_cast<char *>(key_in_arr.data()), tokens_size);
-	value_cache_dat.read(reinterpret_cast<char *>(value_in_arr.data()), tokens_size);
 
 	out_key_dat.read(reinterpret_cast<char *>(key_arr[0].data()), cache_size);
 	out_value_dat.read(reinterpret_cast<char *>(value_arr[0].data()), cache_size);
@@ -317,6 +266,9 @@ int top_tb(){
 	// memcpy(value_arr[0].data(), value_arr_a.data(), cache_size);
 	memcpy(key_arr_a.data(), key_arr[0].data(), cache_size);
 	memcpy(value_arr_a.data(), value_arr[0].data(), cache_size);
+
+	/* ================================== read data into array =================================== */
+
 	
 	std::cout<<"Loaded the files into memory"<<std::endl;
 
@@ -329,37 +281,17 @@ int top_tb(){
 
 int curr_pos = 150;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
-
-	/* ============================ Call the function(s) ====================================== */
-
-	// void matmult_kernel(mfdata_v_t *out, mfdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER)
-
-	// matmult_kernel(tok_out_arr[1].data(), tokens_arr.data(), wk_sf_arr.data(), wk_q_arr.data(), MODEL_ELEMENTS, MODEL_ELEMENTS, 0);
-	// qkv_tokens.read(reinterpret_cast<char *>(tokens_arr.data()), tokens_size);
-	// key_output.read(reinterpret_cast<char *>(tok_out_arr[0].data()), tokens_size);
-// 	tok_w1_arr
-// tok_w1_out_arr
-// mha_kernel(tokens_arr.data(), mfdata_v_t *key_cache, mfdata_v_t *value_cache, mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in, const int POS, const int CURR_LAYER)
-	// mha_kernel(tokens_arr.data(), key_arr_a.data(), value_arr_a.data(), key_in_arr.data(), value_in_arr.data(), curr_pos, 0);
-	
-/*======= get all the data =================================== */
-
-	// for (int i = 0; i < MODEL_ELEMENTS; i++) {
-	// 	// float foo = att_score_arr[i].data();
-	// 	std::cout<< "golden: "<<att_score_arr[0][i]<<std::endl;
-	// }
-
-	transformer_cu(actual_arr.data(), comb_sf_arr.data(), comb_q_arr.data(), 
-	actual_arr.data(), comb_sf_arr.data(), comb_q_arr.data(), 
-	rms_tokens_arr.data(), rms_w_arr.data(), 
-	w1w3_arr.data(), 
-	tokens_arr.data(), key_arr_a.data(), value_arr_a.data(), curr_pos, 0, 0, 1, MODEL_ELEMENTS, MODEL_ELEMENTS * 3);
-	/*  ====================================== process the results ============================ */
-	// std::cout<<"token_arr size: "<<log_out_arr[1].size()<<std::endl;
-	// std::cout<<"key size: "<<key_in_arr.size()<<std::endl;
-	// std::cout<<"value size: "<<value_in_arr.size()<<std::endl;
+transformer_cu(	output_arr.data(), sf_w_arr.data(), quant_w_arr.data(), 
+								output_arr.data(), sf_w_arr.data(), quant_w_arr.data(), 
+								tokens_arr.data(), rms_w_arr.data(), swiglu_arr.data(), 
+								mha_tokens_arr.data(), key_arr_a.data(), value_arr_a.data(), 
+								curr_pos, MODEL_ELEMENTS, MODEL_ELEMENTS, 
+								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
+								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
+								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 1);
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
-	parse_results<fdata_v_t, float>(golden_arr, actual_arr);
+	// parse_results<fdata_v_t, float>(golden_arr, actual_arr);
 	// std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	// parse_results<mfdata_v_t, float>(tok_w1_out_arr[0], tok_w1_out_arr[1]);
 

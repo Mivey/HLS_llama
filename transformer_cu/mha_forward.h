@@ -334,9 +334,15 @@ void mha_WAR_store_load(adata_v_t *cache, s_adata_v_t &output, s_adata_v_t &inpu
 void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_thr],
 								fdata_v_t *out_0, fdata_v_t *w_sf_0, idata_v_t *w_0, 
 								fdata_v_t *out_1, fdata_v_t *w_sf_1, idata_v_t *w_1, 
-								fdata_v_t *diff, fdata_v_t *weights, fdata_v_t *w1w3, 
-								adata_v_t *tokens, adata_v_t *key_cache, adata_v_t *value_cache, 
-								const int POS, const int CURR_LAYER, const int SEL, const int INIT,
-								const int N_DIM, const int M_DIM);
+								fdata_v_t *tokens, fdata_v_t *weights, fdata_v_t *w1w3, 
+								adata_v_t *mha_tokens, adata_v_t *key_cache, adata_v_t *value_cache, 
+								const int POS, const int N_DIM, const int M_DIM, 
+								const int QKV_W, const int QKV_sf_W,
+								const int Out_W, const int Out_sf_W,
+								const int FF_w1w3_W, const int FF_w1w3_sf_W,
+								const int FF_w2_W, const int FF_w2_sf_W, 
+								const int Embed_W, const int Embed_sf_W, 
+								const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
+								const int faker);
 #endif
 

@@ -74,3 +74,6 @@ mha/*
 transformer_cu/.cache/
 transformer_cu/.cache/
 transformer_cu/combo_cu/
+transformer_cu/testbench/seed_42069/*
+transformer_cu/testbench/seed_42069_conv/*
+transformer_cu/testbench/weights/*
