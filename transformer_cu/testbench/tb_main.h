@@ -73,7 +73,7 @@ template<typename T, typename S>
 void parse_results (const std::vector<T> &gold, const std::vector<T> &obs, double rel_tol = 0.03, double abs_tol = 1e-4){
     int pass = 0;
     int fail = 0;
-    int print_limit = 200; // Prevent console spam
+    int print_limit = 900; // Prevent console spam
 
     // Metrics for AI/LLM evaluation
     double mse_sum = 0.0;

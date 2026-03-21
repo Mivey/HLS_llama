@@ -47,7 +47,17 @@ int top_tb(){
 	std::ifstream file(checkpoint, std::ios::binary | std::ios::ate);
 	std::ifstream out_value_dat("seed_42069_conv/150_output_value_cache_head_maj.bin", std::ios::binary);
 	std::ifstream out_key_dat("seed_42069_conv/150_output_key_cache_head_maj.bin", std::ios::binary);
+	// std::ifstream tokens_dat("seed_42069_conv/150_output_key_cache_head_maj.bin", std::ios::binary);
 
+	std::ifstream key_output("seed_42069/150_output_k_tokens.bin", std::ios::binary);
+	std::ifstream value_output("seed_42069/150_output_v_tokens.bin", std::ios::binary);
+	std::ifstream query_output("seed_42069/150_output_q_tokens.bin", std::ios::binary);
+	std::ifstream input_tokens("seed_42069/150_input_tokens.bin", std::ios::binary);
+	// std::ifstream w2_output("seed_42069/TOP_25_xb2_mm_output_A1.bin", std::ios::binary);
+	// std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary);
+	std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary);
+	std::ifstream w1_output("seed_42069/150_output_w1_tokens.bin", std::ios::binary);
+	std::ifstream w3_output("seed_42069/150_output_w3_tokens.bin", std::ios::binary);
 
 	if (!out_value_dat.is_open() ) {
 	std::cout<<"out_value_dat. Already off to a bad start."<<std::endl;
@@ -60,6 +70,31 @@ int top_tb(){
 
 	if (!file.is_open() ) {
 	std::cout<<"No. Already off to a bad start."<<std::endl;
+	exit(EXIT_FAILURE);
+	}
+
+	if (!input_tokens.is_open() ) {
+	std::cout<<"No input. Already off to a bad start."<<std::endl;
+	exit(EXIT_FAILURE);
+	}
+
+	if (!w2_output.is_open() ) {
+	std::cout<<"No w2. Already off to a bad start."<<std::endl;
+	exit(EXIT_FAILURE);
+	}
+
+	if (!key_output.is_open() ) {
+	std::cout<<"No k. Already off to a bad start."<<std::endl;
+	exit(EXIT_FAILURE);
+	}
+
+	if (!value_output.is_open() ) {
+	std::cout<<"No v. Already off to a bad start."<<std::endl;
+	exit(EXIT_FAILURE);
+	}
+
+	if (!query_output.is_open() ) {
+	std::cout<<"No q. Already off to a bad start."<<std::endl;
 	exit(EXIT_FAILURE);
 	}
 //todo: chedk if file is open
@@ -86,9 +121,8 @@ int top_tb(){
 	size_t w2_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(int8_t);
 	size_t w2_sf_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
 
-
-
 	
+	// file.seekg(0, std::ios::end);
 	size_t file_size = file.tellg();
 	file.seekg(0, std::ios::beg);
 	
@@ -198,7 +232,7 @@ int top_tb(){
 	const int rms_w_size = MODEL_ELEMENTS * 4 * layer_cnt;
 	const int tokens_size = MODEL_ELEMENTS * 4;
 	const int tok_w1_size = MODEL_HIDDEN_DIM * 4;
-	const int logits_size = MODEL_TOKENS * 4;
+	const int logits_size = MODEL_HIDDEN_DIM * 2 * sizeof(float);//* MODEL_TOKENS * 4;//
 	const int logits_quant_size = MODEL_ELEMENTS * MODEL_TOKENS * 1;
 	const int logits_sf_size = MODEL_ELEMENTS * MODEL_TOKENS / MODEL_SCALING_FACTOR * 4;
 	// const int sf_el = MODEL_ELEMENTS / 64;
@@ -218,7 +252,7 @@ int top_tb(){
 	const int rms_w_cnt = rms_w_size / sizeof(fdata_v_t);
 	const int tokens_cnt = tokens_size / sizeof(fdata_v_t);
 	const int tok_w1_cnt = tok_w1_size / sizeof(fdata_v_t);
-	const int logits_cnt = logits_size / sizeof(mfdata_v_t);
+	const int logits_cnt = logits_size / sizeof(fdata_v_t);
 	const int logits_q_cnt = logits_quant_size / sizeof(idata_v_t);
 	const int logits_sf_cnt = logits_sf_size / sizeof(fdata_v_t);
 	const int slice_w_data_cnt = slice_w_data_size / sizeof(mfdata_v_t);
@@ -240,9 +274,56 @@ int top_tb(){
 	std::vector<fdata_v_t> swiglu_arr(hd_tok_cnt * 2);
 	std::vector<adata_v_t> mha_tokens_arr((tokens_size / (sizeof(adata_v_t))));
 	std::vector<fdata_v_t> output_arr(logits_cnt);
+	std::vector<fdata_v_t> golden_output_arr(logits_cnt);
 	// std::vector<mfdata_v_t> val_in_rope_arr(tokens_cnt);
 	// std::vector<mfdata_v_t> key_in_rope_arr(tokens_cnt);
+	
+	// query_output.seekg(0, std::ios::end);
+	// file_size = query_output.tellg();
+	// query_output.seekg(0, std::ios::beg);
+	char *goa = reinterpret_cast<char*>(golden_output_arr.data());
+	size_t goa_idx = 0;
+	// query_output.read(goa, file_size);
+	// goa_idx += file_size;
+	
+	// key_output.seekg(0, std::ios::beg);
+	// key_output.read(goa + goa_idx, file_size);
+	// goa_idx += file_size;
+	
+	// value_output.seekg(0, std::ios::beg);
+	// value_output.read(goa + goa_idx, file_size);
 
+	w2_output.seekg(0, std::ios::end);
+	file_size = w2_output.tellg();
+	w2_output.seekg(0, std::ios::beg);
+	
+	w2_output.read(goa, file_size);
+
+
+	// w1_output.seekg(0, std::ios::end);
+	// file_size = w1_output.tellg();
+	// w1_output.seekg(0, std::ios::beg);
+	
+	// w1_output.read(goa, file_size);
+	// w3_output.read(goa + file_size, file_size);
+
+
+
+
+	char *oa = reinterpret_cast<char*>(output_arr.data());
+	input_tokens.seekg(0, std::ios::end);
+	file_size = input_tokens.tellg();
+	input_tokens.seekg(0, std::ios::beg);
+	input_tokens.read(oa, file_size);
+
+
+	// w1_output.seekg(0, std::ios::end);
+	// file_size = w1_output.tellg();
+	// w1_output.seekg(0, std::ios::beg);
+	
+	// w1_output.read(oa, file_size);
+	// w3_output.read(oa + file_size, file_size);
+	
 
 
 	// std::vector<std::vector<fdata_v_t>> query_arr(2, std::vector<fdata_v_t>(out_data_cnt));
@@ -259,6 +340,8 @@ int top_tb(){
 	std::vector<mfdata_v_t> key_arr_a(cache_cnt);
 	std::vector<mfdata_v_t> value_arr_a(cache_cnt);
 
+
+	// w2_output.read(reinterpret_cast<char *>(golden_output_arr.data()), tokens_size);
 
 	out_key_dat.read(reinterpret_cast<char *>(key_arr[0].data()), cache_size);
 	out_value_dat.read(reinterpret_cast<char *>(value_arr[0].data()), cache_size);
@@ -283,23 +366,24 @@ int curr_pos = 150;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
 transformer_cu(	output_arr.data(), sf_w_arr.data(), quant_w_arr.data(), 
 								output_arr.data(), sf_w_arr.data(), quant_w_arr.data(), 
-								tokens_arr.data(), rms_w_arr.data(), swiglu_arr.data(), 
-								mha_tokens_arr.data(), key_arr_a.data(), value_arr_a.data(), 
+								rms_w_arr.data(), key_arr_a.data(), value_arr_a.data(), 
 								curr_pos, MODEL_ELEMENTS, MODEL_ELEMENTS, 
 								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
 								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
 								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 1);
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 4);
+
+	std::fill(output_arr.begin() + 192, output_arr.end(), 0);
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
-	// parse_results<fdata_v_t, float>(golden_arr, actual_arr);
+	parse_results<fdata_v_t, float>(golden_output_arr, output_arr);
 	// std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	// parse_results<mfdata_v_t, float>(tok_w1_out_arr[0], tok_w1_out_arr[1]);
 
-	// std::cout<< "========================= Value cache array data ========================"<<std::endl;
-	// parse_cache_results<mfdata_v_t, float>(value_arr[0], value_arr_a);
+	std::cout<< "========================= Value cache array data ========================"<<std::endl;
+	parse_cache_results<mfdata_v_t, float>(value_arr[0], value_arr_a);
 
-	// std::cout<< "========================= Key cache array data ========================"<<std::endl;
-	// parse_cache_results<mfdata_v_t, float>(key_arr[0], key_arr_a);
+	std::cout<< "========================= Key cache array data ========================"<<std::endl;
+	parse_cache_results<mfdata_v_t, float>(key_arr[0], key_arr_a);
 
 	return 0;
 

@@ -306,12 +306,13 @@ void swiglu(hls::stream<T> &hb_out, hls::stream<T> &hb_in, hls::stream<T> &hb2_i
 	for (int i = 0 ; i < MODEL_HIDDEN_DIM / elem; i++) {
 	#pragma HLS pipeline II=4
 		T val =hb_in.read();
+		T tmp_hb2 = hb2_in.read();
 		T eval;
 		for (int j = 0; j < elem; j++) {
 			#pragma HLS UNROLL
-			eval[j] = val[j] / ( 1.0f + hls::expf(-1 * (float)val[j]));
+			eval[j] = val[j] / ( 1.0f + hls::expf(-1 * val[j])) * tmp_hb2[j];
 		}
-		hb_out.write(eval * hb2_in.read());
+		hb_out.write(eval);
 	}
 }
 
@@ -331,18 +332,31 @@ void resid_conn(hls::stream<T> &tokens_out, hls::stream<T> &tokens_in, hls::stre
 	}
 }
 void mha_WAR_store_load(adata_v_t *cache, s_adata_v_t &output, s_adata_v_t &input, const int CURR_LAYER, const int POS);
+// void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_thr],
+// 								fdata_v_t *out_0, fdata_v_t *w_sf_0, idata_v_t *w_0, 
+// 								fdata_v_t *out_1, fdata_v_t *w_sf_1, idata_v_t *w_1, 
+// 								fdata_v_t *tokens, fdata_v_t *weights, fdata_v_t *w1w3, 
+// 								adata_v_t *mha_tokens, adata_v_t *key_cache, adata_v_t *value_cache, 
+// 								const int POS, const int N_DIM, const int M_DIM, 
+// 								const int QKV_W, const int QKV_sf_W,
+// 								const int Out_W, const int Out_sf_W,
+// 								const int FF_w1w3_W, const int FF_w1w3_sf_W,
+// 								const int FF_w2_W, const int FF_w2_sf_W, 
+// 								const int Embed_W, const int Embed_sf_W, 
+// 								const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
+// 								const int faker);
+
+
 void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_thr],
 								fdata_v_t *out_0, fdata_v_t *w_sf_0, idata_v_t *w_0, 
 								fdata_v_t *out_1, fdata_v_t *w_sf_1, idata_v_t *w_1, 
-								fdata_v_t *tokens, fdata_v_t *weights, fdata_v_t *w1w3, 
-								adata_v_t *mha_tokens, adata_v_t *key_cache, adata_v_t *value_cache, 
+								fdata_v_t *weights, adata_v_t *key_cache, adata_v_t *value_cache, 
 								const int POS, const int N_DIM, const int M_DIM, 
 								const int QKV_W, const int QKV_sf_W,
 								const int Out_W, const int Out_sf_W,
 								const int FF_w1w3_W, const int FF_w1w3_sf_W,
 								const int FF_w2_W, const int FF_w2_sf_W, 
 								const int Embed_W, const int Embed_sf_W, 
-								const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
-								const int faker);
+								const int rms_att_W, const int rms_ffn_W, const int rms_final_W, const int faker);
 #endif
 

@@ -236,7 +236,7 @@ void wide_mha_kernel(s_adata_v_t &xb,
 }
 
 void mha_kernel(s_fdata_v_t &output,
-								adata_v_t *tokens, //6 mha_kernel
+								fdata_v_t *tokens, //6 mha_kernel
                 adata_v_t *key_cache, 
                 adata_v_t *value_cache, 
                 const int POS, const int CURR_LAYER){
@@ -245,8 +245,8 @@ void mha_kernel(s_fdata_v_t &output,
 	s_adata_v_t xb_ws_q("WS to Quantizer for XB Stream");
 	s_adata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
 	s_adata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
-	s_adata_v_t s_value_cache_in, s_query_r, s_key_cache_in_r;
-	s_adata_v_t s_key_cache_in, s_query, s_value_cache_in_u;
+	s_fdata_v_t s_key_cache_in, s_query, s_value_cache_in, s_query_r, s_key_cache_in_r;
+	s_adata_v_t s_value_cache_in_u,  s_key_cache_in_u, s_query_u;
 	// s_mfdata_v_t sm_query, sm_kc, sm_vc;
 
   #pragma HLS STABLE variable=POS
@@ -256,6 +256,9 @@ void mha_kernel(s_fdata_v_t &output,
 
 	#pragma HLS STREAM variable=s_key_cache_in depth=8 //good
 	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_ELEMENTS / MID_FL_ELEM //good
+	#pragma HLS STREAM variable=s_query_u depth=MODEL_ELEMENTS / MID_FL_ELEM 
+	#pragma HLS STREAM variable=s_key_cache_in_u depth=16 
+	#pragma HLS STREAM variable=s_value_cache_in_u depth=16
 	#pragma HLS STREAM variable=s_value_cache_in depth=8 //good
 	#pragma HLS STREAM variable=s_query depth=MODEL_ELEMENTS / MID_FL_ELEM //good
 	#pragma HLS STREAM variable=s_query_r depth=MODEL_ELEMENTS / MID_FL_ELEM //good
@@ -273,20 +276,24 @@ void mha_kernel(s_fdata_v_t &output,
 	// mm2s_input_data(s_query_r, tokens, MODEL_ELEMENTS/MAX_FL_ELEM);
 	// mm2s_input_data(s_key_cache_in_r, key_cache_in, MODEL_ELEMENTS/MAX_FL_ELEM);
 	// mm2s_input_data(s_value_cache_in, value_cache_in, MODEL_ELEMENTS/MAX_FL_ELEM);
-	mm2s_input_data(s_query_r, tokens, MODEL_ELEMENTS/MID_FL_ELEM, 0); //read query first
-	mm2s_input_data(s_key_cache_in_r, tokens, MODEL_ELEMENTS/MID_FL_ELEM, 1); //key
-	mm2s_input_data(s_value_cache_in, tokens, MODEL_ELEMENTS/MID_FL_ELEM, 2); // value
+	const int tokens_cnt = MODEL_ELEMENTS / SM_FL_ELEM; 
+	
+	mm2s_input_data(s_query_r, tokens, tokens_cnt, 0); //read query first
+	mm2s_input_data(s_key_cache_in_r, tokens, tokens_cnt, 1); //key
+	mm2s_input_data(s_value_cache_in, tokens, tokens_cnt, 2); // value
+	vec_up_converter(s_value_cache_in_u, s_value_cache_in, MODEL_ELEMENTS/MID_FL_ELEM);
 	
 	rope_kernel(s_query, s_query_r, POS);
+	vec_up_converter(s_query_u, s_query, MODEL_ELEMENTS/MID_FL_ELEM);
 	rope_kernel(s_key_cache_in, s_key_cache_in_r, POS);
-	vec_up_converter(s_value_cache_in_u, s_value_cache_in, MODEL_ELEMENTS/MID_FL_ELEM);
+	vec_up_converter(s_key_cache_in_u, s_key_cache_in, MODEL_ELEMENTS/MID_FL_ELEM);
 
-	mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS);
+	mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in_u, CURR_LAYER, POS);
 	mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in_u, CURR_LAYER, POS);
 	
-	wide_mha_kernel(xb_ws_q, s_key_cache_to_kernel, s_value_cache_to_kernel, s_query, POS + 1);
+	wide_mha_kernel(xb_ws_q, s_key_cache_to_kernel, s_value_cache_to_kernel, s_query_u, POS + 1);
 	
-	vec_down_converter(output, xb_ws_q, MODEL_ELEMENTS/SM_FL_ELEM);
+	vec_down_converter(output, xb_ws_q, tokens_cnt);
 	// store_output(tokens, xb_ws_q, MODEL_ELEMENTS);
 
 	return;

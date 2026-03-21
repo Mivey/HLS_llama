@@ -16,7 +16,7 @@
 //                 const int POS, const int CURR_LAYER);
 
 void mha_kernel(s_fdata_v_t &output,
-								adata_v_t *tokens, //6 mha_kernel
+								fdata_v_t *tokens, //6 mha_kernel
                 adata_v_t *key_cache, 
                 adata_v_t *value_cache, 
                 const int POS, const int CURR_LAYER);

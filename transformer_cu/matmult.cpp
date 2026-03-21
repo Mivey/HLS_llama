@@ -79,7 +79,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 }
 
 
-void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
+void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg){
 
 	constexpr int mm_thr = 2;
 	// const int num = N_DIM * M_DIM ;
@@ -123,8 +123,8 @@ void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_
 	inf_split_tee(d_tok_sf, tok_sf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
 	inf_split_tee(d_tok, tok_q, (N_DIM / MAX_QUANT_ELEM));
 	
-	mm2s_input_data(s_wsf, w_sf, sf_count, CURR_LAYER);
-	mm2s_input_data(s_w, w, w_count, CURR_LAYER);
+	mm2s_input_data(s_wsf, w_sf, sf_count, CURR_LAYER, sf_reg);
+	mm2s_input_data(s_w, w, w_count, CURR_LAYER, w_reg);
 
 	inf_round_robin(d_wsf, s_wsf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)), M_DIM);
 	inf_round_robin(d_w, s_w, (N_DIM / MAX_QUANT_ELEM), M_DIM);
