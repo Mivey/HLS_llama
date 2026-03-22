@@ -72,10 +72,10 @@ void wide_mha_iterate(hls::stream<my_float_t> &out, s_adata_v_t & query, s_adata
 	
 	const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
 	const my_float_t score_scalar = 1.0f / sqrtf((float) MODEL_HEAD_SIZE);
-	std::array<adata_v_t, (array_size)> query_arr;
+	std::array<mfdata_v_t, (array_size)> query_arr;
 	my_float_t att = 0.0f;
 	// std::array<my_float_t, (array_size)> score;
-	adata_v_t kc_arr[array_size];
+	mfdata_v_t kc_arr[array_size];
 	#pragma HLS ARRAY_PARTITION variable=kc_arr complete
 	// #pragma HLS ARRAY_PARTITION variable=score complete
 	#pragma HLS ARRAY_PARTITION variable=query_arr complete
@@ -95,14 +95,14 @@ void wide_mha_iterate(hls::stream<my_float_t> &out, s_adata_v_t & query, s_adata
 		//att_array adder tree
 		#pragma HLS PIPELINE
 		for (int j = 0; j < array_size; j++) {
-			adata_v_t var = key_cache.read();
+			mfdata_v_t var = key_cache.read();
 			kc_arr[j] = var;
 		}
 		
 		att_loop:// no name b/c we unroll 
 		for (size_t j = 0; j < array_size; j++){
-			adata_v_t tmpa = query_arr[j];
-			adata_v_t tmpb = kc_arr[j];
+			mfdata_v_t tmpa = query_arr[j];
+			mfdata_v_t tmpb = kc_arr[j];
 			for (int n = 0; n < MAX_FL_ELEM; n++) {
 				att += tmpa[n] * tmpb[n];
 			}
@@ -186,12 +186,12 @@ void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> 
 }
 
 
-void wide_mha_weighted_sum(s_adata_v_t &xb, hls::stream<my_float_t>  &att_in, s_adata_v_t &value_cache, const int POS){
+void wide_mha_weighted_sum(s_mfdata_v_t &xb, hls::stream<my_float_t>  &att_in, s_mfdata_v_t &value_cache, const int POS){
 
 	// const int ratio = MAX_FL_ELEM / MAX_FL_ELEM;
 	constexpr int ARR_SIZE = MODEL_HEAD_SIZE / MAX_FL_ELEM;
-	adata_v_t xb_arr[ARR_SIZE] = {0.0f};
-	adata_v_t vc_arr[ARR_SIZE];
+	mfdata_v_t xb_arr[ARR_SIZE] = {0.0f};
+	mfdata_v_t vc_arr[ARR_SIZE];
 	#pragma HLS ARRAY_PARTITION variable=xb_arr complete
 	#pragma HLS ARRAY_PARTITION variable=vc_arr complete
 
@@ -212,10 +212,10 @@ void wide_mha_weighted_sum(s_adata_v_t &xb, hls::stream<my_float_t>  &att_in, s_
 	}
 }
 
-void wide_mha_kernel(s_adata_v_t &xb, 
-								s_adata_v_t &key_cache,
-								s_adata_v_t &value_cache,
-								s_adata_v_t &query,
+void wide_mha_kernel(s_mfdata_v_t &xb, 
+								s_mfdata_v_t &key_cache,
+								s_mfdata_v_t &value_cache,
+								s_mfdata_v_t &query,
 								const int POS){
 
 	
