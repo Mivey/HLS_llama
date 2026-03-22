@@ -4,6 +4,7 @@
 #include "swiglu.h"
 #include "mha.h"
 #include "quantizer.h"
+#include "combiner.h"
 #include <cstdint>
 #include <exception>
 #include <iterator>
@@ -44,7 +45,7 @@ struct axi_reg{
 };
 
 void cu_selecter(	s_fdata_v_t &s_tokens, fdata_v_t internal_tokens[MODEL_ELEMENTS/SM_FL_ELEM], 
-									fdata_v_t *weights, fdata_v_t *diff, //adata_v_t *mha_tokens, fdata_v_t *w1w3,
+									fdata_v_t *weights, mfdata_v_t *diff, //adata_v_t *mha_tokens, fdata_v_t *w1w3,
 									adata_v_t *key_cache, adata_v_t *value_cache, 
 									keys &r, axi_reg &tt){ //todo: remove POS, it's apart of the axi_reg keyring
 	// add back init
@@ -99,14 +100,15 @@ void cu_selecter(	s_fdata_v_t &s_tokens, fdata_v_t internal_tokens[MODEL_ELEMENT
 	}
 }
 
-void df_region(	fdata_v_t *out_0, fdata_v_t * out_1, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1, 
+void df_region(	mfdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1, 
 								idata_v_t *w_0, idata_v_t *w_1, s_fdata_v_t &s_tokens, 
 								const int rn, const int rm, const int sf_reg, const int w_reg, const int layer){
 	
 	#pragma HLS DATAFLOW
-	hls::stream<my_float_t> s_tok_sf;
+	hls::stream<my_float_t> s_tok_sf, s_out[mm_thr];
 	s_fdata_v_t tok_sf[mm_thr];
 	s_idata_v_t s_tok_q, tok_q[mm_thr];
+	
 		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=s_tok_q depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
@@ -117,13 +119,16 @@ void df_region(	fdata_v_t *out_0, fdata_v_t * out_1, fdata_v_t *w_sf_0, fdata_v_
 	inf_split_tee(tok_sf, s_tok_sf, (rn / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
 	inf_split_tee(tok_q, s_tok_q, (rn / MAX_QUANT_ELEM));
 
-	GeMV_kernel(out_0, tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
-	GeMV_kernel(out_1, tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
+	GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
+	GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
+
+	gemv_combo(out, s_out, rm);
 }
 
 void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_thr],
-								fdata_v_t *out_0, fdata_v_t *w_sf_0, idata_v_t *w_0, 
-								fdata_v_t *out_1, fdata_v_t *w_sf_1, idata_v_t *w_1, 
+								mfdata_v_t *tokens, 
+								fdata_v_t *w_sf_0, idata_v_t *w_0, 
+								fdata_v_t *w_sf_1, idata_v_t *w_1, 
 								fdata_v_t *weights, adata_v_t *key_cache, adata_v_t *value_cache, 
 								const int POS, const int N_DIM, const int M_DIM, 
 								const int QKV_W, const int QKV_sf_W,
@@ -156,10 +161,10 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 	constexpr int MHA_DEPTH = MODEL_ELEMENTS / MID_FL_ELEM * 3;
 	
 
-	#pragma HLS INTERFACE mode=m_axi port=out_0 		bundle=D_TOK_W_SF_0 	depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=(4096/SM_DW * 8)	max_read_burst_length=(4096/SM_DW*8)
+	#pragma HLS INTERFACE mode=m_axi port=tokens 		bundle=D_TOK_W_SF_0 	depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=(4096/SM_DW * 8)	max_read_burst_length=(4096/SM_DW*8)
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_0 		bundle=D_TOK_W_SF_0 	depth=6844416/SM_FL_ELEM 		offset=slave max_read_burst_length=(4096/SM_DW * 8)	
 	#pragma HLS INTERFACE mode=m_axi port=w_0 				bundle=D_W_GEMM_0 		depth=109510656/MAX_QUANT_ELEM 	offset=slave max_read_burst_length=(4096/MAX_DW*8) num_read_outstanding=32 
-	#pragma HLS INTERFACE mode=m_axi port=out_1 		bundle=D_TOK_W_SF_1 	depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=(4096/SM_DW * 8)	
+	// #pragma HLS INTERFACE mode=m_axi port=out_1 		bundle=D_TOK_W_SF_1 	depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=(4096/SM_DW * 8)	
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_1 		bundle=D_TOK_W_SF_1 	depth=6844416/SM_FL_ELEM 		offset=slave max_read_burst_length=(4096/SM_DW * 8)	
 	#pragma HLS INTERFACE mode=m_axi port=w_1 				bundle=D_W_GEMM_1 		depth=109510656/MAX_QUANT_ELEM 	offset=slave max_read_burst_length=(4096/MAX_DW*8) num_read_outstanding=32 
 	
@@ -170,10 +175,10 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 	#pragma HLS INTERFACE mode=m_axi port=value_cache			bundle=vc_gemm		depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MID_DW * 8)		max_write_burst_length=(4096/MAX_DW * 8)
 	#pragma HLS INTERFACE mode=m_axi port=key_cache				bundle=kc_gemm		depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MID_DW * 8)		max_write_burst_length=(4096/MAX_DW * 8)
 
-	#pragma HLS INTERFACE mode=s_axilite port=out_0 				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=tokens 				bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=w_sf_0 				bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=w_0 					bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=out_1 				bundle=control
+	// #pragma HLS INTERFACE mode=s_axilite port=out_1 				bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=w_sf_1 				bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=w_1 					bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=weights				bundle=control
@@ -238,14 +243,14 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 		s_fdata_v_t s_tokens;
 		#pragma HLS STREAM variable=s_tokens depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		// runner.next_state = 3;
-		cu_selecter(s_tokens, internal_tokens, weights, out_0, key_cache, value_cache, runner, tt);
+		cu_selecter(s_tokens, internal_tokens, weights, tokens, key_cache, value_cache, runner, tt);
 		
 		int rn = runner.N_DIM;
 		int rm = runner.M_DIM;
 		int sf_reg = runner.w_sf;
 		int w_reg = runner.w;
 		int layer = runner.CURR_LAYER;
-		df_region(out_0, out_1, w_sf_0, w_sf_1, w_0, w_1, s_tokens, rn, rm, sf_reg, w_reg, layer);
+		df_region(tokens, w_sf_0, w_sf_1, w_0, w_1, s_tokens, rn, rm, sf_reg, w_reg, layer);
 	}
 	return;
 }

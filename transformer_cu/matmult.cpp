@@ -79,7 +79,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 }
 
 
-void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg){
+void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg){
 
 	constexpr int mm_thr = 2;
 	// const int num = N_DIM * M_DIM ;
@@ -134,8 +134,8 @@ void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_
 		alt_mat_mult_main(out_thread[i], d_w[i], d_wsf[i], d_tok[i], d_tok_sf[i], N_DIM, M_DIM/mm_thr);
 	}
 	
-	rr_merge(s_out, out_thread, M_DIM / SM_FL_ELEM);
-	s2mm_output_data(out, s_out, M_DIM / SM_FL_ELEM, (W_Off / SM_FL_ELEM));
+	rr_merge(out, out_thread, M_DIM);
+	// s2mm_output_data(out, s_out, M_DIM / SM_FL_ELEM, (W_Off / SM_FL_ELEM));
 	// s_mm_output_sel(out, xb_out, s_out, M_DIM/SM_FL_ELEM, (W_Off / SM_FL_ELEM), AXI_SEL);
 	return;
 }

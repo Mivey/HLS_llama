@@ -145,6 +145,22 @@ void rr_merge(hls::stream<S> &out, hls::stream<T> (&in)[N], const int vCount){
 	}
 }
 
+
+template<typename T, int N>
+void rr_merge(hls::stream<T> &out, hls::stream<T> (&in)[N], const int M_DIM){
+	
+	tot_num_data:
+	for (int i = 0; i < M_DIM / N; i++) {
+		#pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS / MAX_FL_ELEM
+		#pragma HLS PIPELINE
+			
+			for (int j = 0; j < N; j++) {
+				#pragma HLS UNROLL
+				out.write(in[j].read());
+			}
+	}
+}
+
 template<typename T>
 void mm2s_input_data(hls::stream<T> &out, T *in, const size_t COUNT){
 	
