@@ -2,6 +2,7 @@
 #ifndef MARK_FORWARD
 #define MARK_FORWARD
 
+#define __DEBUG__
 // #include "fast_common.h"
 #include <cstddef>
 #include <cstdint>

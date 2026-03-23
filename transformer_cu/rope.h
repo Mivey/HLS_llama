@@ -55,6 +55,7 @@ void rope_kernel (hls::stream<hls::vector<T, N>> &o, hls::stream<hls::vector<T, 
 		head_dim_unroll_loop:
 		for (int j = 0 ; j < (N / 2); j++) {
 			#pragma HLS PIPELINE
+			#pragma HLS UNROLL factor = 2
 			int head_dim = (k + j * 2) % MODEL_HEAD_SIZE;
 			float freq =  arr[head_dim]; /*1.0f / hls::powf(10000.0f, (float)head_dim/HEAD_SIZE);*/ 
 			float val = POS * freq;
