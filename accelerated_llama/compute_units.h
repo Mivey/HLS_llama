@@ -8,182 +8,17 @@
 #include <cstdint>
 #include <fstream>
 
-
-struct Quantized_bo{
-	xrt::bo q;
-	xrt::bo s;
-};
-struct bo_weights{
-	xrt::bo rms_att;
-	xrt::bo rms_ffn;
-	xrt::bo rms_final;
-	Quantized_bo query;
-	Quantized_bo key;
-	Quantized_bo value;
-	Quantized_bo out;
-	Quantized_bo FFN1;
-	Quantized_bo FFN2;
-	Quantized_bo FFN3;
-	Quantized_bo logits;
-};
-class MatMultClass{
-	public:
-	//Matrix Multiply Init
-		MatMultClass(xrt::device &d, xrt::uuid &u): device(d), uuid(u){
-			kernel = xrt::kernel(device, uuid, "matmult_kernel");
-		}
-		//Run sequential Method - Start and wait for CU to complete
-		//void matmult_kernel(mfdata_v_t *out, mfdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int READ_OFFSET, const int WRITE_OFFSET)
-		void run(xrt::bo &output, xrt::bo &input, xrt::bo &sf_bo, xrt::bo &w_bo, const int n_dim, const int m_dim, const int read_os, const int wwrite_os){
-			auto run = kernel(output, input, sf_bo, w_bo, n_dim, m_dim, read_os, wwrite_os);
-			run.wait();
-		}
-		//Run parallel Method - Start multiple CU's 
-		xrt::run start(xrt::bo &output, xrt::bo &input, xrt::bo &sf_bo, xrt::bo &w_bo, const int n_dim, const int m_dim, const int read_os, const int wwrite_os){
-			return kernel(output, input, sf_bo, w_bo, n_dim, m_dim, read_os, wwrite_os);
-		}
-
-		// Wait parallel Method - wait for the handles to return
-		void wait(xrt::run &run_handle){
-			run_handle.wait();
-		}
-
-	private:
-		xrt::device device;
-		xrt::uuid uuid;
-		xrt::kernel kernel;
-};
-class GeMVClass{
-	public:
-	//Matrix Multiply Init
-		GeMVClass(xrt::device &d, xrt::uuid &u): device(d), uuid(u){
-			kernel = xrt::kernel(device, uuid, "GeMV_kernel");
-		}
-		//Run sequential Method - Start and wait for CU to complete
-// void GeMV_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
-		void run(xrt::bo &output_bo, xrt::bo &fl_tok_bo, xrt::bo &sf_bo, xrt::bo &w_bo, const int n_dim, const int m_dim, const int CURR_LAYER, const int W_Off){
-			auto run = kernel(output, input, sf_bo, w_bo, n_dim, m_dim, read_os, wwrite_os);
-			run.wait();
-		}
-		//Run parallel Method - Start multiple CU's 
-		xrt::run start(xrt::bo &output, xrt::bo &input, xrt::bo &sf_bo, xrt::bo &w_bo, const int n_dim, const int m_dim, const int read_os, const int wwrite_os){
-			return kernel(output, input, sf_bo, w_bo, n_dim, m_dim, read_os, wwrite_os);
-		}
-
-		// Wait parallel Method - wait for the handles to return
-		void wait(xrt::run &run_handle){
-			run_handle.wait();
-		}
-
-	private:
-		xrt::device device;
-		xrt::uuid uuid;
-		xrt::kernel kernel;
-};
-
-class MHAClass{
-	public:
-	//MHA Init
-		MHAClass(xrt::device &d, xrt::uuid &u): device(d), uuid(u){
-			kernel = xrt::kernel(device, uuid, "mha_kernel");
-			allocate_cache();
-		}
-		//Run Sequential Method
-		void run(xrt::bo &tokens, xrt::bo &key, xrt::bo &value, const int layer_idx, const int pos){
-			auto run = kernel(tokens, key_bo, value_bo, key, value, pos, layer_idx);
-			run.wait();
-		}
-
-	private:
-		xrt::device device;
-		xrt::uuid uuid;
-		xrt::kernel kernel;
-		xrt::bo key_bo;
-		xrt::bo value_bo;
-		
-		const size_t c_size = (size_t)MODEL_ELEMENTS * MODEL_SEQUENCE_LEN * MODEL_NUM_LAYERS * sizeof(float);
-
-		//private method to store the KV cache objects.
-		void allocate_cache(){
-			//create the containers for the weights
-			key_bo = xrt::bo(device, c_size, kernel.group_id(0));
-			value_bo = xrt::bo(device, c_size, kernel.group_id(0));
-		}
-};
-
-class SwigluClass{
-	public:
-	//SWIGLU Init
-		SwigluClass(xrt::device &d, xrt::uuid &u): device(d), uuid(u){
-			kernel = xrt::kernel(device, uuid, "swiglu_kernel");
-		}
-		//Sequential Run Method
-		void run(xrt::bo &out, xrt::bo &w1, xrt::bo &w3){
-			auto run = kernel(out, w1, w3);
-			run.wait();
-		}
-		
-	private:
-		xrt::device device;
-		xrt::uuid uuid;
-		xrt::kernel kernel;
-};
-
-class RMSClass{
-	public:
-		RMSClass(xrt::device &d, xrt::uuid &u): device(d), uuid(u){
-			kernel = xrt::kernel(device, uuid, "rmsnorm_kernel");
-		}
-		
-// void rmsnorm_kernel(fdata_v_t * output, fdata_v_t *tokens, fdata_v_t *weights, const int CURR_LAYER){
-		void run(xrt::bo &output, xrt::bo &tokens, xrt::bo &w_bo, const int l){
-			auto run = kernel(output, tokens, w_bo, l);
-			run.wait();
-		}
-		
-	private:
-		xrt::device device;
-		xrt::uuid uuid;
-		xrt::kernel kernel;		
-};
-
-class ResConClass{
-	public:
-		ResConClass(xrt::device &d, xrt::uuid &u): device(d), uuid(u){
-			kernel = xrt::kernel(device, uuid, "rmsnorm_kernel");
-		}
-// void rescon_kernel(fdata_v_t *x, fdata_v_t *xb){
-		void run(xrt::bo &x_bo, xrt::bo &xb_bo){
-			auto run = kernel(x_bo, xb_bo);
-			run.wait();
-		}
-
-	private:
-		xrt::device device;
-		xrt::uuid uuid;
-		xrt::kernel kernel;		
-};
-
-
 class ForwardBlock{
 	public:
 		ForwardBlock(
-			int device_id, std::string& binaryFile, 
-			// std::string &QKV_w_comb, std::string &QKV_sf_comb,
-			// std::string &out_w, std::string &out_sf, 
-			// std::string &ffn1_3_w_comb, std::string &ffn1_3_sf_comb, 
-			// std::string &ffn2_w, std::string &ffn2_sf,
-			// std::string &logits_w, std::string &logits_sf,
-			// std::string &rms_att_w, std::string &rms_ffn_w, std::string &rms_final_w,
-			std::string &checkpoint,
-			Transformer *t, const int mm_cu_cnt){
+			int device_id, std::string& binaryFile, std::string &checkpoint, Transformer *t, const int mm_cu_cnt){
 				
 			try {
 				device = xrt::device(device_id);
 				std::cout << "device name:     " << device.get_info<xrt::info::device::name>() << "\n";
      		std::cout << "device bdf:      " << device.get_info<xrt::info::device::bdf>() << "\n";
 				uuid = device.load_xclbin(binaryFile);
-				xrt::kernel kernel = xrt::kernel(device, uuid, "matmult_kernel");
+				xrt::kernel kernel = xrt::kernel(device, uuid, "transformer_cu");
 				g_id = kernel.group_id(2);
 			} catch (const std::exception& e) {
 				throw std::runtime_error(std::string(e.what()));
@@ -197,15 +32,133 @@ class ForwardBlock{
 			std::ifstream file(checkpoint, std::ios::binary | std::ios::ate);
 			size_t file_size = file.tellg();
 			file.seekg(0, std::ios::beg);
-			parent_bo = xrt::bo(device, file_size,kernel.group_id(0));
+			// parent_bo = xrt::bo(device, file_size, kernel.group_id(0));
+
 			file.read(parent_bo.map<char*>(), file_size);
 			parent_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 
 			size_t offset = 256; // first bytes are for config file
 			int GS = 64;
-			// maybe later we read this directly and use it inside of runForward intead of passing transformer t.
 
-			//lambda helper slicer upper
+			size_t rms_att_size = (MODEL_ELEMENTS * 12 * sizeof(float));
+			size_t rms_ffn_size = rms_att_size;
+			size_t rms_final_size = MODEL_ELEMENTS * sizeof(float);
+			
+			size_t nn_size = MODEL_ELEMENTS * MODEL_ELEMENTS;
+			size_t nn_sf_size = nn_size * sizeof(float) / MODEL_SCALING_FACTOR;
+			
+			size_t nm_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM;
+			size_t nm_sf_size = nm_size * sizeof(float) / MODEL_SCALING_FACTOR;
+			
+			size_t embed_size = MODEL_ELEMENTS * MODEL_TOKENS * sizeof(int8_t);
+			size_t embed_sf_size = MODEL_ELEMENTS * MODEL_TOKENS * sizeof(float) / MODEL_SCALING_FACTOR;
+			size_t qkv_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 3 * sizeof(int8_t);
+			size_t qkv_sf_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 3 * sizeof(float) / MODEL_SCALING_FACTOR;
+			size_t o_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 1 * sizeof(int8_t);
+			size_t o_sf_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 1 * sizeof(float) / MODEL_SCALING_FACTOR;
+			size_t w1w3_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 2 * sizeof(int8_t);
+			size_t w1w3_sf_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 2 * sizeof(float) / MODEL_SCALING_FACTOR;
+			size_t w2_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(int8_t);
+			size_t w2_sf_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(float) / MODEL_SCALING_FACTOR;
+
+	
+	
+			size_t q_size = (MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3 ) * MODEL_NUM_LAYERS + MODEL_TOKENS)) * sizeof(int8_t);
+			size_t rms_size = (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)) * sizeof(float);
+			size_t sf_size = (q_size * sizeof(float) / (sizeof(int8_t) * MODEL_SCALING_FACTOR));
+			
+			std::vector<idata_v_t> quant_w_arr(q_size / sizeof(idata_v_t));
+			std::vector<fdata_v_t> sf_w_arr(sf_size / sizeof(fdata_v_t));
+			std::vector<fdata_v_t> rms_w_arr(rms_size / sizeof(fdata_v_t));
+			
+			char * q_ptr = reinterpret_cast<char*>(quant_w_arr.data());
+			char *sf_ptr = reinterpret_cast<char*>(sf_w_arr.data());
+			char *rms_ptr = reinterpret_cast<char*>(rms_w_arr.data());
+
+			size_t file_ptr = 256;
+			size_t rms_idx = 0;
+			file.seekg(file_ptr, std::ios::beg);
+			
+			axi_reg.rms_att_W = 0;
+			file.read(rms_ptr + rms_idx, rms_att_size);
+			rms_idx += rms_att_size;
+			
+			axi_reg.rms_ffn_W = axi_reg.rms_att_W + rms_att_size;
+			file.read(rms_ptr + rms_idx, rms_ffn_size);
+			rms_idx += rms_ffn_size;
+			
+			axi_reg.rms_final_W = axi_reg.rms_ffn_W + rms_ffn_size;
+			file.read(rms_ptr + rms_idx, rms_final_size);
+			file_ptr = file.tellg();
+			
+			size_t q_idx = 0;
+			size_t sf_idx = 0;
+			
+			axi_reg.Embed_W = 0;
+			file.read(q_ptr + q_idx, embed_size);
+			q_idx += embed_size;
+			
+			axi_reg.Embed_sf_W = 0;
+			file.read(sf_ptr + sf_idx, embed_sf_size);
+			sf_idx += embed_sf_size;
+			
+			// read QKV
+			axi_reg.QKV_sf_W = sf_idx;
+			axi_reg.QKV_W = q_idx;
+			
+			file_ptr = file_ptr + embed_sf_size + embed_size;
+			
+			for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
+			
+				for (int j = 0; j < 3; j++) {
+					file.seekg((file_ptr + j * (nn_size + nn_sf_size) * (MODEL_NUM_LAYERS - 0)), std::ios::beg);
+					file.read(q_ptr + q_idx, nn_size);
+					q_idx += nn_size;
+					file.read(sf_ptr + sf_idx, nn_sf_size);
+					sf_idx += nn_sf_size;
+				}
+				file_ptr += (nn_sf_size + nn_size);
+			}
+			
+			axi_reg.Out_sf_W = sf_idx;
+			axi_reg.Out_W = q_idx;
+			//already at Output
+			for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
+				
+				file.read(q_ptr + q_idx, nn_size);
+				q_idx += nn_size;
+				file.read(sf_ptr + sf_idx, nn_sf_size);
+				sf_idx += nn_sf_size;
+			}
+			file_ptr = file.tellg();
+			
+			axi_reg.FF_w1w3_sf_W = sf_idx;
+			axi_reg.FF_w1w3_W = q_idx;
+			//now at w1
+			for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
+			
+				for (int j = 0; j < 2; j++) {
+					file.seekg((file_ptr + j * 2 * (nm_size + nm_sf_size) * (MODEL_NUM_LAYERS - 0)), std::ios::beg); // skip over FFN2
+					file.read(q_ptr + q_idx, nm_size);
+					q_idx += nm_size;
+					file.read(sf_ptr + sf_idx, nm_sf_size);
+					sf_idx += nm_sf_size;
+				}
+				file_ptr += (nm_size + nm_sf_size);
+			}
+
+			axi_reg.FF_w2_W = q_idx;
+			axi_reg.FF_w2_sf_W = sf_idx;
+			file.seekg(file_ptr, std::ios::beg);
+			for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
+				
+				file.read(q_ptr + q_idx, nm_size);
+				q_idx += nm_size;
+				file.read(sf_ptr + sf_idx, nm_sf_size);
+				sf_idx += nm_sf_size;
+			}
+
+			//===============================================================
 			auto slice = [&](size_t size) -> xrt::bo {
 				xrt::bo sub = xrt::bo(parent, size, offset);
 				offset += size;
@@ -267,6 +220,8 @@ class ForwardBlock{
 			token_bo_map = token_bo.map<float*>();
 			mm_logits_map = mm_logits.map<float*>();
 			std::cout<<"init complete feb 14 5:30\n";
+
+			//==========================================
 		}
 /*===============================================================================================================
 RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD 
@@ -389,20 +344,7 @@ RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORW
 	private:
 		xrt::device device;
 		xrt::uuid uuid;
-
-		bo_weights w_bo;
-		xrt::bo parent_bo;
-
-		xrt::bo qkvo_w_bo, qkvo_sf_bo, w1w2w3_w_bo, w1w2w3_sf_bo, logits_w_bo, logits_sf_bo;
-		xrt::bo rms_aff_bo;
-		/* const */int q_off, k_off, v_off, o_off, ffn1_off, ffn2_off, ffn3_off, rms_att_off, rms_ffn_off, rms_final_off;
-
-		std::vector<std::unique_ptr<MatMultClass>> mm_cu_kernel;
-		std::unique_ptr<RMSClass> rms_kernel;
-		std::unique_ptr<SwigluClass>  swiglu_kernel;
-		std::unique_ptr<MHAClass> mha_kernel;
-		std::unique_ptr<ResConClass> rc_kernel;
-
+		xrt::bo rms_bo, weights_bo, w_sf_bo;
 
 		Config *p;
 		RunState *s;

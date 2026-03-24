@@ -140,8 +140,15 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 				const int FF_w1w3_W, const int FF_w1w3_sf_W,
 				const int FF_w2_W, const int FF_w2_sf_W, 
 				const int Embed_W, const int Embed_sf_W, 
-				const int rms_att_W, const int rms_ffn_W, const int rms_final_W, 
-				const int faker){
+				const int rms_att_W, const int rms_ffn_W, const int rms_final_W
+				#ifdef __DEBUG__
+				, const int faker // WTF if faker? \
+				faker lets us choose how many steps to run the transformer module, by overriding the default setting. \
+				Maybe in a future revision, I will pass hidden layer info directly instead of setting hard values. \
+				it feels like Im breaking a rule using the backslash like this ;-_- \
+				Does this upset you? I bet it does, huh? LUL. Stay mad, nerd. =^)
+				#endif
+			){
 	
 	
 	constexpr int q_size = (MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3 ) * MODEL_NUM_LAYERS + MODEL_TOKENS)) * sizeof(int8_t);
@@ -183,7 +190,6 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 	#pragma HLS INTERFACE mode=s_axilite port=POS 					bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=N_DIM 				bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=M_DIM 				bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=faker 				bundle=control
 	
 	#pragma HLS INTERFACE mode=s_axilite port=QKV_W					bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=QKV_sf_W			bundle=control
@@ -199,6 +205,10 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 	#pragma HLS INTERFACE mode=s_axilite port=rms_ffn_W			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=rms_final_W		bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=return				bundle=control
+	
+	#ifdef __DEBUG__
+			#pragma HLS INTERFACE mode=s_axilite port=faker 				bundle=control
+	#endif
 
 	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
 	s_fdata_v_t internal_stream[2];
@@ -223,6 +233,10 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 		rms_ffn_W, 
 		rms_final_W
 	};
+
+	#ifndef __DEBUG__
+		const int faker = MODEL_NUM_LAYERS;
+	#endif
 
 	for(int ii = 0; ii < faker; ii++) {
 	// for(int ii = 0; ii < MODEL_NUM_LAYERS; ii++) {
