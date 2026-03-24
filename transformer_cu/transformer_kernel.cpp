@@ -7,6 +7,7 @@
 #include "combiner.h"
 #include <cstdint>
 #include <exception>
+#include <hls_fence.h>
 #include <iterator>
 #include <sys/types.h>
 
@@ -74,7 +75,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						r.w = tt.Out_W / sizeof(idata_v_t);
 						break;
 						
-	case 2 :	rmsnorm_kernel(s_tokens, diff, weights, r.CURR_LAYER, 0, tt.rms_ffn_W / sizeof(mfdata_v_t));
+	case 2 :	rmsnorm_kernel(s_tokens, diff, weights, r.CURR_LAYER, 0, tt.rms_ffn_W / sizeof(fdata_v_t));
 						r.next_state++;
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
@@ -93,7 +94,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						r.w = tt.FF_w2_W / sizeof(idata_v_t);
 						break;
 						
-	case 4 :	rmsnorm_kernel(s_tokens, diff, weights, 0, 0, tt.rms_final_W/ sizeof(mfdata_v_t)); 
+	case 4 :	rmsnorm_kernel(s_tokens, diff, weights, 0, 0, tt.rms_final_W/ sizeof(fdata_v_t)); 
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
 						r.M_DIM = MODEL_TOKENS; // embeddings out
 						r.w_sf = tt.Embed_sf_W / sizeof(fdata_v_t);
@@ -129,7 +130,7 @@ void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1,
 }
 
 void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_thr],
-				fdata_v_t *tokens, 
+				fdata_v_t *tokens,
 				fdata_v_t *w_sf_0, idata_v_t *w_0, 
 				fdata_v_t *w_sf_1, idata_v_t *w_1, 
 				fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
@@ -142,16 +143,22 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 				const int rms_att_W, const int rms_ffn_W, const int rms_final_W, 
 				const int faker){
 	
+	
+	constexpr int q_size = (MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3 ) * MODEL_NUM_LAYERS + MODEL_TOKENS)) * sizeof(int8_t);
+	constexpr int rms_size = (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)) * sizeof(my_float_t);
+	constexpr int sf_size = (q_size * sizeof(my_float_t) / (sizeof(int8_t) * MODEL_SCALING_FACTOR));
+	
 	constexpr int RMS_DEPTH = MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1) / SM_FL_ELEM;
 	constexpr int CACHE_DEPTH = MODEL_ELEMENTS * MODEL_SEQUENCE_LEN * MODEL_NUM_LAYERS / MAX_FL_ELEM;
 	constexpr int TOK_DEPTH = MODEL_ELEMENTS / MAX_FL_ELEM;
-	constexpr int HD_QUANT_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 2 / MAX_QUANT_ELEM;
-	constexpr int HD_SF_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 2 / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+	constexpr int HD_QUANT_DEPTH = q_size / MAX_QUANT_ELEM;//MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 2 / MAX_QUANT_ELEM;
+	constexpr int HD_SF_DEPTH = sf_size / SM_FL_ELEM; //MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 2 / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
 	constexpr int TOK_OUT_DEPTH = MODEL_HIDDEN_DIM / SM_FL_ELEM * 2;
 	constexpr int MHA_DEPTH = MODEL_ELEMENTS / MID_FL_ELEM * 3;
 	
 
-	#pragma HLS INTERFACE mode=m_axi port=tokens 				bundle=w_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=(4096/SM_DW * 8)	max_read_burst_length=(4096/SM_DW*8)
+	#pragma HLS INTERFACE mode=m_axi port=tokens 				bundle=w_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
+	// #pragma HLS INTERFACE mode=m_axi port=bokens 				bundle=b_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_read_burst_length=(4096/SM_DW*8)
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_0 				bundle=D_TOK_W_SF_0 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/SM_DW * 8)	
 	#pragma HLS INTERFACE mode=m_axi port=w_0 					bundle=D_W_GEMM_0 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 	//	num_read_outstanding=32 
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_1 				bundle=D_TOK_W_SF_1 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/SM_DW * 8)	
@@ -196,9 +203,6 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
 	s_fdata_v_t internal_stream[2];
 	
-	// #pragma HLS BIND_STORAGE variable=internal_diff type=ram_t2p impl=bram
-	// #pragma HLS ARRAY_PARTITION variable=internal_diff dim=1 type=block factor=2
-	
 	keys runner;
 	runner.CURR_LAYER = 0;
 	axi_reg tt = {
@@ -223,10 +227,14 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 	for(int ii = 0; ii < faker; ii++) {
 	// for(int ii = 0; ii < MODEL_NUM_LAYERS; ii++) {
 		s_fdata_v_t s_cu_sel_out;
-		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/MAX_FL_ELEM
+		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		// runner.next_state = 3;
+		// if (ii > 0) {
+		// 	hls::fence(tokens);
+		// }
 		cu_selecter(s_cu_sel_out, weights, tokens, key_cache, value_cache, runner, tt);
 		
+		// hls::fence({s_cu_sel_out}, {tokens});
 		int rn = runner.N_DIM;
 		int rm = runner.M_DIM;
 		int sf_reg = runner.w_sf;
