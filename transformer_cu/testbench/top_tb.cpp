@@ -45,17 +45,19 @@ int top_tb(){
 
 	std::string checkpoint = "weights/stories110M_q8.bin";
 	std::ifstream file(checkpoint, std::ios::binary | std::ios::ate);
-	std::ifstream out_value_dat("seed_42069_conv/150_output_value_cache_head_maj.bin", std::ios::binary);
-	std::ifstream out_key_dat("seed_42069_conv/150_output_key_cache_head_maj.bin", std::ios::binary);
+	std::ifstream out_value_dat("seed_199/199_02_value_cache.bin", std::ios::binary);
+	std::ifstream out_key_dat("seed_199/199_02_key_cache.bin", std::ios::binary);
+	// std::ifstream out_value_dat("seed_42069_conv/150_output_value_cache_head_maj.bin", std::ios::binary);
+	// std::ifstream out_key_dat("seed_42069_conv/150_output_key_cache_head_maj.bin", std::ios::binary);
 	// std::ifstream tokens_dat("seed_42069_conv/150_output_key_cache_head_maj.bin", std::ios::binary);
 
 	std::ifstream key_output("seed_42069/150_output_k_tokens.bin", std::ios::binary);
 	std::ifstream value_output("seed_42069/150_output_v_tokens.bin", std::ios::binary);
 	std::ifstream query_output("seed_42069/150_output_q_tokens.bin", std::ios::binary);
-	std::ifstream input_tokens("seed_42069/150_input_tokens.bin", std::ios::binary);
+	std::ifstream input_tokens("seed_199/199_01_rms_att_in.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/TOP_25_xb2_mm_output_A1.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary);
-	std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary);
+	std::ifstream w2_output("seed_199/199_15_ffn2_out.bin", std::ios::binary);
 	std::ifstream w1_output("seed_42069/150_output_w1_tokens.bin", std::ios::binary);
 	std::ifstream w3_output("seed_42069/150_output_w3_tokens.bin", std::ios::binary);
 
@@ -274,6 +276,7 @@ int top_tb(){
 	std::vector<fdata_v_t> swiglu_arr(hd_tok_cnt * 2);
 	std::vector<adata_v_t> mha_tokens_arr((tokens_size / (sizeof(adata_v_t))));
 	std::vector<fdata_v_t> output_arr(logits_cnt);
+	std::vector<fdata_v_t> input_arr(logits_cnt);
 	std::vector<fdata_v_t> golden_output_arr(logits_cnt);
 	// std::vector<mfdata_v_t> val_in_rope_arr(tokens_cnt);
 	// std::vector<mfdata_v_t> key_in_rope_arr(tokens_cnt);
@@ -310,6 +313,73 @@ int top_tb(){
 
 
 
+
+	// read 64 floats
+	// jump 768 values
+	// read 64
+
+	std::vector<std::vector<mfdata_v_t>> key_arr(2, std::vector<mfdata_v_t>(cache_cnt));
+	std::vector<std::vector<mfdata_v_t>> value_arr(2, std::vector<mfdata_v_t>(cache_cnt));
+
+// Assuming your types and constants are defined...
+int head_dim_bytes = MODEL_HEAD_SIZE * sizeof(my_float_t); 
+
+// 1. Read the entire file into a raw token-major buffer (FAST)
+std::vector<char> raw_token_major_buf(cache_size);
+out_key_dat.read(raw_token_major_buf.data(), cache_size);
+
+// 2. Prepare your destination head-major buffer
+// We can cast this directly into your existing key_arr
+char* dest_ptr = reinterpret_cast<char*>(key_arr[0].data());
+const char* src_ptr = raw_token_major_buf.data();
+
+// 3. In-memory Transpose
+for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
+	for (int h = 0; h < MODEL_NUM_HEADS; h++) {
+		for (int t = 0; t < MODEL_SEQUENCE_LEN; t++) {
+				
+			// Calculate where this specific head chunk lives in the source (token-major)
+			// Layout: [Layer][Token][Head][Head_Dim]
+			size_t src_offset = l * (MODEL_SEQUENCE_LEN * MODEL_NUM_HEADS * head_dim_bytes) +
+													t * (MODEL_NUM_HEADS * head_dim_bytes) +
+													h * head_dim_bytes;
+
+			// Copy 64 elements (head_dim_bytes) from source to our sequential destination
+			std::memcpy(dest_ptr, src_ptr + src_offset, head_dim_bytes);
+			
+			// Advance our destination pointer! (Fixes the overwrite bug)
+			dest_ptr += head_dim_bytes; 
+		}
+	}
+}
+
+out_value_dat.read(raw_token_major_buf.data(), cache_size);
+
+dest_ptr = reinterpret_cast<char*>(value_arr[0].data());
+
+// 3. In-memory Transpose
+for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
+	for (int h = 0; h < MODEL_NUM_HEADS; h++) {
+		for (int t = 0; t < MODEL_SEQUENCE_LEN; t++) {
+				
+			// Calculate where this specific head chunk lives in the source (token-major)
+			// Layout: [Layer][Token][Head][Head_Dim]
+			size_t src_offset = l * (MODEL_SEQUENCE_LEN * MODEL_NUM_HEADS * head_dim_bytes) +
+													t * (MODEL_NUM_HEADS * head_dim_bytes) +
+													h * head_dim_bytes;
+
+			// Copy 64 elements (head_dim_bytes) from source to our sequential destination
+			std::memcpy(dest_ptr, src_ptr + src_offset, head_dim_bytes);
+			
+			// Advance our destination pointer! (Fixes the overwrite bug)
+			dest_ptr += head_dim_bytes; 
+		}
+	}
+}
+
+
+
+
 	char *oa = reinterpret_cast<char*>(output_arr.data());
 	input_tokens.seekg(0, std::ios::end);
 	file_size = input_tokens.tellg();
@@ -327,8 +397,6 @@ int top_tb(){
 
 
 	// std::vector<std::vector<fdata_v_t>> query_arr(2, std::vector<fdata_v_t>(out_data_cnt));
-	std::vector<std::vector<mfdata_v_t>> key_arr(2, std::vector<mfdata_v_t>(cache_cnt));
-	std::vector<std::vector<mfdata_v_t>> value_arr(2, std::vector<mfdata_v_t>(cache_cnt));
 	std::vector<std::vector<mfdata_v_t>> tok_out_arr(2, std::vector<mfdata_v_t>(tokens_cnt));
 	std::vector<std::vector<mfdata_v_t>> tok_w1_out_arr(2, std::vector<mfdata_v_t>(tok_w1_cnt));
 	std::vector<std::vector<mfdata_v_t>> log_out_arr(2, std::vector<mfdata_v_t>(logits_cnt));
@@ -343,8 +411,6 @@ int top_tb(){
 
 	// w2_output.read(reinterpret_cast<char *>(golden_output_arr.data()), tokens_size);
 
-	out_key_dat.read(reinterpret_cast<char *>(key_arr[0].data()), cache_size);
-	out_value_dat.read(reinterpret_cast<char *>(value_arr[0].data()), cache_size);
 	// memcpy(key_arr[0].data(), key_arr_a.data(), cache_size);
 	// memcpy(value_arr[0].data(), value_arr_a.data(), cache_size);
 	memcpy(key_arr_a.data(), key_arr[0].data(), cache_size);
@@ -364,8 +430,9 @@ int top_tb(){
 
 int curr_pos = 150;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
-transformer_cu(	output_arr.data(), sf_w_arr.data(), quant_w_arr.data(), 
-								output_arr.data(), sf_w_arr.data(), quant_w_arr.data(), 
+transformer_cu(	output_arr.data(), //output_arr.data(), 
+								sf_w_arr.data(), quant_w_arr.data(), 
+								sf_w_arr.data(), quant_w_arr.data(), 
 								rms_w_arr.data(), key_arr_a.data(), value_arr_a.data(), 
 								curr_pos, MODEL_ELEMENTS, MODEL_ELEMENTS, 
 								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
