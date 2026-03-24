@@ -2,8 +2,11 @@
 #ifndef MARK_FORWARD
 #define MARK_FORWARD
 
-#define __DEBUG__
+// #define __DEBUG__
 // #include "fast_common.h"
+#ifdef  __DEBUG__
+	#include "hls_print.h"
+#endif
 #include <cstddef>
 #include <cstdint>
 #include <hls_stream.h>
@@ -365,9 +368,10 @@ void mha_WAR_store_load(adata_v_t *cache, s_adata_v_t &output, s_adata_v_t &inpu
 
 
 void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_thr],
-								fdata_v_t *out_0, fdata_v_t *w_sf_0, idata_v_t *w_0, 
-								fdata_v_t *out_1, fdata_v_t *w_sf_1, idata_v_t *w_1, 
-								fdata_v_t *weights, adata_v_t *key_cache, adata_v_t *value_cache, 
+								fdata_v_t *tokens, //fdata_v_t *bokens, 
+								fdata_v_t *w_sf_0, idata_v_t *w_0, 
+								fdata_v_t *w_sf_1, idata_v_t *w_1, 
+								fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
 								const int POS, const int N_DIM, const int M_DIM, 
 								const int QKV_W, const int QKV_sf_W,
 								const int Out_W, const int Out_sf_W,
