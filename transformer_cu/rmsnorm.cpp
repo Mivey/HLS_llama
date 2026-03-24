@@ -12,7 +12,7 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_EL
   fdata_v_t arr[MODEL_ELEMENTS/SM_FL_ELEM] = {0};
 	// #pragma HLS ARRAY_PARTITION variable=arr type=complete
 	const int acc_lag = 8;
-  my_float_t ss[acc_lag] = {0.0f};// = {0.0f}; // <----- added init value 0.0f 10/3 while working on MHA
+  my_float_t ss[acc_lag] = {0.0f};
   
   rms_mac_loop:
   for (int i = 0; i < (MODEL_ELEMENTS / SM_FL_ELEM); i++) {
@@ -33,14 +33,7 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_EL
 		ftss += ss[i];
 	}
 
-	// for (int stride = (acc_lag >>1); stride > 0; stride >>=1) {
-	// 	#pragma HLS UNROLL
-	// 	for (int i = 0; i < stride; i++) {
-	// 		#pragma HLS UNROLL
-	// 		ss[i] += ss[stride + i];
-	// 	}
-	// }
-  my_float_t fss = (ftss / MODEL_ELEMENTS + 1e-6);
+  my_float_t fss = (ftss / MODEL_ELEMENTS + 1e-5);
 	
   fss = 1.0f/hls::sqrtf(fss);
 
@@ -79,14 +72,5 @@ void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t *diff, fdata_v_t *weigh
 
 	rmsnorm(s_tokens_out, s_diff, internal_tokens, s_weights, INIT);
 		
-	#ifdef  __DEBUG__
-		for (int i = 0; i < 3; i++) {
-			fdata_v_t temp = internal_tokens[i];
-			for (int j = 0; j < SM_FL_ELEM; j++) {
-				hls::print("RMS token values here: %f\n", temp[j]);
-			}
-		}
-	#endif
-	
 	return;
 }

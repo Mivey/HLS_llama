@@ -225,7 +225,7 @@ void wide_mha_kernel(s_fdata_v_t &out,
 		
 		hls::stream<my_float_t> mha_it_sm, att_sm_ws;
 		s_mfdata_v_t xb;
-		#pragma hls STREAM variable=xb depth = 64
+		// #pragma hls STREAM variable=xb depth = 64
 		#pragma HLS STREAM variable=mha_it_sm depth=512
 	#pragma HLS BIND_STORAGE variable=mha_it_sm type=fifo impl=bram
 		#pragma HLS STREAM variable=att_sm_ws depth=512
@@ -240,16 +240,16 @@ void wide_mha_kernel(s_fdata_v_t &out,
 
 void mha_kernel(s_fdata_v_t &output,
 								fdata_v_t *tokens, //6 mha_kernel
-                adata_v_t *key_cache, 
-                adata_v_t *value_cache, 
+                mfdata_v_t *key_cache, 
+                mfdata_v_t *value_cache, 
                 const int POS, const int CURR_LAYER){
 
 	
-	// s_adata_v_t xb_ws_q("WS to Quantizer for XB Stream");
-	s_adata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
-	s_adata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
+	s_mfdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
+	s_mfdata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
+	s_mfdata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
 	s_fdata_v_t s_key_cache_in, s_query, s_value_cache_in, s_query_r, s_key_cache_in_r;
-	s_adata_v_t s_value_cache_in_u,  s_key_cache_in_u, s_query_u;
+	s_mfdata_v_t s_value_cache_in_u,  s_key_cache_in_u, s_query_u;
 	// s_mfdata_v_t sm_query, sm_kc, sm_vc;
 
   #pragma HLS STABLE variable=POS
@@ -262,6 +262,7 @@ void mha_kernel(s_fdata_v_t &output,
 	#pragma HLS STREAM variable=s_query_u depth=MODEL_ELEMENTS / MID_FL_ELEM 
 	#pragma HLS STREAM variable=s_key_cache_in_u depth=16 
 	#pragma HLS STREAM variable=s_value_cache_in_u depth=16
+	#pragma HLS STREAM variable=output depth=MODEL_ELEMENTS / SM_FL_ELEM
 	#pragma HLS STREAM variable=s_value_cache_in depth=8 //good
 	#pragma HLS STREAM variable=s_query depth=MODEL_ELEMENTS / MID_FL_ELEM //good
 	#pragma HLS STREAM variable=s_query_r depth=MODEL_ELEMENTS / MID_FL_ELEM //good

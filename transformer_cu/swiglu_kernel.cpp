@@ -13,6 +13,5 @@ void swiglu_kernel(s_fdata_v_t &output, fdata_v_t *w1w3){
 	mm2s_input_data(s_w1, w1w3, MODEL_HIDDEN_DIM/SM_FL_ELEM, 0);
 	mm2s_input_data(s_w3, w1w3, MODEL_HIDDEN_DIM/SM_FL_ELEM, 1);
 	swiglu(output, s_w1, s_w3);
-	// store_output(output, out, MODEL_HIDDEN_DIM);
 	return;
 }
