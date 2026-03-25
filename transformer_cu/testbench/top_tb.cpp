@@ -428,7 +428,7 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	/* ============================ write inputs to the streams ====================== */
 		
 
-int curr_pos = 150;
+int curr_pos = 15;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
 transformer_cu(	output_arr.data(), //output_arr.data(), 
 								sf_w_arr.data(), quant_w_arr.data(), 
