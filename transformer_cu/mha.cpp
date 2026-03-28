@@ -212,7 +212,7 @@ void wide_mha_weighted_sum(s_mfdata_v_t &xb, hls::stream<my_float_t>  &att_in, s
 	}
 }
 
-void wide_mha_kernel(s_fdata_v_t &out, 
+void wide_mha_kernel(s_mfdata_v_t &out, 
 								s_mfdata_v_t &key_cache,
 								s_mfdata_v_t &value_cache,
 								s_mfdata_v_t &query,
@@ -224,7 +224,7 @@ void wide_mha_kernel(s_fdata_v_t &out,
 		#pragma HLS DATAFLOW
 		
 		hls::stream<my_float_t> mha_it_sm, att_sm_ws;
-		s_mfdata_v_t xb;
+		// s_mfdata_v_t xb;
 		// #pragma hls STREAM variable=xb depth = 64
 		#pragma HLS STREAM variable=mha_it_sm depth=512
 	#pragma HLS BIND_STORAGE variable=mha_it_sm type=fifo impl=bram
@@ -233,8 +233,8 @@ void wide_mha_kernel(s_fdata_v_t &out,
 
 		wide_mha_iterate(mha_it_sm, query, key_cache, POS);
 		wide_mha_softmax(att_sm_ws, mha_it_sm, POS);
-		wide_mha_weighted_sum(xb, att_sm_ws, value_cache, POS);
-		vec_down_converter(out, xb, MODEL_ELEMENTS / (SM_FL_ELEM * MODEL_NUM_HEADS));
+		wide_mha_weighted_sum(out, att_sm_ws, value_cache, POS);
+		// vec_down_converter(out, xb, MODEL_ELEMENTS / (SM_FL_ELEM * MODEL_NUM_HEADS));
 	}
 }
 
@@ -296,9 +296,9 @@ void mha_kernel(s_fdata_v_t &output,
 	mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in_u, CURR_LAYER, POS);
 	mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in_u, CURR_LAYER, POS);
 	
-	wide_mha_kernel(output, s_key_cache_to_kernel, s_value_cache_to_kernel, s_query_u, POS + 1);
+	wide_mha_kernel(xb_ws_q, s_key_cache_to_kernel, s_value_cache_to_kernel, s_query_u, POS + 1);
 	
-	// vec_down_converter(output, xb_ws_q, tokens_cnt);
+	vec_down_converter(output, xb_ws_q, tokens_cnt);
 	// store_output(tokens, xb_ws_q, MODEL_ELEMENTS);
 
 	return;

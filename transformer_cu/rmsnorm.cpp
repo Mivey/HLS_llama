@@ -11,7 +11,7 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_EL
 	constexpr int UF = 4;
   fdata_v_t arr[MODEL_ELEMENTS/SM_FL_ELEM] = {0};
 	// #pragma HLS ARRAY_PARTITION variable=arr type=complete
-	const int acc_lag = 8;
+	const int acc_lag = 16;
   my_float_t ss[acc_lag] = {0.0f};
   
   rms_mac_loop:
