@@ -2,7 +2,7 @@
 #ifndef MARK_FORWARD
 #define MARK_FORWARD
 
-// #define __DEBUG__
+#define __DEBUG__
 // #include "fast_common.h"
 #ifdef  __DEBUG__
 	#include "hls_print.h"
@@ -278,6 +278,18 @@ void s_mm_output_sel(hls::vector<T, N> *mm_out, hls::stream<hls::vector<T, N>> &
 	}
 }
 
+template<typename T, size_t N>
+void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int count){
+	
+	const int vCount = count/ N;
+	
+	mm2mm_writer:
+	for (int i = 0; i < vCount; i++) {
+		#pragma HLS PIPELINE II=1
+		mm_out[i] = mm_in[i];
+	}
+}
+
 template<typename T>
 void store_output(T *out, hls::stream<T> &in , const int vSize){
 
@@ -372,12 +384,16 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 								fdata_v_t *w_sf_0, idata_v_t *w_0, 
 								fdata_v_t *w_sf_1, idata_v_t *w_1, 
 								fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
-								const int POS, const int N_DIM, const int M_DIM, 
+								const int POS, //const int N_DIM, const int M_DIM, 
 								const int QKV_W, const int QKV_sf_W,
 								const int Out_W, const int Out_sf_W,
 								const int FF_w1w3_W, const int FF_w1w3_sf_W,
 								const int FF_w2_W, const int FF_w2_sf_W, 
 								const int Embed_W, const int Embed_sf_W, 
-								const int rms_att_W, const int rms_ffn_W, const int rms_final_W, const int faker);
+								const int rms_att_W, const int rms_ffn_W, const int rms_final_W
+				#ifdef __DEBUG__
+				, const int faker 
+				#endif
+				);
 #endif
 
