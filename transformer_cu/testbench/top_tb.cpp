@@ -56,8 +56,9 @@ int top_tb(){
 	std::ifstream query_output("seed_42069/150_output_q_tokens.bin", std::ios::binary);
 	std::ifstream input_tokens("seed_199/199_01_rms_att_in.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/TOP_25_xb2_mm_output_A1.bin", std::ios::binary);
-	// std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary);
-	std::ifstream w2_output("seed_199/199_15_ffn2_out.bin", std::ios::binary);
+	// std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary); 
+	std::ifstream w2_output("seed_199/199_15a_ffn2_out.bin", std::ios::binary);
+	// std::ifstream w2_output("seed_199/199_logits_out.bin", std::ios::binary);
 	std::ifstream w1_output("seed_42069/150_output_w1_tokens.bin", std::ios::binary);
 	std::ifstream w3_output("seed_42069/150_output_w3_tokens.bin", std::ios::binary);
 
@@ -234,7 +235,7 @@ int top_tb(){
 	const int rms_w_size = MODEL_ELEMENTS * 4 * layer_cnt;
 	const int tokens_size = MODEL_ELEMENTS * 4;
 	const int tok_w1_size = MODEL_HIDDEN_DIM * 4;
-	const int logits_size = MODEL_HIDDEN_DIM * 2 * sizeof(float);//* MODEL_TOKENS * 4;//
+	const int logits_size = MODEL_TOKENS * sizeof(float);//* MODEL_TOKENS * 4;//
 	const int logits_quant_size = MODEL_ELEMENTS * MODEL_TOKENS * 1;
 	const int logits_sf_size = MODEL_ELEMENTS * MODEL_TOKENS / MODEL_SCALING_FACTOR * 4;
 	// const int sf_el = MODEL_ELEMENTS / 64;
@@ -428,17 +429,18 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	/* ============================ write inputs to the streams ====================== */
 		
 
-int curr_pos = 15;
+int curr_pos = 150;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
 transformer_cu(	output_arr.data(), //output_arr.data(), 
 								sf_w_arr.data(), quant_w_arr.data(), 
 								sf_w_arr.data(), quant_w_arr.data(), 
 								rms_w_arr.data(), key_arr_a.data(), value_arr_a.data(), 
-								curr_pos, MODEL_ELEMENTS, MODEL_ELEMENTS, 
+								curr_pos, //MODEL_ELEMENTS, MODEL_ELEMENTS, 
 								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
 								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
 								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 4);
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 8
+								);
 
 	std::fill(output_arr.begin() + 192, output_arr.end(), 0);
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
@@ -446,11 +448,11 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 	// std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	// parse_results<mfdata_v_t, float>(tok_w1_out_arr[0], tok_w1_out_arr[1]);
 
-	std::cout<< "========================= Value cache array data ========================"<<std::endl;
-	parse_cache_results<mfdata_v_t, float>(value_arr[0], value_arr_a);
+	// std::cout<< "========================= Value cache array data ========================"<<std::endl;
+	// parse_cache_results<mfdata_v_t, float>(value_arr[0], value_arr_a);
 
-	std::cout<< "========================= Key cache array data ========================"<<std::endl;
-	parse_cache_results<mfdata_v_t, float>(key_arr[0], key_arr_a);
+	// std::cout<< "========================= Key cache array data ========================"<<std::endl;
+	// parse_cache_results<mfdata_v_t, float>(key_arr[0], key_arr_a);
 
 	return 0;
 
