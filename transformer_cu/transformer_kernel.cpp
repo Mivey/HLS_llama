@@ -130,8 +130,11 @@ void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1,
 
 	GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
 	GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
+	// GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
+	// GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
 
-	gemv_combo(out, s_out, rm);
+	// gemv_combo(out, s_out, rm);
+	gemv_split(out, s_out, rm);
 }
 
 void transformer_cu(
@@ -214,6 +217,7 @@ void transformer_cu(
 	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
 	// s_fdata_v_t internal_stream[2];
 	fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM];
+#pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
 #pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=uram
 	
 	keys runner;
@@ -244,7 +248,9 @@ void transformer_cu(
 		const int faker = MODEL_NUM_LAYERS * 4 + 1;
 	#endif
 
-	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS);
+	// mm2mm_store(internal_token, tokens, MODEL_ELEMENTS);
+	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, MODEL_TOKENS);
+	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, MODEL_TOKENS);
 
 	for(int ii = 0; ii < faker; ii++) {
 	// for(int ii = 0; ii < MODEL_NUM_LAYERS; ii++) {

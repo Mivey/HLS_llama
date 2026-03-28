@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <hls_stream.h>
 #include <hls_vector.h>
 #include <utils/x_hls_defines.h>
 
@@ -38,6 +39,20 @@ void pipo_out(hls::vector<T, N> *out, hls::vector<T, N> pipo_buf[M][P], int chun
     }
   }
 }
+template<typename T, size_t N, int M=BURST_LEN, int P>
+void alt_pipo_out(hls::vector<T, N> *out, hls::vector<T, N> pipo_buf[M][P], int chunk_idx, const int M_DIM){
+
+  const int chunk_offset = chunk_idx * M; 
+  const int stride = M_DIM / (P * N); 
+  
+  for (int i = 0; i < P; i++) {
+		pipo_out_stride:
+    for (int j = 0; j < M; j++) {
+      #pragma HLS PIPELINE II=1
+      out[(i * stride) + chunk_offset + j] = pipo_buf[j][i];
+    }
+  }
+}
 
 template<typename T, size_t N, int P>
 void gemv_combo(hls::vector<T, N> *out, hls::stream<T> (&gemv_out)[P], const int M_DIM){
@@ -53,5 +68,23 @@ void gemv_combo(hls::vector<T, N> *out, hls::stream<T> (&gemv_out)[P], const int
 		
 		pipo_intake<T, N, BURST_LEN, P>(my_pipo_arr, gemv_out);
 		pipo_out<T, N, BURST_LEN, P>(out, my_pipo_arr, df, M_DIM);
+	}
+}
+
+template<typename T, size_t N, int P>
+void gemv_split(hls::vector<T, N> *out, hls::stream<T> (&gemv_out)[P], const int M_DIM){
+	
+	const int offset = MODEL_TOKENS / (N * P);
+	typedef hls::vector<T, N> gdata_v_t;
+	const int c_idx = M_DIM / (P * N);
+	for (int i = 0; i < c_idx; i++) {
+		for (int j = 0; j < P; j++) {
+			#pragma HLS UNROLL
+			gdata_v_t data;
+			for (int k = 0; k < N; k++) {
+				data[k] = gemv_out[j].read();
+			}
+			out[i + j * offset] = data;
+		}
 	}
 }

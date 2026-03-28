@@ -290,6 +290,19 @@ void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int c
 	}
 }
 
+template<typename T, size_t N>
+void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int count, const int ts, const int cur_spl, const int offset){
+	
+	const int vCount = count/ (N * ts);
+	const int wos = offset * cur_spl / (N * ts);
+	
+	mm2mm_writer:
+	for (int i = 0; i < vCount; i++) {
+		#pragma HLS PIPELINE II=1
+		mm_out[i + wos] = mm_in[i + cur_spl * vCount];
+	}
+}
+
 template<typename T>
 void store_output(T *out, hls::stream<T> &in , const int vSize){
 

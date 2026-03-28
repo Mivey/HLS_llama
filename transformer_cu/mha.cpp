@@ -238,6 +238,14 @@ void wide_mha_kernel(s_mfdata_v_t &out,
 	}
 }
 
+void mha_mm2s_data(s_fdata_v_t &q, s_fdata_v_t &k, s_fdata_v_t &v, fdata_v_t *in, const int cnt){
+	
+	mm2s_input_data(q, in, cnt, 0, 0);
+	mm2s_input_data(k, in, cnt / 2, 0, cnt);
+	mm2s_input_data(k, in, cnt / 2, 0, MODEL_TOKENS / (SM_FL_ELEM * 2));
+	mm2s_input_data(v, in, cnt, 0, (MODEL_TOKENS / SM_FL_ELEM + cnt)/2);
+}
+
 void mha_kernel(s_fdata_v_t &output,
 								fdata_v_t *tokens, //6 mha_kernel
                 mfdata_v_t *key_cache, 
@@ -282,9 +290,11 @@ void mha_kernel(s_fdata_v_t &output,
 	// mm2s_input_data(s_value_cache_in, value_cache_in, MODEL_ELEMENTS/MAX_FL_ELEM);
 	const int tokens_cnt = MODEL_ELEMENTS / SM_FL_ELEM; 
 	
-	mm2s_input_data(s_query_r, tokens, tokens_cnt, 0); //read query first
-	mm2s_input_data(s_key_cache_in_r, tokens, tokens_cnt, 1); //key
-	mm2s_input_data(s_value_cache_in, tokens, tokens_cnt, 2); // value
+	// mm2s_input_data(s_query_r, tokens, tokens_cnt, 0); //read query first
+	// mm2s_input_data(s_key_cache_in_r, tokens, tokens_cnt, 1); //key
+	// mm2s_input_data(s_value_cache_in, tokens, tokens_cnt, 2); // value
+
+	mha_mm2s_data(s_query_r, s_key_cache_in_r, s_value_cache_in, tokens, tokens_cnt);
 	
 	rope_kernel(s_query, s_query_r, POS);
 	rope_kernel(s_key_cache_in, s_key_cache_in_r, POS);

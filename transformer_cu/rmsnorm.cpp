@@ -5,6 +5,12 @@
 	#include "hls_print.h"
 #endif
 
+void rms_mm2s_data(s_fdata_v_t &out, fdata_v_t *in, const int cnt){
+	// #pragma HLS PIPELINE off
+	mm2s_input_data(out, in, cnt/2, 0, 0 );
+	mm2s_input_data(out, in, cnt/2, 0, (MODEL_TOKENS / (SM_FL_ELEM * 2)));
+}
+
 
 void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_ELEM], s_fdata_v_t &w, const int INIT){
   // #pragma HLS DATAFLOW
@@ -66,7 +72,8 @@ void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t *diff, fdata_v_t *weigh
 	#pragma HLS BIND_STORAGE variable=internal_tokens type=ram_t2p impl=bram
 	#pragma HLS ARRAY_PARTITION variable=internal_tokens dim=1 type=cyclic factor=2
 
-	mm2s_input_data(s_diff, diff, ratio);
+	// mm2s_input_data(s_diff, diff, ratio);
+	rms_mm2s_data(s_diff, diff, ratio);
 	// rms_load_input(s_weights, weights, CURR_LAYER);
 	mm2s_input_data(s_weights, weights, ratio, CURR_LAYER, offset);
 
