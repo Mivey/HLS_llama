@@ -57,8 +57,8 @@ int top_tb(){
 	std::ifstream input_tokens("seed_199/199_01_rms_att_in.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/TOP_25_xb2_mm_output_A1.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary); 
-	std::ifstream w2_output("seed_199/199_15a_ffn2_out.bin", std::ios::binary);
-	// std::ifstream w2_output("seed_199/199_logits_out.bin", std::ios::binary);
+	// std::ifstream w2_output("seed_199/199_15a_ffn2_out.bin", std::ios::binary);
+	std::ifstream w2_output("seed_199/199_logits_out.bin", std::ios::binary);
 	std::ifstream w1_output("seed_42069/150_output_w1_tokens.bin", std::ios::binary);
 	std::ifstream w3_output("seed_42069/150_output_w3_tokens.bin", std::ios::binary);
 
@@ -442,7 +442,7 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 8
 								);
 
-	std::fill(output_arr.begin() + 192, output_arr.end(), 0);
+	// std::fill(output_arr.begin() + 192, output_arr.end(), 0);
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	parse_results<fdata_v_t, float>(golden_output_arr, output_arr);
 	// std::cout<< "========================= Tokens output array data ========================"<<std::endl;
