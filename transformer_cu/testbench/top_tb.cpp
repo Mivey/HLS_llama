@@ -57,7 +57,7 @@ int top_tb(){
 	std::ifstream input_tokens("seed_199/199_01_rms_att_in.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/TOP_25_xb2_mm_output_A1.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary); 
-	std::ifstream w2_output("seed_199/199_15a_ffn2_out.bin", std::ios::binary);
+	std::ifstream w2_output("seed_199/199_15_ffn2_out.bin", std::ios::binary); // I believe that if I do _15a_ffn2 that is the first two hidden layers.
 	// std::ifstream w2_output("seed_199/199_logits_out.bin", std::ios::binary);
 	std::ifstream w1_output("seed_42069/150_output_w1_tokens.bin", std::ios::binary);
 	std::ifstream w3_output("seed_42069/150_output_w3_tokens.bin", std::ios::binary);
@@ -439,7 +439,40 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
 								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
 								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 8
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 1, 0, 0
+								);
+	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
+transformer_cu(	output_arr.data(), //output_arr.data(), 
+								sf_w_arr.data(), quant_w_arr.data(), 
+								sf_w_arr.data(), quant_w_arr.data(), 
+								rms_w_arr.data(), key_arr_a.data(), value_arr_a.data(), 
+								curr_pos, //MODEL_ELEMENTS, MODEL_ELEMENTS, 
+								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
+								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
+								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 0, 0, 1
+								);
+	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
+transformer_cu(	output_arr.data(), //output_arr.data(), 
+								sf_w_arr.data(), quant_w_arr.data(), 
+								sf_w_arr.data(), quant_w_arr.data(), 
+								rms_w_arr.data(), key_arr_a.data(), value_arr_a.data(), 
+								curr_pos, //MODEL_ELEMENTS, MODEL_ELEMENTS, 
+								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
+								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
+								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 0, 0, 2
+								);
+	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
+transformer_cu(	output_arr.data(), //output_arr.data(), 
+								sf_w_arr.data(), quant_w_arr.data(), 
+								sf_w_arr.data(), quant_w_arr.data(), 
+								rms_w_arr.data(), key_arr_a.data(), value_arr_a.data(), 
+								curr_pos, //MODEL_ELEMENTS, MODEL_ELEMENTS, 
+								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
+								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
+								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 0, 0, 3
 								);
 
 	std::fill(output_arr.begin() + 192, output_arr.end(), 0);

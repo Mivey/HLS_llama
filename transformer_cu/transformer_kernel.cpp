@@ -14,24 +14,15 @@
 
 constexpr int mm_thr = 2;
 struct keys {
-	int n = 0;
-	int CURR_LAYER = 0;
-	int next_layer = 0;
-	int AXI_SEL = 0;
 	int N_DIM = MODEL_ELEMENTS;
 	int M_DIM = MODEL_ELEMENTS;
-	int curr_state = 0;
-	int next_state = 0;
 	int w_sf;
 	int w;
-	int INIT;
 	// int stop;
 } ;
 
 struct axi_reg{
 	int POS;
-	int N_DIM;
-	int M_DIM; 
 	int QKV_W;
 	int QKV_sf_W;
 	int Out_W;
@@ -45,6 +36,9 @@ struct axi_reg{
 	int rms_att_W;
 	int rms_ffn_W; 
 	int rms_final_W;
+	int INIT;
+	int CURR_LAYER;
+	int SEL;
 };
 
 void cu_selecter(	s_fdata_v_t &s_tokens,
@@ -54,23 +48,17 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 	// add back init
 	// remove case 5
 	// add diff loader outside of for loop;
-	r.curr_state = r.next_state;
-	r.AXI_SEL = 0;
-	r.CURR_LAYER = r.next_layer;
 	// r.INIT =  ((r.next_state == 0) && (r.CURR_LAYER == 0)) ? 1 : 0;
-	switch (r.curr_state) {
-	case 0 :	rmsnorm_kernel(s_tokens, diff, weights, r.CURR_LAYER, r.INIT, tt.rms_att_W / sizeof(fdata_v_t)); 
-						r.next_state++;
+	switch (tt.SEL) {
+	case 0 :	rmsnorm_kernel(s_tokens, diff, weights, tt.CURR_LAYER, tt.INIT, tt.rms_att_W / sizeof(fdata_v_t)); 
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
 						r.M_DIM = MODEL_ELEMENTS * 3; // QKV
 						r.w_sf = tt.QKV_sf_W / sizeof(fdata_v_t);
 						r.w = tt.QKV_W / sizeof(idata_v_t);
-						r.INIT = 0;
 						break;
 						
-	case 1 :	mha_kernel(s_tokens, diff, key_cache, value_cache, tt.POS, r.CURR_LAYER); 
-						r.next_state++;
+	case 1 :	mha_kernel(s_tokens, diff, key_cache, value_cache, tt.POS, tt.CURR_LAYER); 
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
 						r.M_DIM = MODEL_ELEMENTS; // Out
@@ -78,8 +66,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						r.w = tt.Out_W / sizeof(idata_v_t);
 						break;
 						
-	case 2 :	rmsnorm_kernel(s_tokens, diff, weights, r.CURR_LAYER, 0, tt.rms_ffn_W / sizeof(fdata_v_t));
-						r.next_state++;
+	case 2 :	rmsnorm_kernel(s_tokens, diff, weights, tt.CURR_LAYER, 0, tt.rms_ffn_W / sizeof(fdata_v_t));
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
 						r.M_DIM = MODEL_HIDDEN_DIM * 2; // gate & up
@@ -88,8 +75,6 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						break;
 						
 	case 3 :	swiglu_kernel(s_tokens, diff); 
-						r.next_layer = r.CURR_LAYER + 1;
-						r.next_state = (r.next_layer == MODEL_NUM_LAYERS) ? 4 : 0;
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_HIDDEN_DIM; // 2048 tokens
 						r.M_DIM = MODEL_ELEMENTS; // down
@@ -102,9 +87,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						r.M_DIM = MODEL_TOKENS; // embeddings out
 						r.w_sf = tt.Embed_sf_W / sizeof(fdata_v_t);
 						r.w = tt.Embed_W / sizeof(idata_v_t);
-						r.AXI_SEL = 1;
-						// r.stop = 1;
-						r.CURR_LAYER = 0;
+						tt.CURR_LAYER = 0;
 						break;
 	}
 }
@@ -145,14 +128,8 @@ void transformer_cu(
 				const int FF_w1w3_W, const int FF_w1w3_sf_W,
 				const int FF_w2_W, const int FF_w2_sf_W, 
 				const int Embed_W, const int Embed_sf_W, 
-				const int rms_att_W, const int rms_ffn_W, const int rms_final_W
-				#ifdef __DEBUG__
-				, const int faker // WTF if faker? \
-				faker lets us choose how many steps to run the transformer module, by overriding the default setting. \
-				Maybe in a future revision, I will pass hidden layer info directly instead of setting hard values. \
-				it feels like Im breaking a rule using the backslash like this ;-_- \
-				Does this upset you? I bet it does, huh? LUL. Stay mad, nerd. =^)
-				#endif
+				const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
+				const int INIT, const int CURR_LAYER, const int SEL
 			){
 	
 	
@@ -205,26 +182,15 @@ void transformer_cu(
 	#pragma HLS INTERFACE mode=s_axilite port=rms_att_W			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=rms_ffn_W			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=rms_final_W		bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=INIT					bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=CURR_LAYER		bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=SEL						bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=return				bundle=control
 	
-	#ifdef __DEBUG__
-			#pragma HLS INTERFACE mode=s_axilite port=faker 				bundle=control
-	#endif
-
-	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
-	// s_fdata_v_t internal_stream[2];
-	fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM];
-#pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=uram
-	
 	keys runner;
-	// runner.stop = 0;
-	runner.INIT = 1;
 	
-	runner.CURR_LAYER = 0;
 	axi_reg tt = {
 		POS, 
-		0, 
-		0, 
 		QKV_W, 
 		QKV_sf_W,
 		Out_W, 
@@ -237,36 +203,19 @@ void transformer_cu(
 		Embed_sf_W, 
 		rms_att_W, 
 		rms_ffn_W, 
-		rms_final_W
+		rms_final_W,
+		INIT,
+		CURR_LAYER,
+		SEL
 	};
 
-	#ifndef __DEBUG__
-		const int faker = MODEL_NUM_LAYERS * 4 + 1;
-	#endif
-
-	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS);
-
-	for(int ii = 0; ii < faker; ii++) {
-	// for(int ii = 0; ii < MODEL_NUM_LAYERS; ii++) {
-	// while (runner.stop == 0) {
 		s_fdata_v_t s_cu_sel_out;
 		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
-		// runner.next_state = 3;
-		// if (ii > 0) {
-		// 	hls::fence(tokens);
-		// }
-		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, runner, tt);
 		
-		// hls::fence({s_cu_sel_out}, {tokens});
-		// int rn = runner.N_DIM;
-		// int rm = runner.M_DIM;
-		// int sf_reg = runner.w_sf;
-		// int w_reg = runner.w;
-		// int layer = runner.CURR_LAYER;
-		// runner.INIT = 1;
-		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER);
-	}
-	mm2mm_store(tokens, internal_token, MODEL_TOKENS);
+		cu_selecter(s_cu_sel_out, weights, tokens, key_cache, value_cache, runner, tt);
+		
+		df_region(tokens, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, CURR_LAYER);
+		
 	return;
 }
 
