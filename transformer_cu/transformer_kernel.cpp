@@ -133,8 +133,8 @@ void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1,
 	// GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
 	// GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
 
-	// gemv_combo(out, s_out, rm);
-	gemv_split(out, s_out, rm);
+	gemv_combo(out, s_out, rm);
+	// gemv_split(out, s_out, rm);
 }
 
 void transformer_cu(
@@ -148,14 +148,8 @@ void transformer_cu(
 				const int FF_w1w3_W, const int FF_w1w3_sf_W,
 				const int FF_w2_W, const int FF_w2_sf_W, 
 				const int Embed_W, const int Embed_sf_W, 
-				const int rms_att_W, const int rms_ffn_W, const int rms_final_W
-				#ifdef __DEBUG__
-				, const int faker // WTF if faker? \
-				faker lets us choose how many steps to run the transformer module, by overriding the default setting. \
-				Maybe in a future revision, I will pass hidden layer info directly instead of setting hard values. \
-				it feels like Im breaking a rule using the backslash like this ;-_- \
-				Does this upset you? I bet it does, huh? LUL. Stay mad, nerd. =^)
-				#endif
+				const int rms_att_W, const int rms_ffn_W, const int rms_final_W, 
+				const int SEL, const int INIT, const int CURR_LAYER
 			){
 	
 	
@@ -210,15 +204,12 @@ void transformer_cu(
 	#pragma HLS INTERFACE mode=s_axilite port=rms_final_W		bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=return				bundle=control
 	
-	#ifdef __DEBUG__
-			#pragma HLS INTERFACE mode=s_axilite port=faker 				bundle=control
-	#endif
 
 	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
 	// s_fdata_v_t internal_stream[2];
-	fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM];
-#pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
-#pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=uram
+	// fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM];
+// #pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
+// #pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=uram
 	
 	keys runner;
 	// runner.stop = 0;
@@ -244,24 +235,13 @@ void transformer_cu(
 		rms_final_W
 	};
 
-	#ifndef __DEBUG__
-		const int faker = MODEL_NUM_LAYERS * 4 + 1;
-	#endif
-
-	// mm2mm_store(internal_token, tokens, MODEL_ELEMENTS);
-	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, MODEL_TOKENS);
-	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, MODEL_TOKENS);
-
-	for(int ii = 0; ii < faker; ii++) {
-	// for(int ii = 0; ii < MODEL_NUM_LAYERS; ii++) {
-	// while (runner.stop == 0) {
 		s_fdata_v_t s_cu_sel_out;
 		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		// runner.next_state = 3;
 		// if (ii > 0) {
 		// 	hls::fence(tokens);
 		// }
-		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, runner, tt);
+		cu_selecter(s_cu_sel_out, weights, tokens, key_cache, value_cache, runner, tt);
 		
 		// hls::fence({s_cu_sel_out}, {tokens});
 		// int rn = runner.N_DIM;
@@ -270,9 +250,8 @@ void transformer_cu(
 		// int w_reg = runner.w;
 		// int layer = runner.CURR_LAYER;
 		// runner.INIT = 1;
-		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER);
-	}
-	mm2mm_store(tokens, internal_token, MODEL_TOKENS);
+		df_region(tokens, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER);
+	// mm2mm_store(tokens, internal_token, MODEL_TOKENS);
 	return;
 }
 
