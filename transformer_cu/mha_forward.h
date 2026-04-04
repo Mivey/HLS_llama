@@ -2,7 +2,7 @@
 #ifndef MARK_FORWARD
 #define MARK_FORWARD
 
-// #define __DEBUG__
+#define __DEBUG__
 // #include "fast_common.h"
 #ifdef  __DEBUG__
 	#include "hls_print.h"
@@ -405,7 +405,7 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 								const int Embed_W, const int Embed_sf_W, 
 								const int rms_att_W, const int rms_ffn_W, const int rms_final_W
 				#ifdef __DEBUG__
-				, const int faker 
+				, const int faker ,const int INIT, const int CURR_LAYER, const int NEXT_STATE
 				#endif
 				);
 #endif

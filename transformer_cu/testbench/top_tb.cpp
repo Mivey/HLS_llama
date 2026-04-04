@@ -57,8 +57,9 @@ int top_tb(){
 	std::ifstream input_tokens("seed_199/199_01_rms_att_in.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/TOP_25_xb2_mm_output_A1.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary); 
-	// std::ifstream w2_output("seed_199/199_15a_ffn2_out.bin", std::ios::binary);
-	std::ifstream w2_output("seed_199/199_logits_out.bin", std::ios::binary);
+	std::ifstream w2_output("seed_199/199_15a_ffn2_out.bin", std::ios::binary);
+	// std::ifstream w2_output("seed_199/199_15_ffn2_out.bin", std::ios::binary);
+	// std::ifstream w2_output("seed_199/199_logits_out.bin", std::ios::binary);
 	std::ifstream w1_output("seed_42069/150_output_w1_tokens.bin", std::ios::binary);
 	std::ifstream w3_output("seed_42069/150_output_w3_tokens.bin", std::ios::binary);
 
@@ -287,6 +288,7 @@ int top_tb(){
 	// query_output.seekg(0, std::ios::beg);
 	char *goa = reinterpret_cast<char*>(golden_output_arr.data());
 	size_t goa_idx = 0;
+	std::fill(golden_output_arr.begin(), golden_output_arr.end(), 0);
 	// query_output.read(goa, file_size);
 	// goa_idx += file_size;
 	
@@ -301,7 +303,8 @@ int top_tb(){
 	file_size = w2_output.tellg();
 	w2_output.seekg(0, std::ios::beg);
 	
-	w2_output.read(goa, file_size);
+	w2_output.read(goa, file_size/2);
+	w2_output.read(goa + logits_size/2, file_size/2);
 
 
 	// w1_output.seekg(0, std::ios::end);
@@ -439,10 +442,11 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
 								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
 								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 8
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 8, 1, 0, 0
 								);
-
-	// std::fill(output_arr.begin() + 192, output_arr.end(), 0);
+	int zz = output_arr.size();
+	std::fill(output_arr.begin() + 96,output_arr.begin() + zz / 2 - 1, 0);
+	std::fill(output_arr.begin() + zz / 2 + 96,output_arr.end(), 0);
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	parse_results<fdata_v_t, float>(golden_output_arr, output_arr);
 	// std::cout<< "========================= Tokens output array data ========================"<<std::endl;

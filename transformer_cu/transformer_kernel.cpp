@@ -6,6 +6,7 @@
 #include "quantizer.h"
 #include "combiner.h"
 // #include "sampler.h"
+#include <algorithm>
 #include <cstdint>
 #include <exception>
 #include <hls_fence.h>
@@ -149,11 +150,7 @@ void transformer_cu(
 				const int Embed_W, const int Embed_sf_W, 
 				const int rms_att_W, const int rms_ffn_W, const int rms_final_W
 				#ifdef __DEBUG__
-				, const int faker // WTF if faker? \
-				faker lets us choose how many steps to run the transformer module, by overriding the default setting. \
-				Maybe in a future revision, I will pass hidden layer info directly instead of setting hard values. \
-				it feels like Im breaking a rule using the backslash like this ;-_- \
-				Does this upset you? I bet it does, huh? LUL. Stay mad, nerd. =^)
+				, const int faker ,const int INIT, const int CURR_LAYER, const int NEXT_STATE
 				#endif
 			){
 	
@@ -211,11 +208,15 @@ void transformer_cu(
 	
 	#ifdef __DEBUG__
 			#pragma HLS INTERFACE mode=s_axilite port=faker 				bundle=control
+			#pragma HLS INTERFACE mode=s_axilite port=INIT 				bundle=control
+			#pragma HLS INTERFACE mode=s_axilite port=CURR_LAYER 				bundle=control
+			#pragma HLS INTERFACE mode=s_axilite port=NEXT_STATE 				bundle=control
 	#endif
 
 	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
 	// s_fdata_v_t internal_stream[2];
 	fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM];
+	std::fill(internal_token->begin(), internal_token->end(), 0);
 	#pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
 	#pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=uram
 	
@@ -245,6 +246,10 @@ void transformer_cu(
 
 	#ifndef __DEBUG__
 		const int faker = MODEL_NUM_LAYERS * 4 + 1;
+	#endif
+	#ifdef __DEBUG__
+		runner.CURR_LAYER = CURR_LAYER;
+		runner.next_state = NEXT_STATE;
 	#endif
 
 	// mm2mm_store(internal_token, tokens, MODEL_ELEMENTS);
