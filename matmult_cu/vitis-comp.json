@@ -1,0 +1,14 @@
+{
+  "name": "matmult_cu",
+  "type": "HLS",
+  "configuration": {
+    "componentType": "HLS",
+    "configFiles": [
+      "mm_hls_config.cfg"
+    ],
+    "work_dir": "matmult_cu"
+  },
+  "useSysrootToolchain": false,
+  "template": "empty_hls_component",
+  "templateFlow": "VITIS"
+}
