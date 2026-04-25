@@ -2,6 +2,9 @@
 	"clangd.fallbackFlags": [
 		"-I/tools/Xilinx/2025.2/Vitis/include",
 		"-I/tools/Xilinx/2025.2/Vitis/include/etc",
-		"-I/tools/Xilinx/2025.2/Vitis/lnx64/tools/auto_cc/include"
+		"-I/tools/Xilinx/2025.2/Vitis/lnx64/tools/auto_cc/include",
+		"-I/home/lolwut/tools/Xilinx/2025.2/Vitis/include",
+		"-I/home/lolwut/tools/Xilinx/2025.2/Vitis/include/etc",
+		"-I/home/lolwut/tools/Xilinx/2025.2/Vitis/lnx64/tools/auto_cc/include"
 	]
 }
