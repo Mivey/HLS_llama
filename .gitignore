@@ -78,3 +78,5 @@ transformer_cu/testbench/seed_42069/*
 transformer_cu/testbench/seed_42069_conv/*
 transformer_cu/testbench/weights/*
 transformer_cu/testbench/seed_199/*
+sampler_cu/.cache
+sampler_cu/sampler_cu/*

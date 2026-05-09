@@ -46,6 +46,7 @@ struct axi_reg{
 	int rms_att_W;
 	int rms_ffn_W; 
 	int rms_final_W;
+	// bool mha_return;
 };
 
 void cu_selecter(	s_fdata_v_t &s_tokens,
@@ -148,10 +149,11 @@ void transformer_cu(
 				const int FF_w1w3_W, const int FF_w1w3_sf_W,
 				const int FF_w2_W, const int FF_w2_sf_W, 
 				const int Embed_W, const int Embed_sf_W, 
-				const int rms_att_W, const int rms_ffn_W, const int rms_final_W
-				#ifdef __DEBUG__
-				, const int faker ,const int INIT, const int CURR_LAYER, const int NEXT_STATE
-				#endif
+				const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
+			#ifdef __DEBUG__
+				const int faker ,const int INIT, const int CURR_LAYER, const int NEXT_STATE,
+			#endif
+				const float temperature, const float coin, int* pick
 			){
 	
 	
@@ -212,6 +214,10 @@ void transformer_cu(
 			#pragma HLS INTERFACE mode=s_axilite port=CURR_LAYER 				bundle=control
 			#pragma HLS INTERFACE mode=s_axilite port=NEXT_STATE 				bundle=control
 	#endif
+	#pragma HLS INTERFACE mode=s_axilite port=temperature			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=coin		bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=pick				bundle=control
+	// #pragma HLS INTERFACE mode=s_axilite port=mha_return				bundle=control
 
 	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
 	// s_fdata_v_t internal_stream[2];
@@ -223,8 +229,10 @@ void transformer_cu(
 	keys runner;
 	// runner.stop = 0;
 	runner.INIT = 1;
+	// bool skip = (mha_return != 0) ? 1 : 0;
 	
-	runner.CURR_LAYER = 0;
+	runner.next_layer = 0;
+	runner.next_layer = 0;
 	axi_reg tt = {
 		POS, 
 		0, 
@@ -242,13 +250,14 @@ void transformer_cu(
 		rms_att_W, 
 		rms_ffn_W, 
 		rms_final_W
+		// skip
 	};
 
 	#ifndef __DEBUG__
 		const int faker = MODEL_NUM_LAYERS * 4 + 1;
 	#endif
 	#ifdef __DEBUG__
-		runner.CURR_LAYER = CURR_LAYER;
+		runner.next_layer = CURR_LAYER;
 		runner.next_state = NEXT_STATE;
 	#endif
 
@@ -276,6 +285,11 @@ void transformer_cu(
 		// runner.INIT = 1;
 		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER);
 	}
-	mm2mm_store(tokens, internal_token, MODEL_TOKENS);
+	#ifdef __DEBUG__
+		mm2mm_store(tokens, internal_token, MODEL_TOKENS);
+	#endif
+	#ifndef __DEBUG__
+		systolic_sort(internal_token, pick, temperature, coin);
+	#endif
 	return;
 }

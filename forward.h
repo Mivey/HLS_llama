@@ -317,4 +317,6 @@ void mha_WAR_store_load(mfdata_v_t *cache, s_mfdata_v_t &output, s_mfdata_v_t &i
 void mm_tok_load_input(s_idata_v_t &out, idata_v_t *in, const int vCount, const int CURR_LAYER);
 void mm_load_input(s_fdata_v_t &out, fdata_v_t *in, const int vCount, const int CURR_LAYER);
 
+void systolic_sort(fdata_v_t *logit, int* pick, const float temperature, const float coin);
+
 #endif

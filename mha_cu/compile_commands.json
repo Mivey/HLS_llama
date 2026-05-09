@@ -8,9 +8,9 @@
       "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=mha_kernel",
       "-c",
-      "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/mha.cpp"
+      "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/mha_forward.cpp"
     ],
-    "file": "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/mha.cpp"
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/mha_forward.cpp"
   },
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu",
@@ -21,9 +21,9 @@
       "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=mha_kernel",
       "-c",
-      "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/forward.cpp"
+      "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/mha.cpp"
     ],
-    "file": "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/forward.cpp"
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/mha.cpp"
   },
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu",
@@ -33,9 +33,9 @@
       "-fhls-tb",
       "-hls-sim-headers-dir=/tools/Xilinx/2025.2/Vitis/include",
       "-c",
-      "testbench/top_tb.cpp"
+      "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/testbench/top_tb.cpp"
     ],
-    "file": "testbench/top_tb.cpp"
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/testbench/top_tb.cpp"
   },
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu",
@@ -45,8 +45,8 @@
       "-fhls-tb",
       "-hls-sim-headers-dir=/tools/Xilinx/2025.2/Vitis/include",
       "-c",
-      "testbench/tb_main.cpp"
+      "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/testbench/tb_main.cpp"
     ],
-    "file": "testbench/tb_main.cpp"
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/mha_cu/testbench/tb_main.cpp"
   }
 ]
