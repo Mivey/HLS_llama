@@ -21,7 +21,7 @@ void abs_intake(s_fdata_v_t &tokens_out, s_fdata_v_t &abs_tokens, s_fdata_v_t &t
 		}		
 		abs_tokens.write(c_val);
 	}
-	
+	// can probably get rid of abs_intake
 }
 
 void max_finder(hls::stream<my_float_t> &max_val, s_fdata_v_t & abs_tokens){
@@ -30,6 +30,8 @@ void max_finder(hls::stream<my_float_t> &max_val, s_fdata_v_t & abs_tokens){
 	const int cnt = MODEL_SCALING_FACTOR / SM_FL_ELEM;
 	my_float_t c_val[MODEL_SCALING_FACTOR];
 	#pragma HLS ARRAY_PARTITION variable=c_val dim=1 type=complete
+	//here we store token_out and then assign token_out[i] to c_val[i * MAX_FL_ELEM + k] = hls::absf(token_out[i][k])
+	
 	
 	mf_intake:
 	for (int i = 0; i < cnt; i++) {
@@ -59,12 +61,12 @@ void quant_out( hls::stream<my_float_t> &tok_sf_out, s_idata_v_t &tok_out, s_fda
 	idata_v_t quant_tmp; // not an array anymore
 	// fdata_v_t tok_arr[TOK_COUNT];
 	
-	create_quant_val:
+	create_q_val:
 	for (size_t j = 0; j < TOK_COUNT; j++) {
 		#pragma HLS PIPELINE
 		fdata_v_t proc_tok = tokens_in.read();
 		
-		create_quant_val_pipeline_loop:	
+		create_q_val_ppl:	
 		for (size_t k = 0; k < SM_FL_ELEM; k++) {
 			#pragma HLS UNROLL
 			quant_tmp[j * SM_FL_ELEM + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);

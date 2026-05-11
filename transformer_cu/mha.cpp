@@ -209,6 +209,7 @@ void wide_mha_weighted_sum(s_mfdata_v_t &xb, hls::stream<my_float_t>  &att_in, s
 	for (int i = 0 ; i < ARR_SIZE; i++) {
 		#pragma HLS PIPELINE II=1
 		xb.write(xb_arr[i]);
+		//instead of reporting float vect, we 
 	}
 }
 
@@ -234,7 +235,7 @@ void wide_mha_kernel(s_mfdata_v_t &out,
 		wide_mha_iterate(mha_it_sm, query, key_cache, POS);
 		wide_mha_softmax(att_sm_ws, mha_it_sm, POS);
 		wide_mha_weighted_sum(out, att_sm_ws, value_cache, POS);
-		// vec_down_converter(out, xb, MODEL_ELEMENTS / (SM_FL_ELEM * MODEL_NUM_HEADS));
+		//quantizer goes here
 	}
 }
 
