@@ -68,6 +68,36 @@ HEAD MAJOR:		I read all the sentences (head size) on the page (position) before 
     
 */
 
+/*
+NEEDS REWRITE:
+	1. should be compatible with llama3
+		- look at how the small version of tinystories works
+	2. crete second softmax function that streams inputs and outputs from aie function
+	3. should have only ONE dataflow pragma
+	4. incoporate quantizer
+	5. break up load and store?
+
+	Looks like this:
+	for (int i = 0; i < LOOP_CNT; i++):
+		#pragma hls dataflow
+		 Get 64 values from query
+		 ** do to: learn how KV work here and if I can grab 16 values**
+		 rope q, k
+		 ** speculation aie  start **
+		 leave WAR main idea alone, slight modification to send 12/32/whatever
+		 	needs to read/write bf16 for additional size savings and speed
+		 implement mha iterate, softmax and ws in aie
+		 	inputs : q (from rope) k, v (from WAR), POS
+			output : xb (n sized bf16 vector)
+		** speculation aie end **
+		quantizer
+			bf16 to float?
+
+		
+		 
+		 
+*/
+
 void wide_mha_iterate(hls::stream<my_float_t> &out, s_adata_v_t & query, s_adata_v_t &key_cache, const int POS){
 	
 	const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
@@ -86,9 +116,9 @@ void wide_mha_iterate(hls::stream<my_float_t> &out, s_adata_v_t & query, s_adata
 		#pragma HLS PIPELINE II=1
 		query_arr[j] = query.read();
 	}
-// other way that may be faster is my_float_t tatt[4] 
-// then tatt[i] =+ query_arr[i][n] * tmpb[n];
-//then att += tatt[i] (hls unroll)
+	// other way that may be faster is my_float_t tatt[4] 
+	// then tatt[i] =+ query_arr[i][n] * tmpb[n];
+	//then att += tatt[i] (hls unroll)
 	pos_loop:
 	for (size_t k = 0; k < POS; k++){
 	#pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
@@ -241,6 +271,7 @@ void wide_mha_kernel(s_mfdata_v_t &out,
 
 void mha_mm2s_data(s_fdata_v_t &q, s_fdata_v_t &k, s_fdata_v_t &v, fdata_v_t *in, const int cnt){
 	
+	// prob delete
 	mm2s_input_data(q, in, cnt, 0, 0);
 	mm2s_input_data(k, in, cnt / 2, 0, cnt);
 	mm2s_input_data(k, in, cnt / 2, 0, MODEL_TOKENS / (SM_FL_ELEM * 2));

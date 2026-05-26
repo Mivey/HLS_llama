@@ -1,27 +1,27 @@
 [
   {
-    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/sampler_cu",
+    "directory": "/home/lolwut/projects/hls/HLS_llama/sampler_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-hls-syn-headers-dir=/home/lolwut/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=systolic_sort",
       "-c",
-      "/home/lolwut/project/2026/HLS/HLS_llama/sampler_cu/sampler.cpp"
+      "/home/lolwut/projects/hls/HLS_llama/sampler_cu/sampler.cpp"
     ],
-    "file": "/home/lolwut/project/2026/HLS/HLS_llama/sampler_cu/sampler.cpp"
+    "file": "/home/lolwut/projects/hls/HLS_llama/sampler_cu/sampler.cpp"
   },
   {
-    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/sampler_cu",
+    "directory": "/home/lolwut/projects/hls/HLS_llama/sampler_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls-tb",
-      "-hls-sim-headers-dir=/tools/Xilinx/2025.2/Vitis/include",
+      "-hls-sim-headers-dir=/home/lolwut/tools/Xilinx/2025.2/Vitis/include",
       "-c",
-      "/home/lolwut/project/2026/HLS/HLS_llama/sampler_cu/sampler_tb.cpp"
+      "/home/lolwut/projects/hls/HLS_llama/sampler_cu/sampler_tb.cpp"
     ],
-    "file": "/home/lolwut/project/2026/HLS/HLS_llama/sampler_cu/sampler_tb.cpp"
+    "file": "/home/lolwut/projects/hls/HLS_llama/sampler_cu/sampler_tb.cpp"
   }
 ]

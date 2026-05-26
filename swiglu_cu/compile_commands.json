@@ -1,15 +1,15 @@
 [
   {
-    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/swiglu_cu",
+    "directory": "/home/lolwut/projects/hls/HLS_llama/swiglu_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-hls-syn-headers-dir=/home/lolwut/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=swiglu_kernel",
       "-c",
-      "/home/lolwut/project/2026/HLS/HLS_llama/swiglu_cu/siwglu_kernel.cpp"
+      "/home/lolwut/projects/hls/HLS_llama/swiglu_cu/siwglu_kernel.cpp"
     ],
-    "file": "/home/lolwut/project/2026/HLS/HLS_llama/swiglu_cu/siwglu_kernel.cpp"
+    "file": "/home/lolwut/projects/hls/HLS_llama/swiglu_cu/siwglu_kernel.cpp"
   }
 ]

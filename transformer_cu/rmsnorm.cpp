@@ -1,5 +1,6 @@
 #include "rmsnorm.h"
 #include "mha_forward.h"
+#include "quantizer.h"
 
 #ifdef  __DEBUG__
 	#include "hls_print.h"
@@ -52,10 +53,10 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_EL
 }
 
 
-void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t *diff, fdata_v_t *weights, const int CURR_LAYER, const int INIT, const int offset){
+void rmsnorm_kernel(s_idata_v_t &s_w, hls::stream<my_float_t> &s_sf, fdata_v_t *diff, fdata_v_t *weights, const int CURR_LAYER, const int INIT, const int offset){
 
 	#pragma HLS DATAFLOW
-	s_fdata_v_t s_weights, s_tokens, s_diff;
+	s_fdata_v_t s_weights, s_tokens, s_diff, s_tokens_out;
 	const int ratio = MODEL_ELEMENTS / SM_FL_ELEM;
 	
 	#pragma HLS STREAM variable=s_tokens depth=ratio
@@ -78,6 +79,8 @@ void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t *diff, fdata_v_t *weigh
 	mm2s_input_data(s_weights, weights, ratio, CURR_LAYER, offset);
 
 	rmsnorm(s_tokens_out, s_diff, internal_tokens, s_weights, INIT);
+	
+	quantizer_kernel(s_sf, s_w, s_tokens_out, MODEL_ELEMENTS);
 		
 	return;
 }
