@@ -238,7 +238,101 @@ void wide_mha_kernel(s_mfdata_v_t &xb,
 	}
 }
 
-void mha_kernel(mfdata_v_t *tokens, //6 mha_kernel
+void mha_kernel(hls::stream<my_float_t> &sf,
+								s_idata_v_t &w,
+								fdata_v_t *tokens, //6 mha_kernel
+                mfdata_v_t *key_cache, 
+                mfdata_v_t *value_cache, 
+								mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in,
+                const int POS, const int CURR_LAYER){
+  
+
+	constexpr int QUANT_DEPTH = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS / MAX_QUANT_ELEM;
+	constexpr int SF_DEPTH = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+	constexpr int HD_QUANT_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS  / MAX_QUANT_ELEM;
+	constexpr int HD_SF_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+	constexpr int CACHE_DEPTH = MODEL_ELEMENTS * MODEL_SEQUENCE_LEN * MODEL_NUM_LAYERS / MAX_FL_ELEM;
+	constexpr int TOK_DEPTH = MODEL_ELEMENTS / MAX_FL_ELEM;
+	constexpr int RMS_DEPTH = MODEL_ELEMENTS * MODEL_NUM_LAYERS / MAX_FL_ELEM;
+	constexpr	int LOGITS_QUANT_DEPTH = MODEL_ELEMENTS * MODEL_TOKENS / MAX_QUANT_ELEM;
+	constexpr int LOGITS_SF_DEPTH =  MODEL_ELEMENTS * MODEL_TOKENS / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+	constexpr int LOGITS_DEPTH = MODEL_TOKENS / MAX_FL_ELEM;
+
+	#pragma HLS INTERFACE mode=m_axi port=value_cache			bundle=vc_gemm		depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)		max_write_burst_length=(4096/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=key_cache				bundle=kc_gemm		depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)		max_write_burst_length=(4096/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=value_cache_in	bundle=token_gemm		depth=TOK_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=key_cache_in		bundle=token_gemm		depth=TOK_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=tokens					bundle=token_gemm	depth=TOK_DEPTH				offset=slave	max_read_burst_length=(4096/MAX_DW * 8)
+	// #pragma HLS INTERFACE mode=m_axi port=sf					bundle=token_gemm	depth=TOK_DEPTH				offset=slave	max_write_burst_length=(4096/MAX_DW * 8)  
+	// #pragma HLS INTERFACE mode=m_axi port=w					bundle=token_gemm	depth=TOK_DEPTH				offset=slave	max_write_burst_length=(4096/MAX_DW * 8) 
+	/* **********************************************************************************/
+	#pragma HLS INTERFACE mode=s_axilite port=tokens				 					bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=value_cache 						bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=key_cache								bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=value_cache_in 					bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=key_cache_in						bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=CURR_LAYER 							bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=POS 										bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=return 									bundle=control
+	
+	s_mfdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
+	s_mfdata_v_t abs_tokens, abs_max_raw_tok, max_tok_out;
+	hls::stream<my_float_t> q_max_val;
+	s_mfdata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
+	s_mfdata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
+	s_mfdata_v_t s_key_cache_in, s_query, s_value_cache_in, s_query_r, s_key_cache_in_r;
+
+  #pragma HLS STABLE variable=POS
+  #pragma HLS STABLE variable=CURR_LAYER
+
+	#pragma HLS STREAM variable=s_key_cache_in depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM  //good
+	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM  //good
+	#pragma HLS STREAM variable=sf depth=MODEL_ELEMENTS / SM_FL_ELEM / MODEL_SCALING_FACTOR
+	#pragma HLS STREAM variable=s_value_cache_in depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM  //good
+	#pragma HLS STREAM variable=s_query depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM //good
+	#pragma HLS STREAM variable=s_query_r depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM //good
+	// #pragma HLS STREAM variable=xb_ws_q depth=8 //good
+	#pragma HLS STREAM variable=s_key_cache_to_kernel depth=4096 //good
+	#pragma HLS STREAM variable=s_value_cache_to_kernel depth=4096 //good
+	
+	#pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo impl=bram
+	#pragma HLS BIND_STORAGE variable=s_query type=fifo impl=bram
+	#pragma HLS BIND_STORAGE variable=s_query_r type=fifo impl=bram
+	#pragma HLS BIND_STORAGE variable=s_key_cache_to_kernel type=fifo impl=uram
+	#pragma HLS BIND_STORAGE variable=s_value_cache_to_kernel type=fifo impl=uram
+
+	mha_num_head_loop:
+	for (size_t i = 0; i < MODEL_NUM_HEADS; i++) {
+		#pragma HLS DATAFLOW
+		
+		hls::stream<my_float_t> mha_it_sm, att_sm_ws;
+		// s_mfdata_v_t xb;
+		// #pragma hls STREAM variable=xb depth = 64
+		#pragma HLS STREAM variable=mha_it_sm depth=512
+		#pragma HLS BIND_STORAGE variable=mha_it_sm type=fifo impl=bram
+		#pragma HLS STREAM variable=att_sm_ws depth=512
+		#pragma HLS BIND_STORAGE variable=att_sm_ws type=fifo impl=bram
+
+		mha_input_data(s_query_r, tokens, 0, i * MODEL_HEAD_SIZE); //read query first
+		mha_input_data(s_key_cache_in_r, tokens, 1, i * MODEL_HEAD_SIZE); //key
+		mha_input_data(s_value_cache_in, tokens, 2, i * MODEL_HEAD_SIZE); // value
+		rope_kernel<my_float_t, MAX_FL_ELEM, MODEL_HEAD_SIZE>(s_query, s_query_r, POS);
+		rope_kernel<my_float_t, MAX_FL_ELEM, MODEL_HEAD_SIZE>(s_key_cache_in, s_key_cache_in_r, POS);
+		mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS, i);
+		mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, CURR_LAYER, POS, i);
+		wide_mha_iterate(mha_it_sm, s_query_r, s_key_cache_to_kernel, POS);
+		wide_mha_softmax(att_sm_ws, mha_it_sm, POS);
+		wide_mha_weighted_sum(xb_ws_q, att_sm_ws, s_value_cache_to_kernel, POS);
+		abs_intake(abs_max_raw_tok, abs_tokens, xb_ws_q);
+		max_finder(q_max_val, max_tok_out, abs_tokens, abs_max_raw_tok);
+		quant_out(sf, w, max_tok_out, q_max_val);
+		//quantizer goes here
+	}
+	
+	return;
+}
+
+void old_mha_kernel(mfdata_v_t *tokens, //6 mha_kernel
                 mfdata_v_t *key_cache, 
                 mfdata_v_t *value_cache, 
 								mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in,
@@ -325,4 +419,3 @@ void mha_kernel(mfdata_v_t *tokens, //6 mha_kernel
 
 	return;
 }
-
