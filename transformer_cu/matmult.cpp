@@ -81,6 +81,8 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 
 void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg){
 
+
+// todo: lets fix the intake. This should get jsut the scaling factor, and just a few of the weights. Also sf should be bf16 in ddr and uram; convert to float before operation. 
 	constexpr int mm_thr = 2;
 	// const int num = N_DIM * M_DIM ;
 	// const int num_sf = N_DIM * M_DIM / (MODEL_SCALING_FACTOR );
