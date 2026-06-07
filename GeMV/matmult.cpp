@@ -344,3 +344,185 @@ void GeMV_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *
 	s2mm_output_data(out, s_out, M_DIM / SM_FL_ELEM, 0);
 	return;
 }
+
+void get_tok( idata_v_t *tok, my_float_t *tok_sf, s_idata_v_t &s_tok, hls::stream<my_float_t> &s_tok_sf, const int N_DIM){
+	
+	const int vCount = N_DIM / MAX_QUANT_ELEM; 
+	
+	get_tok:
+	for (int i = 0; i < vCount; i++) {
+		#pragma HLS LOOP_TRIPCOUNT min=(MODEL_ELEMENTS / MAX_QUANT_ELEM) max = (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM)
+		#pragma HLS PIPELINE II=1 
+		tok[i] = s_tok.read();
+		tok_sf[i] = s_tok_sf.read();
+		
+	}
+}
+
+
+void qsum_pl(hls::stream<my_float_t> &q_out, idata_v_t *tok, s_idata_v_t &s_w, const int N_DIM, const int M_DIM){
+	
+	const int vCount = N_DIM / MAX_QUANT_ELEM;
+	
+	for(int k = 0; k < M_DIM; k++){	
+		#pragma HLS LOOP_TRIPCOUNT min=(SM_FL_ELEM) max = (MODEL_HIDDEN_DIM)
+		partial_sum:
+		for (int i = 0 ; i < vCount; i++) {
+		#pragma HLS LOOP_TRIPCOUNT min=(MODEL_ELEMENTS / MAX_QUANT_ELEM / SM_FL_ELEM) max = (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM / SM_FL_ELEM)
+			#pragma HLS PIPELINE II=1
+			idata_v_t tok_tmp = tok[i];
+			idata_v_t w_tmp = s_w.read();
+			
+			int32_t temp = 0;
+			for (int j = 0; j < MAX_QUANT_ELEM; j++) {
+				#pragma HLS UNROLL
+				temp += (tok_tmp[j] * w_tmp[j]);
+			}
+			q_out.write((my_float_t)temp);
+		}
+	}	
+}
+
+void sf_sum_pl(hls::stream<my_float_t> &ps_out, my_float_t *tok_sf, s_fdata_v_t &w_sf, const int N_DIM, const int M_DIM){
+	
+	const int vCount = N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+	
+	for(int k = 0; k < M_DIM; k++){	
+		#pragma HLS LOOP_TRIPCOUNT min=(SM_FL_ELEM) max = (MODEL_HIDDEN_DIM)
+		partial_sum_sf:
+		for (int i = 0; i < vCount; i++) {
+			#pragma HLS LOOP_TRIPCOUNT min=(MODEL_ELEMENTS / MAX_QUANT_ELEM / SM_FL_ELEM) max = (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM / SM_FL_ELEM)
+					
+			fdata_v_t tmp = w_sf.read();
+			for (int j = 0; j < SM_FL_ELEM; j++) {
+				#pragma hls PIPELINE II=1
+				ps_out.write(tmp[j] * tok_sf[i * SM_FL_ELEM + j]);
+			}
+		}
+	}
+}
+
+void scalar_out(hls::stream<my_float_t> &out, hls::stream<my_float_t> &ps_out, hls::stream<my_float_t> &q_out, const int N_DIM, const int M_DIM){
+	const int vCount = N_DIM/(MODEL_SCALING_FACTOR);
+	for(int k = 0; k < M_DIM; k++){	
+		#pragma HLS LOOP_TRIPCOUNT min=(SM_FL_ELEM) max = (MODEL_HIDDEN_DIM)
+		my_float_t tmp[4] = {};
+#pragma HLS ARRAY_PARTITION variable=tmp dim=1 type=complete
+		final_sum:
+		for (int i = 0; i < vCount; i++) {
+			#pragma HLS LOOP_TRIPCOUNT min=(MODEL_ELEMENTS / MAX_QUANT_ELEM / SM_FL_ELEM) max = (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM / SM_FL_ELEM)
+			#pragma HLS PIPELINE II=1
+			int idx = i % 4;
+			tmp[idx] += ps_out.read() * q_out.read();
+		}
+		my_float_t ftmp = 0;
+		for (int i = 0; i < 4; i++) {
+			#pragma HLS UNROLL
+			ftmp += tmp[i];
+		}
+		out.write(ftmp);
+	}
+}
+
+
+
+void n_GeMV_kernel(fdata_v_t *out, hls::stream<my_float_t> &s_tok_sf, s_idata_v_t &s_tok, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off){
+
+	constexpr int HD_QUANT_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS  / MAX_QUANT_ELEM;
+	constexpr int HD_SF_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+	constexpr int TOK_DEPTH = MODEL_HIDDEN_DIM / SM_FL_ELEM;
+	constexpr int TOK_OUT_DEPTH = MODEL_HIDDEN_DIM / SM_FL_ELEM;
+
+	
+	#pragma HLS INTERFACE mode=m_axi port=out 		bundle=D_TOK_W_SF 	depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=(4096/SM_DW * 8)	
+	// #pragma HLS INTERFACE mode=m_axi port=fl_tok 	bundle=D_TOK_W_SF 	depth=TOK_DEPTH 			offset=slave max_read_burst_length=(4096/SM_DW * 8)	
+	#pragma HLS INTERFACE mode=m_axi port=w_sf 		bundle=D_TOK_W_SF 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/SM_DW * 8)	
+#pragma HLS INTERFACE mode=m_axi port=w bundle=D_W_GEMM depth=HD_QUANT_DEPTH max_read_burst_length=(4096/MAX_DW*8) num_read_outstanding=32 offset=slave
+
+
+	#pragma HLS INTERFACE mode=s_axilite port=out 				bundle=control
+	// #pragma HLS INTERFACE mode=s_axilite port=fl_tok 			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=w_sf 				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=w 					bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=N_DIM 			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=M_DIM 			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=CURR_LAYER 			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=W_Off 			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=return			bundle=control
+
+	constexpr int mm_thr = 2;
+	const int NUM = N_DIM * M_DIM ;
+	const int NUM_SF = N_DIM * M_DIM / (MODEL_SCALING_FACTOR );
+	const int sfCount = N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+	const int qCount = N_DIM / MAX_QUANT_ELEM;
+	
+	s_fdata_v_t tokens("tokens");
+	#pragma HLS STREAM variable=tokens depth = MODEL_HIDDEN_DIM/MAX_FL_ELEM
+	s_fdata_v_t s_wsf("s_wsf");
+#pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=bram
+	#pragma HLS STREAM variable=s_wsf type=fifo depth=16
+	s_idata_v_t s_w("s_w");
+#pragma HLS BIND_STORAGE variable=s_w type=fifo impl=bram
+	#pragma HLS STREAM variable=s_w type=fifo depth=16
+	s_fdata_v_t dist_wsf[mm_thr];
+	s_idata_v_t dist_w[mm_thr];
+	
+	// s_fdata_v_t tok_sf;
+	hls::stream<my_float_t> tmp_tok_sf;
+  // #pragma HLS BIND_STORAGE variable=tok_sf type=ram_2p impl=bram
+	// s_idata_v_t tok;
+	// #pragma HLS STREAM variable=tok type=fifo depth=32
+  // #pragma HLS BIND_STORAGE variable=tok type=ram_2p impl=uram
+	idata_v_t w_arr[TOK_QUANT_MAX];
+
+	hls::stream<my_float_t> wtok;
+	hls::stream<my_float_t> wtok_sf;
+	hls::stream<my_float_t> out_thread[mm_thr];
+	s_fdata_v_t d_tok_sf[mm_thr];
+	s_idata_v_t d_tok[mm_thr];
+	s_fdata_v_t d_wsf[mm_thr];
+	s_idata_v_t d_w[mm_thr];
+	#pragma HLS STREAM variable=d_wsf depth = 4096// MODEL_HIDDEN_DIM/MAX_FL_ELEM
+	#pragma HLS STREAM variable=d_w depth = 4096// MODEL_HIDDEN_DIM/MAX_FL_ELEM
+#pragma HLS BIND_STORAGE variable=d_w type=fifo impl=uram
+#pragma HLS BIND_STORAGE variable=d_wsf type=fifo impl=uram
+	idata_v_t tok[MODEL_HIDDEN_DIM / MAX_QUANT_ELEM];
+	my_float_t tok_sf[MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR];
+	
+
+	// #pragma HLS DATAFLOW
+	// tok_load_input(tokens, fl_tok, N_DIM);
+	// mm2s_input_data(tokens, fl_tok, N_DIM / SM_FL_ELEM);
+	
+	// quantizer_kernel(tmp_tok_sf, tok, tokens, N_DIM);
+	// inf_split_tee(d_tok_sf, tmp_tok_sf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
+	// inf_split_tee(d_tok, tok, (N_DIM / MAX_QUANT_ELEM));
+	get_tok(tok, tok_sf, s_tok, s_tok_sf, N_DIM);
+	for (int i = 0; i < (M_DIM/SM_FL_ELEM); i++) {
+		#pragma HLS DATAFLOW
+		hls::stream<my_float_t> s_out("s_out"), q_out, ps_out;
+		
+		mm2s_input_data(s_wsf, w_sf, NUM_SF, CURR_LAYER, i, (N_DIM * SM_FL_ELEM / MODEL_SCALING_FACTOR));
+		mm2s_input_data(s_w, w, NUM, CURR_LAYER, i, (N_DIM/MAX_QUANT_ELEM) * SM_FL_ELEM);
+		qsum_pl(q_out, tok, s_w, N_DIM, SM_FL_ELEM);
+		sf_sum_pl(ps_out, tok_sf, s_wsf, N_DIM, SM_FL_ELEM);
+		scalar_out(s_out, ps_out, q_out, N_DIM, SM_FL_ELEM);	
+		s2mm_output_data(out, s_out, SM_FL_ELEM, i);	
+		
+	}
+	
+	// mm_load_input(s_wsf, w_sf, num_sf, CURR_LAYER);
+	// mm_tok_load_input(s_w, w, num, CURR_LAYER);
+
+	// inf_round_robin(d_wsf, s_wsf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)), M_DIM);
+	// inf_round_robin(d_w, s_w, (N_DIM / MAX_QUANT_ELEM), M_DIM);
+
+	// for (int i = 0; i < mm_thr; i++) {
+	// 	#pragma HLS UNROLL
+	// 	alt_mat_mult_main(out_thread[i], d_w[i], d_wsf[i], d_tok[i], d_tok_sf[i], N_DIM, M_DIM/mm_thr);
+	// }
+	
+	// rr_merge(s_out, out_thread, M_DIM / SM_FL_ELEM);
+	// s2mm_output_data(out, s_out, M_DIM / SM_FL_ELEM, 0);
+	return;
+}
