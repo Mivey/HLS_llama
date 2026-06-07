@@ -49,9 +49,9 @@ struct axi_reg{
 	// bool mha_return;
 };
 
-void cu_selecter(	s_fdata_v_t &s_tokens,
+void cu_selecter(	/*s_fdata_v_t &s_tokens,*/ hls::stream<my_float_t> &tok_sf, s_idata_v_t &tok_w,
 									fdata_v_t *weights, fdata_v_t *diff, //adata_v_t *mha_tokens, fdata_v_t *w1w3,
-									adata_v_t *key_cache, adata_v_t *value_cache, 
+									mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
 									keys &r, axi_reg &tt){ //todo: remove POS, it's apart of the axi_reg keyring
 	// add back init
 	// remove case 5
@@ -61,7 +61,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 	r.CURR_LAYER = r.next_layer;
 	// r.INIT =  ((r.next_state == 0) && (r.CURR_LAYER == 0)) ? 1 : 0;
 	switch (r.curr_state) {
-	case 0 :	rmsnorm_kernel(s_tokens, diff, weights, r.CURR_LAYER, r.INIT, tt.rms_att_W / sizeof(fdata_v_t)); 
+	case 0 :	rmsnorm_kernel(tok_w, tok_sf, diff, weights, r.CURR_LAYER, r.INIT, tt.rms_att_W / sizeof(fdata_v_t)); 
 						r.next_state++;
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
@@ -71,7 +71,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						r.INIT = 0;
 						break;
 						
-	case 1 :	mha_kernel(s_tokens, diff, key_cache, value_cache, tt.POS, r.CURR_LAYER); 
+	case 1 :	mha_kernel(tok_sf, tok_w, diff, key_cache, value_cache, tt.POS, r.CURR_LAYER); 
 						r.next_state++;
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
@@ -80,7 +80,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						r.w = tt.Out_W / sizeof(idata_v_t);
 						break;
 						
-	case 2 :	rmsnorm_kernel(s_tokens, diff, weights, r.CURR_LAYER, 0, tt.rms_ffn_W / sizeof(fdata_v_t));
+	case 2 :	rmsnorm_kernel(tok_w, tok_sf, diff, weights, r.CURR_LAYER, 0, tt.rms_ffn_W / sizeof(fdata_v_t));
 						r.next_state++;
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
@@ -89,7 +89,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						r.w = tt.FF_w1w3_W / sizeof(idata_v_t);
 						break;
 						
-	case 3 :	swiglu_kernel(s_tokens, diff); 
+	case 3 :	swiglu_kernel(tok_sf, tok_w, diff); 
 						r.next_layer = r.CURR_LAYER + 1;
 						r.next_state = (r.next_layer == MODEL_NUM_LAYERS) ? 4 : 0;
 						//current GeMV dimensions:
@@ -99,7 +99,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						r.w = tt.FF_w2_W / sizeof(idata_v_t);
 						break;
 						
-	case 4 :	rmsnorm_kernel(s_tokens, diff, weights, 0, 0, tt.rms_final_W/ sizeof(fdata_v_t)); 
+	case 4 :	rmsnorm_kernel(tok_w, tok_sf, diff, weights, 0, 0, tt.rms_final_W/ sizeof(fdata_v_t)); 
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
 						r.M_DIM = MODEL_TOKENS; // embeddings out
 						r.w_sf = tt.Embed_sf_W / sizeof(fdata_v_t);
@@ -111,20 +111,20 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 	}
 }
 void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1, 
-								idata_v_t *w_0, idata_v_t *w_1, s_fdata_v_t &s_cu_sel_in, 
+								idata_v_t *w_0, idata_v_t *w_1, hls::stream<my_float_t> &s_tok_sf, s_idata_v_t &s_tok_q, 
 								const int rn, const int rm, const int sf_reg, const int w_reg, const int layer){
 	
 	#pragma HLS DATAFLOW
-	hls::stream<my_float_t> s_tok_sf, s_out[mm_thr];
+	hls::stream<my_float_t> s_out[mm_thr];
 	s_fdata_v_t tok_sf[mm_thr];
-	s_idata_v_t s_tok_q, tok_q[mm_thr];
+	s_idata_v_t tok_q[mm_thr];
 	
 		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=s_tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
 		#pragma HLS STREAM variable=tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
 
-	quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, rn);
+	// quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, rn);
 
 	inf_split_tee(tok_sf, s_tok_sf, (rn / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
 	inf_split_tee(tok_q, s_tok_q, (rn / MAX_QUANT_ELEM));
@@ -167,7 +167,7 @@ void transformer_cu(
 	constexpr int HD_QUANT_DEPTH = q_size / MAX_QUANT_ELEM;//MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 2 / MAX_QUANT_ELEM;
 	constexpr int HD_SF_DEPTH = sf_size / SM_FL_ELEM; //MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 2 / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
 	constexpr int TOK_OUT_DEPTH = MODEL_TOKENS / SM_FL_ELEM;
-	constexpr int MHA_DEPTH = MODEL_ELEMENTS / MID_FL_ELEM * 3;
+	constexpr int MHA_DEPTH = MODEL_ELEMENTS / MAX_FL_ELEM * 3;
 	
 
 	#pragma HLS INTERFACE mode=m_axi port=tokens 				bundle=w_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
@@ -221,7 +221,7 @@ void transformer_cu(
 
 	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
 	// s_fdata_v_t internal_stream[2];
-	fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM];
+	fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM] = {};
 	std::fill(internal_token->begin(), internal_token->end(), 0);
 	#pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
 	#pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=uram
@@ -268,13 +268,17 @@ void transformer_cu(
 	for(int ii = 0; ii < faker; ii++) {
 	// for(int ii = 0; ii < MODEL_NUM_LAYERS; ii++) {
 	// while (runner.stop == 0) {
-		s_fdata_v_t s_cu_sel_out;
-		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
+		// s_fdata_v_t s_cu_sel_out;
+		hls::stream<my_float_t> s_tok_sf;
+		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/MODEL_SCALING_FACTOR
+		s_idata_v_t s_tok_w;
+		#pragma HLS STREAM variable=s_tok_w depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
+		// #pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		// runner.next_state = 3;
 		// if (ii > 0) {
 		// 	hls::fence(tokens);
 		// }
-		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, runner, tt);
+		cu_selecter(s_tok_sf, s_tok_w, weights, internal_token, key_cache, value_cache, runner, tt);
 		
 		// hls::fence({s_cu_sel_out}, {tokens});
 		// int rn = runner.N_DIM;
@@ -283,7 +287,7 @@ void transformer_cu(
 		// int w_reg = runner.w;
 		// int layer = runner.CURR_LAYER;
 		// runner.INIT = 1;
-		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER);
+		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_tok_sf, s_tok_w, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER);
 	}
 	#ifdef __DEBUG__
 		mm2mm_store(tokens, internal_token, MODEL_TOKENS);
