@@ -19,8 +19,16 @@
 
 void mha_kernel(s_fdata_v_t &output,
 								fdata_v_t *tokens, //6 mha_kernel
-                adata_v_t *key_cache, 
-                adata_v_t *value_cache, 
+                mfdata_v_t *key_cache, 
+                mfdata_v_t *value_cache, 
+                const int POS, const int CURR_LAYER);
+
+
+void mha_kernel(hls::stream<my_float_t> &sf,
+								s_idata_v_t &w,
+								fdata_v_t *tokens, //6 mha_kernel
+                mfdata_v_t *key_cache, 
+                mfdata_v_t *value_cache, 
                 const int POS, const int CURR_LAYER);
 
 
@@ -203,10 +211,11 @@ void max_finder(hls::stream<T> &max_val, hls::stream<hls::vector<T, N>> &tokens_
 	
 	mf_intake:
 	for (int i = 0; i < cnt; i++) {
-		#pragma HLS PIPELINE II=1
+		// #pragma HLS PIPELINE II=1
 		hls::vector<T, N> val = abs_tokens.read();
 		tokens_out.write(tokens_in.read());
 		for (int k = 0; k < N; k++) {
+			#pragma HLS PIPELINE II=1
 			c_val[i * N + k] = val[k];
 		}
 	}
@@ -232,12 +241,12 @@ void quant_out( hls::stream<T> &tok_sf_out, s_idata_v_t &tok_out, hls::stream<hl
 	
 	create_q_val:
 	for (size_t j = 0; j < TOK_COUNT; j++) {
-		#pragma HLS PIPELINE
+		// #pragma HLS PIPELINE
 		hls::vector<T, N> proc_tok = tokens_in.read();
 		
 		create_q_val_ppl:	
 		for (size_t k = 0; k < N; k++) {
-			#pragma HLS UNROLL factor = 4
+			#pragma HLS PIPELINE
 			quant_tmp[j * N + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);
 		}
 	}

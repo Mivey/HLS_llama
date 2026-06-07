@@ -37,11 +37,11 @@ typedef int8_t my_quant_data_t;
 /* ************************************* */
 
 constexpr size_t MAX_DW = 512;
-constexpr size_t MID_DW = 512;
+// constexpr size_t MID_DW = 512;
 constexpr size_t QUANT_MODIFIER = 1;//(MAX_DW == 512) ? 2 : 1;
 constexpr size_t SM_DW = 128;
 constexpr size_t MAX_FL_ELEM = (MAX_DW / (sizeof(my_float_t) * 8));
-constexpr size_t MID_FL_ELEM = (MID_DW / (sizeof(my_float_t) * 8));
+// constexpr size_t MID_FL_ELEM = (MID_DW / (sizeof(my_float_t) * 8));
 constexpr size_t MAX_QUANT_ELEM = ((MAX_DW / QUANT_MODIFIER) / (sizeof(my_quant_data_t) * 8));
 constexpr size_t SM_FL_ELEM = (SM_DW / (sizeof(my_float_t) * 8));
 constexpr size_t SM_QUANT_ELEM = (SM_DW / (sizeof(my_quant_data_t) * 8));
@@ -65,12 +65,12 @@ const int RECT_SF = RECT_TOK / MODEL_SCALING_FACTOR;
 typedef hls::vector<my_quant_data_t, MAX_QUANT_ELEM> idata_v_t;
 typedef hls::vector<my_float_t, SM_FL_ELEM>	fdata_v_t;
 typedef hls::vector<my_float_t, MAX_FL_ELEM>	mfdata_v_t;
-typedef hls::vector<my_float_t, MID_FL_ELEM>	adata_v_t;
+// typedef hls::vector<my_float_t, MID_FL_ELEM>	adata_v_t;
 
 typedef hls::stream<idata_v_t> s_idata_v_t;
 typedef hls::stream<fdata_v_t> s_fdata_v_t; 
 typedef hls::stream<mfdata_v_t> s_mfdata_v_t;
-typedef hls::stream<adata_v_t> s_adata_v_t;
+// typedef hls::stream<adata_v_t> s_adata_v_t;
 
 template<typename T, int N>
 void inf_split_tee(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vCount){
@@ -208,12 +208,13 @@ void mha_input_data(hls::stream<hls::vector<T, M>> &out, hls::vector<T, N> *in, 
 		hls::vector<T, M> temp_m;
 		
 		for (int j = 0; j < idx; j++) {
-			#pragma HLS PIPELINE II=1
+			// #pragma HLS PIPELINE II=1
 			
 			size_t jdx = idx * i + j;
 			hls::vector<T, N> temp_n = in[jdx + tot_off];
 			
 			for (int k = 0; k < N; k++) {
+				#pragma HLS PIPELINE II=1
 				size_t kdx = N * j + k;
 				temp_m[kdx] = temp_n[k];
 			}
