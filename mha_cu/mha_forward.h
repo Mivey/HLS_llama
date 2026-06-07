@@ -491,12 +491,13 @@ void quant_out( hls::stream<T> &tok_sf_out, s_idata_v_t &tok_out, hls::stream<hl
 	
 	create_q_val:
 	for (size_t j = 0; j < TOK_COUNT; j++) {
-		#pragma HLS PIPELINE
+		// #pragma HLS PIPELINE
 		hls::vector<T, N> proc_tok = tokens_in.read();
 		
 		create_q_val_ppl:	
 		for (size_t k = 0; k < N; k++) {
-			#pragma HLS UNROLL factor = 4
+			#pragma HLS PIPELINE
+			// #pragma HLS UNROLL factor = 4
 			quant_tmp[j * N + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);
 		}
 	}

@@ -112,14 +112,14 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 		for (size_t j = 0 ; j < sfCount; j++) {
   	#pragma HLS LOOP_TRIPCOUNT max = TOK_SF_MAX min=MODEL_ELEMENTS/(MODEL_SCALING_FACTOR * SM_FL_ELEM )  
 			//read the next set of scaling factors
-			fdata_v_t vec_tok_sf = arr_sf[j];
-			fdata_v_t vec_w_sf = w_sf.read();
+			// fdata_v_t vec_tok_sf = arr_sf[j];
+			fdata_v_t vec_w_sf = w_sf.read() * arr_sf[j];
 			// my_float_t tmp_sum = 0.0f;
 			for (size_t k = 0; k < SM_FL_ELEM; k++) {
 				//do our calculations
 				#pragma HLS PIPELINE 
 				
-				my_float_t cur_tok_sf = vec_tok_sf[k];
+				// my_float_t cur_tok_sf = vec_tok_sf[k];
 				my_float_t cur_w_sf = vec_w_sf[k];
 				
 				//read the next set of weights
@@ -136,7 +136,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 				for (size_t m = 0; m < MAX_QUANT_ELEM; m++) {
 					prod += (int32_t) curr_w[m] * curr_tok[m];
 				}
-				sum_out += (float)prod * cur_tok_sf * cur_w_sf;
+				sum_out += (float)prod * cur_w_sf;//cur_tok_sf * 
 			}
 		}
 		out.write(sum_out);
@@ -227,3 +227,27 @@ void double_matmult_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, i
 	s2mm_output_data(out, s_out, M_DIM / SM_FL_ELEM, 0);
 	return;
 }
+
+// void fun_matmult(hls::stream<my_float_t> &q_tok_sf, s_idata_v_t &q_tok, s_fdata_v_t &sf, s_idata_v_t &w, const int N_DIM, const int M_DIM){
+	
+// 	my_float_t token_sf[MODEL_HIDDEN_DIM/MAX_QUANT_ELEM] = {};
+// 	idata_v_t tokens[MODEL_HIDDEN_DIM/MAX_QUANT_ELEM] = {};
+	
+// 	read_tok:
+// 	for (int i = 0; i < (N_DIM/MAX_QUANT_ELEM); i++) {
+// 		#pragma HLS PIPELINE II=1
+// 		token_sf[i] = q_tok_sf.read();
+// 		tokens[i] = q_tok.read();
+// 	}
+
+// 	partial_val:
+// 	for (int i = 0; i < (N_DIM * M_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)); i++) {
+		
+// 		fdata_v_t temp = sf.read();
+// 		for (int j = 0; j < SM_FL_ELEM; j++) {
+// 			#pragma HLS PIPELINE II=1
+// 		}
+
+		
+// 	}
+// }

@@ -104,12 +104,14 @@ void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vEl
 	
   inf_rr_loop:
 	for (int i = 0; i < vSize; i++) {
-		
+	#pragma HLS LOOP_TRIPCOUNT max = MODEL_TOKENS min=MODEL_ELEMENTS  
 		elem_dist_loop:
 		for (int j = 0; j < N; j++) {
+		#pragma HLS LOOP_TRIPCOUNT max = 2 min=1  
 			
 			elem_per_stream_loop:
 			for (int k = 0; k < vElem; k++) {
+			#pragma HLS LOOP_TRIPCOUNT max = MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR min=MODEL_ELEMENTS / MODEL_SCALING_FACTOR  
 				#pragma HLS PIPELINE II=1
 				T data = in.read();
 				out[j].write(data);
@@ -162,6 +164,17 @@ void mm2s_input_data(hls::stream<T> &out, T *in, const size_t COUNT, const size_
 }
 
 template<typename T>
+void mm2s_input_data(hls::stream<T> &out, T *in, const size_t TOT_SIZE, const size_t CURR_LAYER, const size_t SCALE_OFF, const size_t COUNT){
+	
+	const int offset = CURR_LAYER * TOT_SIZE + SCALE_OFF * COUNT;
+	AXI4_to_STREAM:
+	for (int i = 0; i < COUNT; i++) {
+		#pragma HLS PIPELINE II=1
+		out.write(in[i + offset]);
+	}
+}
+
+template<typename T>
 void s2mm_output_data(T *out, hls::stream<T> &in,const size_t COUNT, const size_t W_Off){
 	//remember to calculate W_Off before passing it here. T could be any size, lterally. 
 	S2MM_output:
@@ -173,8 +186,26 @@ void s2mm_output_data(T *out, hls::stream<T> &in,const size_t COUNT, const size_
 }
 
 
-template<typename T, int N>
+template<typename T, size_t N>
 void s2mm_output_data(hls::vector<T, N> *out, hls::stream<T> &in ,const size_t COUNT, const size_t W_Off){
+	//remember to calculate W_Off before passing it here. T could be any size, lterally. 
+
+	S2MM_output:
+	for (int i = 0; i < COUNT / N; i++) {
+		#pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS / N min=MODEL_ELEMENTS / N
+		
+		hls::vector<T, N> tmp;
+		for (int j = 0 ; j < N; j++) {
+			#pragma HLS PIPELINE II=1
+			tmp[j] = in.read();
+		}
+		
+		out[i + W_Off] = tmp;
+	}
+}
+
+template<typename T, int N>
+void ns2mm_output_data(hls::vector<T, N> *out, hls::stream<T> &in ,const size_t COUNT, const size_t W_Off){
 	//remember to calculate W_Off before passing it here. T could be any size, lterally. 
 
 	S2MM_output:
