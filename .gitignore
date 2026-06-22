@@ -80,3 +80,9 @@ transformer_cu/testbench/weights/*
 transformer_cu/testbench/seed_199/*
 sampler_cu/.cache
 sampler_cu/sampler_cu/*
+mha_cu/compile_commands.json
+matmult_cu/compile_commands.json
+GeMV/compile_commands.json
+rms_cu/compile_commands.json
+swiglu_cu/compile_commands.json
+transformer_cu/compile_commands.json
