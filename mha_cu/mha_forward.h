@@ -32,7 +32,7 @@ typedef float my_float_t;
 typedef int8_t my_quant_data_t;
 /* ************************************* */
 
-constexpr size_t MAX_DW = 256;
+constexpr size_t MAX_DW = 512;
 constexpr size_t QUANT_MODIFIER = 1;//(MAX_DW == 512) ? 2 : 1;
 constexpr size_t SM_DW = 128;
 constexpr size_t MAX_FL_ELEM = (MAX_DW / (sizeof(my_float_t) * 8));
