@@ -162,6 +162,8 @@ int top_tb(){
 	const int logits_size = MODEL_TOKENS * 4;
 	const int logits_quant_size = MODEL_ELEMENTS * MODEL_TOKENS * 1;
 	const int logits_sf_size = MODEL_ELEMENTS * MODEL_TOKENS / MODEL_SCALING_FACTOR * 4;
+	const int tok_sf_size = MODEL_ELEMENTS / MODEL_SCALING_FACTOR * sizeof(my_float_t);
+	const int tok_w_size = MODEL_ELEMENTS;
 	// const int sf_el = MODEL_ELEMENTS / 64;
 	// const int wo_sf_size = 36864;
 	
@@ -183,6 +185,9 @@ int top_tb(){
 	const int logits_q_cnt = logits_quant_size / sizeof(idata_v_t);
 	const int logits_sf_cnt = logits_sf_size / sizeof(fdata_v_t);
 	
+	const int tok_sf_cnt = tok_sf_size / sizeof(my_float_t);
+	const int tok_w_cnt = tok_w_size / sizeof(idata_v_t);
+	
 	// const int wo_cnt = wo_size / sizeof(idata_v_t);
 	// const int wo_sf_cnt = wo_sf_size / sizeof(fdata_v_t);
 	const int cache_cnt = cache_size / sizeof(mfdata_v_t);
@@ -196,9 +201,13 @@ int top_tb(){
 
 /* ===================================== declare our vectors ===================================== */
 
-	std::vector<mfdata_v_t> tokens_arr(tokens_cnt);
+	std::vector<fdata_v_t> tokens_arr(tokens_cnt * (SM_FL_ELEM / MAX_FL_ELEM));
 	// std::vector<mfdata_v_t> val_in_rope_arr(tokens_cnt);
 	// std::vector<mfdata_v_t> key_in_rope_arr(tokens_cnt);
+	// std::vector<my_float_t> dut_sf(tok_sf_cnt);
+	// std::vector<idata_v_t> dut_w(tok_w_cnt);
+	hls::stream<my_float_t, tok_sf_cnt> dut_sf;
+	hls::stream<idata_v_t, tok_w_cnt> dut_w;
 
 	std::vector<mfdata_v_t> rms_w_arr(rms_w_cnt);
 
@@ -310,8 +319,17 @@ int curr_pos = 150;
 	// key_output.read(reinterpret_cast<char *>(tok_out_arr[0].data()), tokens_size);
 // 	tok_w1_arr
 // tok_w1_out_arr
-// mha_kernel(tokens_arr.data(), mfdata_v_t *key_cache, mfdata_v_t *value_cache, mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in, const int POS, const int CURR_LAYER)
-	mha_kernel(tokens_arr.data(), key_arr_a.data(), value_arr_a.data(), key_in_arr.data(), value_in_arr.data(), curr_pos, 0);
+
+	//===================================================================
+	// OLD WAY:
+	// mha_kernel(tokens_arr.data(), mfdata_v_t *key_cache, mfdata_v_t *value_cache, mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in, const int POS, const int CURR_LAYER)
+	// mha_kernel(tokens_arr.data(), key_arr_a.data(), value_arr_a.data(), key_in_arr.data(), value_in_arr.data(), curr_pos, 0);
+	//=====================================================================
+
+	
+	// NEW WAY
+	//mha_kernel(hls::stream<my_float_t> &sf,s_idata_v_t &w,fdata_v_t *tokens,mfdata_v_t *key_cache, mfdata_v_t *value_cache, mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in,const int POS, const int CURR_LAYER);
+	mha_kernel(dut_sf, dut_w, tokens_arr.data(), key_arr_a.data(), value_arr_a.data(), key_in_arr.data(), value_in_arr.data(), curr_pos, 0);
 /*======= get all the data =================================== */
 
 	// for (int i = 0; i < MODEL_ELEMENTS; i++) {
@@ -319,12 +337,26 @@ int curr_pos = 150;
 	// 	std::cout<< "golden: "<<att_score_arr[0][i]<<std::endl;
 	// }
 
+	std::vector<mfdata_v_t> deq_tokens(MODEL_ELEMENTS / MAX_FL_ELEM);
+
+	for (int ii = 0; ii < (MODEL_ELEMENTS / MODEL_SCALING_FACTOR); ii++) {
+		float sf_tmp = dut_sf.read();
+		idata_v_t q_tmp = dut_w.read();
+		for (int jj = 0; jj < (MODEL_SCALING_FACTOR / MAX_FL_ELEM); jj++) {
+			int idx = ii * (MODEL_SCALING_FACTOR / MAX_FL_ELEM) + jj;
+			for (int kk = 0; kk < MAX_FL_ELEM; kk++) {
+				float dut_conv = (float) q_tmp[kk + jj * MAX_FL_ELEM];
+				deq_tokens[idx][kk] = dut_conv * sf_tmp;
+			}
+		}
+	}
+
 	/*  ====================================== process the results ============================ */
 	// std::cout<<"token_arr size: "<<log_out_arr[1].size()<<std::endl;
 	// std::cout<<"key size: "<<key_in_arr.size()<<std::endl;
 	// std::cout<<"value size: "<<value_in_arr.size()<<std::endl;
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
-	parse_results<mfdata_v_t, float>(mha_tok_gold, tokens_arr);
+	parse_results<mfdata_v_t, float>(mha_tok_gold, deq_tokens);
 	// std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	// parse_results<mfdata_v_t, float>(tok_w1_out_arr[0], tok_w1_out_arr[1]);
 
