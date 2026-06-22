@@ -99,7 +99,7 @@ NEEDS REWRITE:
 		 
 */
 
-void wide_mha_iterate(hls::stream<my_float_t> &out, s_adata_v_t & query, s_adata_v_t &key_cache, const int POS){
+void wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
 	
 	const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
 	const my_float_t score_scalar = 1.0f / sqrtf((float) MODEL_HEAD_SIZE);
@@ -299,14 +299,14 @@ void mha_kernel(s_fdata_v_t &output,
   // #pragma HLS STREAM variable=tokens depth=MODEL_ELEMENTS / MAX_FL_ELEM
 
 	#pragma HLS STREAM variable=s_key_cache_in depth=8 //good
-	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_ELEMENTS / MID_FL_ELEM //good
-	#pragma HLS STREAM variable=s_query_u depth=MODEL_ELEMENTS / MID_FL_ELEM 
+	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_ELEMENTS / MAX_FL_ELEM //good
+	#pragma HLS STREAM variable=s_query_u depth=MODEL_ELEMENTS / MAX_FL_ELEM 
 	#pragma HLS STREAM variable=s_key_cache_in_u depth=16 
 	#pragma HLS STREAM variable=s_value_cache_in_u depth=16
 	#pragma HLS STREAM variable=output depth=MODEL_ELEMENTS / SM_FL_ELEM
 	#pragma HLS STREAM variable=s_value_cache_in depth=8 //good
-	#pragma HLS STREAM variable=s_query depth=MODEL_ELEMENTS / MID_FL_ELEM //good
-	#pragma HLS STREAM variable=s_query_r depth=MODEL_ELEMENTS / MID_FL_ELEM //good
+	#pragma HLS STREAM variable=s_query depth=MODEL_ELEMENTS / MAX_FL_ELEM //good
+	#pragma HLS STREAM variable=s_query_r depth=MODEL_ELEMENTS / MAX_FL_ELEM //good
 	// #pragma HLS STREAM variable=xb_ws_q depth=8 //good
 	#pragma HLS STREAM variable=s_key_cache_to_kernel depth=4096 //good
 	#pragma HLS STREAM variable=s_value_cache_to_kernel depth=4096 //good
@@ -332,9 +332,9 @@ void mha_kernel(s_fdata_v_t &output,
 	rope_kernel(s_query, s_query_r, POS);
 	rope_kernel(s_key_cache_in, s_key_cache_in_r, POS);
 	
-	vec_up_converter(s_value_cache_in_u, s_value_cache_in, MODEL_ELEMENTS/MID_FL_ELEM);
-	vec_up_converter(s_query_u, s_query, MODEL_ELEMENTS/MID_FL_ELEM);
-	vec_up_converter(s_key_cache_in_u, s_key_cache_in, MODEL_ELEMENTS/MID_FL_ELEM);
+	vec_up_converter(s_value_cache_in_u, s_value_cache_in, MODEL_ELEMENTS/MAX_FL_ELEM);
+	vec_up_converter(s_query_u, s_query, MODEL_ELEMENTS/MAX_FL_ELEM);
+	vec_up_converter(s_key_cache_in_u, s_key_cache_in, MODEL_ELEMENTS/MAX_FL_ELEM);
 
 	mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in_u, CURR_LAYER, POS);
 	mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in_u, CURR_LAYER, POS);

@@ -1,7 +1,7 @@
 #include "mha_forward.h"
 #include "hls_fence.h"
 
-void mha_WAR_store_load(adata_v_t *cache, s_adata_v_t &output, s_adata_v_t &input, const int CURR_LAYER, const int POS){
+void mha_WAR_store_load(mfdata_v_t *cache, s_mfdata_v_t &output, s_mfdata_v_t &input, const int CURR_LAYER, const int POS){
 	// const int num_heads = vSize / MODEL_HEAD_SIZE;
 	const int vec_per_head = MODEL_HEAD_SIZE / MAX_FL_ELEM;
 	const int cache_arr_size = vec_per_head * MODEL_NUM_HEADS;
@@ -10,7 +10,7 @@ void mha_WAR_store_load(adata_v_t *cache, s_adata_v_t &output, s_adata_v_t &inpu
 	const int head_offset = MODEL_SEQUENCE_LEN * vec_per_head;
 	const int pos_offset = POS * vec_per_head;
 	
-	adata_v_t cache_array[cache_arr_size];
+	mfdata_v_t cache_array[cache_arr_size];
 	mha_WAR_store_loop:
 	for (int i = 0;  i < cache_arr_size; i++) {
 		#pragma hls PIPELINE II=1
@@ -26,7 +26,7 @@ void mha_WAR_store_load(adata_v_t *cache, s_adata_v_t &output, s_adata_v_t &inpu
 			#pragma HLS PIPELINE II=1
 			#pragma HLS LOOP_TRIPCOUNT max=MODEL_HEAD_SIZE * (MODEL_SEQUENCE_LEN + 1) / MAX_FL_ELEM
 			int addr = layer_offset + (i * head_offset) + j;
-			adata_v_t tmp = cache[addr];
+			mfdata_v_t tmp = cache[addr];
 			output.write(tmp);
 		} // second for loop that will read 4 elements from array
 		fw_mha_new_loop:
