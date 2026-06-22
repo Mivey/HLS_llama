@@ -201,17 +201,17 @@ void wide_mha_weighted_sum(s_mfdata_v_t &xb, hls::stream<my_float_t>  &att_in, s
 		#pragma HLS PIPELINE
 		#pragma HLS LOOP_TRIPCOUNT max=(MODEL_SEQUENCE_LEN + 1) min=1
 		my_float_t val = att_in.read();
-		for (size_t i = 0; i < ARR_SIZE; i++){
+		for (size_t ii = 0; ii < ARR_SIZE; ii++){
 			// #pragma HLS PIPELINE II=1
 			// mfdata_v_t tmp = value_cache.read();
 			#pragma HLS UNROLL
-			xb_arr[i] += /*att_arr[t]*/ val * value_cache.read();// vc_arr[i];
+			xb_arr[ii] += /*att_arr[t]*/ val * value_cache.read();// vc_arr[i];
 		}
 	}
 	mha_ws_stream_out_xb: // set all values to zero
-	for (int i = 0 ; i < ARR_SIZE; i++) {
+	for (int jj = 0 ; jj < ARR_SIZE; jj++) {
 		#pragma HLS PIPELINE II=1
-		xb.write(xb_arr[i]);
+		xb.write(xb_arr[jj]);
 	}
 }
 
@@ -239,11 +239,11 @@ void wide_mha_kernel(s_mfdata_v_t &xb,
 }
 
 void mha_kernel(hls::stream<my_float_t> &sf,
-								s_idata_v_t &w,
-								fdata_v_t *tokens, //6 mha_kernel
+				s_idata_v_t &w,
+				fdata_v_t *tokens, //6 mha_kernel
                 mfdata_v_t *key_cache, 
                 mfdata_v_t *value_cache, 
-								mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in,
+				mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in,
                 const int POS, const int CURR_LAYER){
   
 
