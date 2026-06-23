@@ -335,7 +335,7 @@ int curr_pos = 150;
 	// for (int i = 0; i < MODEL_ELEMENTS; i++) {
 	// 	// float foo = att_score_arr[i].data();
 	// 	std::cout<< "golden: "<<att_score_arr[0][i]<<std::endl;
-	// }
+	// } 
 
 	std::vector<mfdata_v_t> deq_tokens(MODEL_ELEMENTS / MAX_FL_ELEM);
 
