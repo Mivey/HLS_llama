@@ -408,8 +408,9 @@ void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>>
 		fw_mha_new_loop:
 		for (int j = 0; j < vec_per_head; j++) {
 			#pragma HLS PIPELINE II=1
-			int t = j + idx * vec_per_head;
-			output.write(cache_array[t]);
+			// int t = j + idx * vec_per_head;
+			// output.write(cache_array[t]);
+			output.write(cache_array[j]);
 		}
 	// }
 	
@@ -422,7 +423,8 @@ void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>>
 		for (int j = 0; j < vec_per_head; j++) {
 			#pragma HLS PIPELINE II=1
 			int addr = layer_offset + (idx * head_offset) + pos_offset + j;
-			cache[addr] = cache_array[j + vec_per_head * idx]; // this happens AFTER we're done reading from RAM
+			// cache[addr] = cache_array[j + vec_per_head * idx]; // this happens AFTER we're done reading from RAM
+			cache[addr] = cache_array[j]; // this happens AFTER we're done reading from RAM
 		}
 	// }
 }
@@ -467,6 +469,36 @@ void max_finder(hls::stream<T> &max_val, hls::stream<hls::vector<T, N>> &tokens_
 		tokens_out.write(tokens_in.read());
 		for (int k = 0; k < N; k++) {
 			c_val[i * N + k] = val[k];
+		}
+	}
+
+	for (int stride = (MODEL_SCALING_FACTOR>>1); stride > 0; stride >>=1) {
+		#pragma HLS UNROLL
+		for (int i = 0; i < stride; i++) {
+			#pragma HLS UNROLL
+			c_val[i] = (c_val[i]  > c_val[i + stride] ) ? c_val[i] : c_val[i + stride];
+		}
+	}	
+	max_val.write(c_val[0] * Q_MAX);
+}
+
+template<typename T, size_t N>
+void max_finder(hls::stream<T> &max_val, hls::stream<hls::vector<T, N>> &tokens_out, hls::stream<hls::vector<T, N>> &tokens_in){
+	
+	const T Q_MAX = 1.0f / 127.0f;
+	const int cnt = MODEL_SCALING_FACTOR / N;
+	T c_val[MODEL_SCALING_FACTOR];
+	#pragma HLS ARRAY_PARTITION variable=c_val dim=1 type=complete
+	//here we store token_out and then assign token_out[i] to c_val[i * MAX_FL_ELEM + k] = hls::absf(token_out[i][k])
+	
+	
+	mf_intake:
+	for (int i = 0; i < cnt; i++) {
+		#pragma HLS PIPELINE II=1
+		hls::vector<T, N> val = tokens_in.read();
+		tokens_out.write(val);
+		for (int k = 0; k < N; k++) {
+			c_val[i * N + k] = hls::absf(val[k]);
 		}
 	}
 

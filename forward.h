@@ -175,6 +175,17 @@ void mm2s_input_data(hls::stream<T> &out, T *in, const size_t TOT_SIZE, const si
 }
 
 template<typename T>
+void mm2s_input_data(hls::stream<T> &out, T *in, const size_t COUNT, const size_t CURR_LAYER, const int offset){
+	
+	const int tot_off = CURR_LAYER * COUNT + offset;
+	AXI4_to_STREAM:
+	for (int i = 0; i < COUNT; i++) {
+		#pragma HLS PIPELINE II=1
+		out.write(in[i + tot_off]);
+	}
+}
+
+template<typename T>
 void s2mm_output_data(T *out, hls::stream<T> &in,const size_t COUNT, const size_t W_Off){
 	//remember to calculate W_Off before passing it here. T could be any size, lterally. 
 	S2MM_output:
@@ -318,12 +329,12 @@ template<typename T>
 void swiglu(hls::stream<T> &hb_out, hls::stream<T> &hb_in, hls::stream<T> &hb2_in){
 	int elem = sizeof(T)/ sizeof(my_float_t);
 	for (int i = 0 ; i < MODEL_HIDDEN_DIM / elem; i++) {
-	#pragma HLS pipeline II=4
+	#pragma HLS pipeline II=2
 		T val =hb_in.read();
 		T eval;
 		for (int j = 0; j < elem; j++) {
 			#pragma HLS UNROLL
-			eval[j] = val[j] / ( 1.0f + hls::expf(-1 * (float)val[j]));
+			eval[j] = val[j] * hls::recipf( 1.0f + hls::expf(-1 * (float)val[j]));
 		}
 		hb_out.write(eval * hb2_in.read());
 	}

@@ -1,4 +1,3 @@
-#include "../rmsnorm.h"
 
 #include <cstdio>
 #include <cstring>
@@ -12,6 +11,7 @@
 #include <cmath>
 #include <bitset>
 #include "tb_main.h"
+#include "../rmsnorm.h"
 
 
 int top_tb(){
@@ -48,12 +48,16 @@ int top_tb(){
 	const int out_data_size = MODEL_ELEMENTS * 4;
 	const int rms_w_size = MODEL_ELEMENTS * 4 * layer_cnt;
 	const int tokens_size = MODEL_ELEMENTS * 4;
+	const int tok_sf_size = MODEL_ELEMENTS / MODEL_SCALING_FACTOR * sizeof(my_float_t);
+	const int tok_w_size = MODEL_ELEMENTS;
 	
 	const int out_data_cnt = out_data_size / sizeof(fdata_v_t);
 	const int rms_w_cnt = rms_w_size / sizeof(fdata_v_t);
 	const int tokens_cnt = tokens_size / sizeof(fdata_v_t);
 
 	
+	const int tok_sf_cnt = tok_sf_size / sizeof(my_float_t);
+	const int tok_w_cnt = tok_w_size / sizeof(idata_v_t);
 
 /* ===================================== declare our vectors ===================================== */
 
@@ -67,6 +71,8 @@ int top_tb(){
 
 	std::vector<fdata_v_t> tokesns_out_gold(tokens_cnt);
 
+	hls::stream<my_float_t, tok_sf_cnt> dut_sf;
+	hls::stream<idata_v_t, tok_w_cnt> dut_w;
 	/* ================================== read data into array =================================== */
 
 	input_tokens_dat.read(reinterpret_cast<char *>(tokens_arr.data()), tokens_size);
@@ -91,10 +97,27 @@ int curr_pos = 150;
 	std::cout<<"first one done"<<std::endl;
 
 	// rmsnorm_kernel(tokens_arr.data(), rms_w_arr.data(), 0);
-	rmsnorm_kernel(tokens_out.data(), tokens_arr.data(), diff_in.data(), rms_w_arr.data(), 0);
+	// rmsnorm_kernel(tokens_out.data(), tokens_arr.data(), diff_in.data(), rms_w_arr.data(), 0);
+	rmsnorm_kernel(dut_w, dut_sf, tokens_arr.data(), rms_w_arr.data(), 0, 1, 0);
+
+
+	std::vector<fdata_v_t> deq_tokens(MODEL_ELEMENTS / SM_FL_ELEM);
+	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
+
+	for (int ii = 0; ii < (MODEL_ELEMENTS / MODEL_SCALING_FACTOR); ii++) {
+		float sf_tmp = dut_sf.read();
+		idata_v_t q_tmp = dut_w.read();
+		for (int jj = 0; jj < (MODEL_SCALING_FACTOR / SM_FL_ELEM); jj++) {
+			int idx = ii * (MODEL_SCALING_FACTOR / SM_FL_ELEM) + jj;
+			for (int kk = 0; kk < SM_FL_ELEM; kk++) {
+				float dut_conv = (float) q_tmp[kk + jj * SM_FL_ELEM];
+				deq_tokens[idx][kk] = dut_conv * sf_tmp;
+			}
+		}
+	}
 	
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
-	parse_results<fdata_v_t, float>(tokesns_out_gold, tokens_out);
+	parse_results<fdata_v_t, float>(tokesns_out_gold, deq_tokens);
 
 	return 0;
 

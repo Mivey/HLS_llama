@@ -276,7 +276,7 @@ int top_tb(){
 
 	std::vector<fdata_v_t> tokens_arr(tokens_cnt * 3);
 	std::vector<fdata_v_t> swiglu_arr(hd_tok_cnt * 2);
-	std::vector<adata_v_t> mha_tokens_arr((tokens_size / (sizeof(adata_v_t))));
+	std::vector<mfdata_v_t> mha_tokens_arr((tokens_size / (sizeof(mfdata_v_t))));
 	std::vector<fdata_v_t> output_arr(logits_cnt);
 	std::vector<fdata_v_t> input_arr(logits_cnt);
 	std::vector<fdata_v_t> golden_output_arr(logits_cnt);

@@ -6,7 +6,7 @@
       "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
       "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
-      "-fhlstoplevel=GeMV_kernel",
+      "-fhlstoplevel=n_GeMV_kernel",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/forward.cpp"
     ],
@@ -19,7 +19,7 @@
       "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
       "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
-      "-fhlstoplevel=GeMV_kernel",
+      "-fhlstoplevel=n_GeMV_kernel",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/GeMV/matmult.cpp"
     ],

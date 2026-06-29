@@ -20,7 +20,7 @@ void mha_kernel(hls::stream<my_float_t> &sf,
 				fdata_v_t *tokens, //6 mha_kernel
                 mfdata_v_t *key_cache, 
                 mfdata_v_t *value_cache, 
-				mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in,
+				// mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in,
                 const int POS, const int CURR_LAYER);
 
 template<typename T, size_t N>

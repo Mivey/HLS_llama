@@ -201,7 +201,7 @@ int top_tb(){
 
 /* ===================================== declare our vectors ===================================== */
 
-	std::vector<fdata_v_t> tokens_arr(tokens_cnt * (SM_FL_ELEM / MAX_FL_ELEM));
+	std::vector<fdata_v_t> tokens_arr(3 * (tokens_cnt * MAX_FL_ELEM) / SM_FL_ELEM);
 	// std::vector<mfdata_v_t> val_in_rope_arr(tokens_cnt);
 	// std::vector<mfdata_v_t> key_in_rope_arr(tokens_cnt);
 	// std::vector<my_float_t> dut_sf(tok_sf_cnt);
@@ -261,7 +261,10 @@ int top_tb(){
 // w1_output
 // qkv_tokens
 // w1w3_tokens		mha_tok_dat
-	query_input.read(reinterpret_cast<char *>(tokens_arr.data()), tokens_size);
+char* base_ptr = reinterpret_cast<char *>(tokens_arr.data());
+	query_input.read(base_ptr, tokens_size);
+	key_cache_dat.read(base_ptr + tokens_size, tokens_size);
+	value_cache_dat.read(base_ptr + 2 * tokens_size, tokens_size);
 	// value_input.read(reinterpret_cast<char *>(val_in_rope_arr.data()), tokens_size);
 	// key_input.read(reinterpret_cast<char *>(key_in_rope_arr.data()), tokens_size);
 	// key_output.read(reinterpret_cast<char *>(tok_out_arr[0].data()), tokens_size);
@@ -329,7 +332,7 @@ int curr_pos = 150;
 	
 	// NEW WAY
 	//mha_kernel(hls::stream<my_float_t> &sf,s_idata_v_t &w,fdata_v_t *tokens,mfdata_v_t *key_cache, mfdata_v_t *value_cache, mfdata_v_t *key_cache_in, mfdata_v_t *value_cache_in,const int POS, const int CURR_LAYER);
-	mha_kernel(dut_sf, dut_w, tokens_arr.data(), key_arr_a.data(), value_arr_a.data(), key_in_arr.data(), value_in_arr.data(), curr_pos, 0);
+	mha_kernel(dut_sf, dut_w, tokens_arr.data(), key_arr_a.data(), value_arr_a.data(), /*key_in_arr.data(), value_in_arr.data(), */curr_pos, 0);
 /*======= get all the data =================================== */
 
 	// for (int i = 0; i < MODEL_ELEMENTS; i++) {
@@ -338,6 +341,7 @@ int curr_pos = 150;
 	// } 
 
 	std::vector<mfdata_v_t> deq_tokens(MODEL_ELEMENTS / MAX_FL_ELEM);
+	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
 
 	for (int ii = 0; ii < (MODEL_ELEMENTS / MODEL_SCALING_FACTOR); ii++) {
 		float sf_tmp = dut_sf.read();
