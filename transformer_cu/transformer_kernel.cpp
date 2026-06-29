@@ -261,32 +261,18 @@ void transformer_cu(
 		runner.next_state = NEXT_STATE;
 	#endif
 
-	// mm2mm_store(internal_token, tokens, MODEL_ELEMENTS);
 	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, MODEL_TOKENS);
 	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, MODEL_TOKENS);
 
 	for(int ii = 0; ii < faker; ii++) {
-	// for(int ii = 0; ii < MODEL_NUM_LAYERS; ii++) {
-	// while (runner.stop == 0) {
-		// s_fdata_v_t s_cu_sel_out;
+		
 		hls::stream<my_float_t> s_tok_sf;
 		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/MODEL_SCALING_FACTOR
 		s_idata_v_t s_tok_w;
 		#pragma HLS STREAM variable=s_tok_w depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
-		// #pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
-		// runner.next_state = 3;
-		// if (ii > 0) {
-		// 	hls::fence(tokens);
-		// }
+
 		cu_selecter(s_tok_sf, s_tok_w, weights, internal_token, key_cache, value_cache, runner, tt);
 		
-		// hls::fence({s_cu_sel_out}, {tokens});
-		// int rn = runner.N_DIM;
-		// int rm = runner.M_DIM;
-		// int sf_reg = runner.w_sf;
-		// int w_reg = runner.w;
-		// int layer = runner.CURR_LAYER;
-		// runner.INIT = 1;
 		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_tok_sf, s_tok_w, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER);
 	}
 	#ifdef __DEBUG__

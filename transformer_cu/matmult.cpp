@@ -38,6 +38,15 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 		}
 	}
 	
+	// amm_tok_q:
+	// for (size_t i = 0; i < sfCount; i++){ // vCount here is 1/4 vCount in send_wtok!!
+  // 	#pragma HLS LOOP_TRIPCOUNT max = TOK_SF_MAX min=MODEL_ELEMENTS/(MODEL_SCALING_FACTOR * SM_FL_ELEM )
+	// 	for (size_t j = 0; j < ( SM_FL_ELEM); j++) {
+	// 	#pragma HLS PIPELINE II=1
+	// 		arr[i * (SM_FL_ELEM) + j] = tok.read();
+	// 	}
+	// }
+	
 	amm_calc:
 	for (size_t i = 0; i < M_DIM; i++) {
 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
