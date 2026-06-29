@@ -200,6 +200,36 @@ void abs_intake(hls::stream<hls::vector<T, N>> &tokens_out, hls::stream<hls::vec
 }
 
 template<typename T, size_t N>
+void max_finder(hls::stream<T> &max_val, hls::stream<hls::vector<T, N>> &tokens_out, hls::stream<hls::vector<T, N>> &tokens_in){
+	
+	const T Q_MAX = 1.0f / 127.0f;
+	const int cnt = MODEL_SCALING_FACTOR / N;
+	T c_val[MODEL_SCALING_FACTOR];
+	#pragma HLS ARRAY_PARTITION variable=c_val dim=1 type=complete
+	//here we store token_out and then assign token_out[i] to c_val[i * MAX_FL_ELEM + k] = hls::absf(token_out[i][k])
+	
+	
+	mf_intake:
+	for (int i = 0; i < cnt; i++) {
+		#pragma HLS PIPELINE II=1
+		hls::vector<T, N> val = tokens_in.read();
+		tokens_out.write(val);
+		for (int k = 0; k < N; k++) {
+			c_val[i * N + k] = hls::absf(val[k]);
+		}
+	}
+
+	for (int stride = (MODEL_SCALING_FACTOR>>1); stride > 0; stride >>=1) {
+		#pragma HLS UNROLL
+		for (int i = 0; i < stride; i++) {
+			#pragma HLS UNROLL
+			c_val[i] = (c_val[i]  > c_val[i + stride] ) ? c_val[i] : c_val[i + stride];
+		}
+	}	
+	max_val.write(c_val[0] * Q_MAX);
+}
+
+template<typename T, size_t N>
 void max_finder(hls::stream<T> &max_val, hls::stream<hls::vector<T, N>> &tokens_out, hls::stream<hls::vector<T, N>> &abs_tokens, hls::stream<hls::vector<T, N>> &tokens_in){
 	
 	const T Q_MAX = 1.0f / 127.0f;

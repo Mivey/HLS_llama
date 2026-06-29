@@ -93,10 +93,6 @@ NEEDS REWRITE:
 		** speculation aie end **
 		quantizer
 			bf16 to float?
-
-		
-		 
-		 
 */
 
 void wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
@@ -105,10 +101,9 @@ void wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfda
 	const my_float_t score_scalar = 1.0f / sqrtf((float) MODEL_HEAD_SIZE);
 	std::array<mfdata_v_t, (array_size)> query_arr;
 	my_float_t att = 0.0f;
-	// std::array<my_float_t, (array_size)> score;
+	
 	mfdata_v_t kc_arr[array_size];
 	#pragma HLS ARRAY_PARTITION variable=kc_arr complete
-	// #pragma HLS ARRAY_PARTITION variable=score complete
 	#pragma HLS ARRAY_PARTITION variable=query_arr complete
 	
 	//get 64 elements of query
@@ -117,9 +112,7 @@ void wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfda
 		#pragma HLS PIPELINE II=1
 		query_arr[j] = query.read();
 	}
-	// other way that may be faster is my_float_t tatt[4] 
-	// then tatt[i] =+ query_arr[i][n] * tmpb[n];
-	//then att += tatt[i] (hls unroll)
+	
 	pos_loop:
 	for (size_t k = 0; k < POS; k++){
 	#pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
@@ -184,7 +177,6 @@ void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> 
 		for (int stride = 16; stride > 0; stride >>=1){
 			#pragma HLS UNROLL
 			for (int j = 0; j < stride; j++) {
-				// #pragma HLS PIPELINE II=1
 				#pragma HLS UNROLL
 			tmp_arr[j] = (tmp_arr[j] < tmp_arr[j + stride]) ? tmp_arr[j + stride] : tmp_arr[j];
 			}
@@ -208,7 +200,6 @@ void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> 
 
 	softmax_normalize_loop:
 	for (int i = 0; i < POS; i++) {
-		// #pragma HLS LOOP_TRIPCOUNT max=(SEQ_LEN + 1) min=1
 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN
 		#pragma HLS PIPELINE
 		my_float_t tempa = fatt_arr[i] * inv_soft_sum;
@@ -216,10 +207,8 @@ void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> 
 	}
 }
 
+void wide_mha_weighted_sum(s_fdata_v_t &xb, hls::stream<my_float_t>  &att_in, s_mfdata_v_t &value_cache, const int POS){
 
-void wide_mha_weighted_sum(s_mfdata_v_t &xb, hls::stream<my_float_t>  &att_in, s_mfdata_v_t &value_cache, const int POS){
-
-	// const int ratio = MAX_FL_ELEM / MAX_FL_ELEM;
 	constexpr int ARR_SIZE = MODEL_HEAD_SIZE / MAX_FL_ELEM;
 	mfdata_v_t xb_arr[ARR_SIZE] = {0.0f};
 	mfdata_v_t vc_arr[ARR_SIZE];
@@ -231,124 +220,25 @@ void wide_mha_weighted_sum(s_mfdata_v_t &xb, hls::stream<my_float_t>  &att_in, s
 		#pragma HLS PIPELINE
 		#pragma HLS LOOP_TRIPCOUNT max=(MODEL_SEQUENCE_LEN + 1) min=1
 		my_float_t val = att_in.read();
-		for (size_t i = 0; i < ARR_SIZE; i++){
+		for (size_t ii = 0; ii < ARR_SIZE; ii++){
 			#pragma HLS UNROLL
-			xb_arr[i] += /*att_arr[t]*/ val * value_cache.read();// vc_arr[i];
+			xb_arr[ii] += /*att_arr[t]*/ val * value_cache.read();// vc_arr[i];
 		}
 	}
 	mha_ws_stream_out_xb: // set all values to zero
-	for (int i = 0 ; i < ARR_SIZE; i++) {
+	for (int jj = 0 ; jj < ARR_SIZE; jj++) {
+		mfdata_v_t tmp = xb_arr[jj];
+		for (int k = 0; k < (MAX_FL_ELEM / SM_FL_ELEM); k++) {
 		#pragma HLS PIPELINE II=1
-		xb.write(xb_arr[i]);
-		//instead of reporting float vect, we 
+			fdata_v_t sm_tmp;
+			for (int l = 0; l < SM_FL_ELEM; l++) {
+				#pragma HLS UNROLL
+				sm_tmp[l] = tmp[SM_FL_ELEM * k + l];
+			}
+			xb.write(sm_tmp);
+		}
 	}
 }
-
-void wide_mha_kernel(s_mfdata_v_t &out, 
-								s_mfdata_v_t &key_cache,
-								s_mfdata_v_t &value_cache,
-								s_mfdata_v_t &query,
-								const int POS){
-
-	
-	mha_num_head_loop:
-	for (size_t i = 0; i < MODEL_NUM_HEADS; i++) {
-		#pragma HLS DATAFLOW
-		
-		hls::stream<my_float_t> mha_it_sm, att_sm_ws;
-		// s_mfdata_v_t xb;
-		// #pragma hls STREAM variable=xb depth = 64
-		#pragma HLS STREAM variable=mha_it_sm depth=512
-	#pragma HLS BIND_STORAGE variable=mha_it_sm type=fifo impl=bram
-		#pragma HLS STREAM variable=att_sm_ws depth=512
-	#pragma HLS BIND_STORAGE variable=att_sm_ws type=fifo impl=bram
-
-		wide_mha_iterate(mha_it_sm, query, key_cache, POS);
-		wide_mha_softmax(att_sm_ws, mha_it_sm, POS);
-		wide_mha_weighted_sum(out, att_sm_ws, value_cache, POS);
-		//quantizer goes here
-	}
-}
-
-void mha_mm2s_data(s_fdata_v_t &q, s_fdata_v_t &k, s_fdata_v_t &v, fdata_v_t *in, const int cnt){
-	
-	// prob delete
-	mm2s_input_data(q, in, cnt, 0, 0);
-	mm2s_input_data(k, in, cnt / 2, 0, cnt);
-	mm2s_input_data(k, in, cnt / 2, 0, MODEL_TOKENS / (SM_FL_ELEM * 2));
-	mm2s_input_data(v, in, cnt, 0, (MODEL_TOKENS / SM_FL_ELEM + cnt)/2);
-}
-
-void mha_kernel(s_fdata_v_t &output,
-								fdata_v_t *tokens, //6 mha_kernel
-                mfdata_v_t *key_cache, 
-                mfdata_v_t *value_cache, 
-                const int POS, const int CURR_LAYER){
-
-	
-	s_mfdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
-	s_mfdata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
-	s_mfdata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
-	s_fdata_v_t s_key_cache_in, s_query, s_value_cache_in, s_query_r, s_key_cache_in_r;
-	s_mfdata_v_t s_value_cache_in_u,  s_key_cache_in_u, s_query_u;
-	// s_mfdata_v_t sm_query, sm_kc, sm_vc;
-
-  #pragma HLS STABLE variable=POS
-  #pragma HLS STABLE variable=CURR_LAYER
-  // #pragma HLS STREAM variable=xb_ws_q depth=MODEL_ELEMENTS / MID_FL_ELEM
-  // #pragma HLS STREAM variable=tokens depth=MODEL_ELEMENTS / MAX_FL_ELEM
-
-	#pragma HLS STREAM variable=s_key_cache_in depth=8 //good
-	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_ELEMENTS / MAX_FL_ELEM //good
-	#pragma HLS STREAM variable=s_query_u depth=MODEL_ELEMENTS / MAX_FL_ELEM 
-	#pragma HLS STREAM variable=s_key_cache_in_u depth=16 
-	#pragma HLS STREAM variable=s_value_cache_in_u depth=16
-	#pragma HLS STREAM variable=output depth=MODEL_ELEMENTS / SM_FL_ELEM
-	#pragma HLS STREAM variable=s_value_cache_in depth=8 //good
-	#pragma HLS STREAM variable=s_query depth=MODEL_ELEMENTS / MAX_FL_ELEM //good
-	#pragma HLS STREAM variable=s_query_r depth=MODEL_ELEMENTS / MAX_FL_ELEM //good
-	// #pragma HLS STREAM variable=xb_ws_q depth=8 //good
-	#pragma HLS STREAM variable=s_key_cache_to_kernel depth=4096 //good
-	#pragma HLS STREAM variable=s_value_cache_to_kernel depth=4096 //good
-	
-	#pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo impl=bram
-	#pragma HLS BIND_STORAGE variable=s_query type=fifo impl=bram
-	#pragma HLS BIND_STORAGE variable=s_query_r type=fifo impl=bram
-	#pragma HLS BIND_STORAGE variable=s_key_cache_to_kernel type=fifo impl=uram
-	#pragma HLS BIND_STORAGE variable=s_value_cache_to_kernel type=fifo impl=uram
-
-	#pragma HLS DATAFLOW
-	// mm2s_input_data(s_query_r, tokens, MODEL_ELEMENTS/MAX_FL_ELEM);
-	// mm2s_input_data(s_key_cache_in_r, key_cache_in, MODEL_ELEMENTS/MAX_FL_ELEM);
-	// mm2s_input_data(s_value_cache_in, value_cache_in, MODEL_ELEMENTS/MAX_FL_ELEM);
-	const int tokens_cnt = MODEL_ELEMENTS / SM_FL_ELEM; 
-	
-	// mm2s_input_data(s_query_r, tokens, tokens_cnt, 0); //read query first
-	// mm2s_input_data(s_key_cache_in_r, tokens, tokens_cnt, 1); //key
-	// mm2s_input_data(s_value_cache_in, tokens, tokens_cnt, 2); // value
-
-	mha_mm2s_data(s_query_r, s_key_cache_in_r, s_value_cache_in, tokens, tokens_cnt);
-	
-	rope_kernel(s_query, s_query_r, POS);
-	rope_kernel(s_key_cache_in, s_key_cache_in_r, POS);
-	
-	vec_up_converter(s_value_cache_in_u, s_value_cache_in, MODEL_ELEMENTS/MAX_FL_ELEM);
-	vec_up_converter(s_query_u, s_query, MODEL_ELEMENTS/MAX_FL_ELEM);
-	vec_up_converter(s_key_cache_in_u, s_key_cache_in, MODEL_ELEMENTS/MAX_FL_ELEM);
-
-	mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in_u, CURR_LAYER, POS);
-	mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in_u, CURR_LAYER, POS);
-	
-	wide_mha_kernel(xb_ws_q, s_key_cache_to_kernel, s_value_cache_to_kernel, s_query_u, POS + 1);
-	
-	vec_down_converter(output, xb_ws_q, tokens_cnt);
-	// store_output(tokens, xb_ws_q, MODEL_ELEMENTS);
-
-	return;
-}
-
-
-
 
 void mha_kernel(hls::stream<my_float_t> &sf,
 								s_idata_v_t &w,
@@ -357,9 +247,8 @@ void mha_kernel(hls::stream<my_float_t> &sf,
                 mfdata_v_t *value_cache, 
                 const int POS, const int CURR_LAYER){
 
-	
-	s_mfdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
-	s_mfdata_v_t abs_tokens, abs_max_raw_tok, max_tok_out;
+	s_fdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
+	s_fdata_v_t max_tok_out;
 	hls::stream<my_float_t> q_max_val;
 	s_mfdata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
 	s_mfdata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
@@ -368,15 +257,16 @@ void mha_kernel(hls::stream<my_float_t> &sf,
   #pragma HLS STABLE variable=POS
   #pragma HLS STABLE variable=CURR_LAYER
 
-	#pragma HLS STREAM variable=s_key_cache_in depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM  //good
-	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM  //good
-	#pragma HLS STREAM variable=sf depth=MODEL_ELEMENTS / SM_FL_ELEM / MODEL_SCALING_FACTOR
-	#pragma HLS STREAM variable=s_value_cache_in depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM  //good
-	#pragma HLS STREAM variable=s_query depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM //good
-	#pragma HLS STREAM variable=s_query_r depth=MODEL_HEAD_SIZE * 2 / MAX_FL_ELEM //good
-	// #pragma HLS STREAM variable=xb_ws_q depth=8 //good
-	#pragma HLS STREAM variable=s_key_cache_to_kernel depth=4096 //good
-	#pragma HLS STREAM variable=s_value_cache_to_kernel depth=4096 //good
+	#pragma HLS STREAM variable=s_key_cache_in depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
+	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
+	#pragma HLS STREAM variable=sf depth=MODEL_ELEMENTS / MODEL_SCALING_FACTOR
+	#pragma HLS STREAM variable=w depth=MODEL_ELEMENTS / MAX_QUANT_ELEM
+	#pragma HLS STREAM variable=s_value_cache_in depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
+	#pragma HLS STREAM variable=s_query depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
+	#pragma HLS STREAM variable=s_query_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
+	#pragma HLS STREAM variable=xb_ws_q depth=8 //good
+	#pragma HLS STREAM variable=s_key_cache_to_kernel depth=1024 //good
+	#pragma HLS STREAM variable=s_value_cache_to_kernel depth=1024 //good
 	
 	#pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo impl=bram
 	#pragma HLS BIND_STORAGE variable=s_query type=fifo impl=bram
@@ -384,16 +274,14 @@ void mha_kernel(hls::stream<my_float_t> &sf,
 	#pragma HLS BIND_STORAGE variable=s_key_cache_to_kernel type=fifo impl=uram
 	#pragma HLS BIND_STORAGE variable=s_value_cache_to_kernel type=fifo impl=uram
 
-	mha_num_head_loop:
+	mha_num_head:
 	for (size_t i = 0; i < MODEL_NUM_HEADS; i++) {
 		#pragma HLS DATAFLOW
 		
 		hls::stream<my_float_t> mha_it_sm, att_sm_ws;
-		// s_mfdata_v_t xb;
-		// #pragma hls STREAM variable=xb depth = 64
-		#pragma HLS STREAM variable=mha_it_sm depth=512
+		#pragma HLS STREAM variable=mha_it_sm depth=256
 		#pragma HLS BIND_STORAGE variable=mha_it_sm type=fifo impl=bram
-		#pragma HLS STREAM variable=att_sm_ws depth=512
+		#pragma HLS STREAM variable=att_sm_ws depth=256
 		#pragma HLS BIND_STORAGE variable=att_sm_ws type=fifo impl=bram
 
 		mha_input_data(s_query_r, tokens, 0, i * MODEL_HEAD_SIZE); //read query first
@@ -403,16 +291,12 @@ void mha_kernel(hls::stream<my_float_t> &sf,
 		rope_kernel<my_float_t, MAX_FL_ELEM, MODEL_HEAD_SIZE>(s_key_cache_in, s_key_cache_in_r, POS);
 		mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS, i);
 		mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, CURR_LAYER, POS, i);
-		wide_mha_iterate(mha_it_sm, s_query_r, s_key_cache_to_kernel, POS);
-		wide_mha_softmax(att_sm_ws, mha_it_sm, POS);
-		wide_mha_weighted_sum(xb_ws_q, att_sm_ws, s_value_cache_to_kernel, POS);
-		abs_intake(abs_max_raw_tok, abs_tokens, xb_ws_q);
-		max_finder(q_max_val, max_tok_out, abs_tokens, abs_max_raw_tok);
+		wide_mha_iterate(mha_it_sm, s_query, s_key_cache_to_kernel, POS + 1);
+		wide_mha_softmax(att_sm_ws, mha_it_sm, POS + 1);
+		wide_mha_weighted_sum(xb_ws_q, att_sm_ws, s_value_cache_to_kernel, POS + 1);
+		max_finder(q_max_val, max_tok_out, xb_ws_q);
 		quant_out(sf, w, max_tok_out, q_max_val);
-		//quantizer goes here
 	}
-	
-
 	return;
 }
 								
