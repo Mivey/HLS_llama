@@ -26,7 +26,7 @@ struct keys {
 	int w_sf;
 	int w;
 	int INIT;
-	// int stop;
+	int stop;
 } ;
 
 struct axi_reg{
@@ -105,19 +105,22 @@ void cu_selecter(	/*s_fdata_v_t &s_tokens,*/ hls::stream<my_float_t> &tok_sf, s_
 						r.w_sf = tt.Embed_sf_W / sizeof(fdata_v_t);
 						r.w = tt.Embed_W / sizeof(idata_v_t);
 						r.AXI_SEL = 1;
-						// r.stop = 1;
+						r.stop = 0;
 						r.CURR_LAYER = 0;
 						break;
 	}
 }
 void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1, 
 								idata_v_t *w_0, idata_v_t *w_1, hls::stream<my_float_t> &s_tok_sf, s_idata_v_t &s_tok_q, 
-								const int rn, const int rm, const int sf_reg, const int w_reg, const int layer){
+								const int rn, const int rm, const int sf_reg, const int w_reg, const int layer,  const int boop,
+								const float temperature, const float coin, int* pick){
 	
 	#pragma HLS DATAFLOW
 	hls::stream<my_float_t> s_out[mm_thr];
 	s_fdata_v_t tok_sf[mm_thr];
 	s_idata_v_t tok_q[mm_thr];
+	s_fdata_v_t sys_sort;
+	hls::stream<int> sys_val;
 	
 		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
@@ -135,7 +138,9 @@ void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1,
 	// GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
 
 	// gemv_combo(out, s_out, rm);
-	gemv_split(out, s_out, rm);
+	// gemv_split(out, s_out, rm);
+	gemv_split(out, sys_sort, sys_val, s_out, rm, boop);
+	systolic_sort(sys_sort, sys_val, pick, temperature, coin);
 }
 
 void transformer_cu(
@@ -229,6 +234,7 @@ void transformer_cu(
 	keys runner;
 	// runner.stop = 0;
 	runner.INIT = 1;
+	runner.stop = 1;
 	// bool skip = (mha_return != 0) ? 1 : 0;
 	
 	runner.next_layer = 0;
@@ -273,7 +279,8 @@ void transformer_cu(
 
 		cu_selecter(s_tok_sf, s_tok_w, weights, internal_token, key_cache, value_cache, runner, tt);
 		
-		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_tok_sf, s_tok_w, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER);
+		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_tok_sf, s_tok_w, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER, runner.stop,
+		temperature, coin, pick);
 	}
 	#ifdef __DEBUG__
 		mm2mm_store(tokens, internal_token, MODEL_TOKENS);

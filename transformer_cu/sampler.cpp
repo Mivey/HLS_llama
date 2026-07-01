@@ -1,5 +1,6 @@
 #include "mha_forward.h"
 #include <limits>
+#include <sys/types.h>
 
 constexpr int REG_SIZE = 64;
 
@@ -106,3 +107,5 @@ void systolic_sort(fdata_v_t *logit, int* pick, const float temperature, const f
   }
   return;
 }
+
+//===============================================================================================================================//

@@ -101,10 +101,10 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 	s_fdata_v_t tokens("tokens");
 	#pragma HLS STREAM variable=tokens depth = 16// MODEL_HIDDEN_DIM/MAX_FL_ELEM
 	s_fdata_v_t s_wsf("s_wsf");
-#pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=uram
+	#pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=uram
 	#pragma HLS STREAM variable=s_wsf type=fifo depth=RECT_SF
 	s_idata_v_t s_w("s_w");
-#pragma HLS BIND_STORAGE variable=s_w type=fifo impl=bram
+	#pragma HLS BIND_STORAGE variable=s_w type=fifo impl=bram
 	#pragma HLS STREAM variable=s_w type=fifo depth=16
 	s_fdata_v_t dist_wsf[mm_thr];
 	s_idata_v_t dist_w[mm_thr];
@@ -122,8 +122,8 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 	s_idata_v_t d_w[mm_thr];
 	#pragma HLS STREAM variable=d_wsf depth = 4096// MODEL_HIDDEN_DIM/MAX_FL_ELEM
 	#pragma HLS STREAM variable=d_w depth = 4096// MODEL_HIDDEN_DIM/MAX_FL_ELEM
-#pragma HLS BIND_STORAGE variable=d_w type=fifo impl=uram
-#pragma HLS BIND_STORAGE variable=d_wsf type=fifo impl=uram
+	#pragma HLS BIND_STORAGE variable=d_w type=fifo impl=uram
+	#pragma HLS BIND_STORAGE variable=d_wsf type=fifo impl=uram
 	s_fdata_v_t s_out("s_out");
 	
 

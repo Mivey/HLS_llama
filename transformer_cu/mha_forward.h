@@ -472,5 +472,7 @@ void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_t
 							#endif
 								const float temperature, const float coin, int* pick
 				);
-	void systolic_sort(fdata_v_t *logit, int* pick, const float temperature, const float coin);
+				
+void systolic_sort(fdata_v_t *logit, int* pick, const float temperature, const float coin);
+// void systolic_sort(s_fdata_v_t &s_logit, hls::stream<int> &s_val, int* pick, const float temperature, const float coin);
 #endif
