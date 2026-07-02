@@ -100,68 +100,46 @@ struct ProbIndex{
   my_float_t prob;
 };
 
-template<typename T, size_t N>
-void systolic_sort(hls::stream<hls::vector<T, N>> &s_logit, hls::stream<int> &s_val, int* pick, const float temperature, const float coin){
+// template<typename T, size_t N>
+void systolic_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_DIM){
     
   // ProbIndex init = {0, std::numeric_limits<float>::lowest()};
   ProbIndex st[REG_SIZE]; // systolic temp array
-  ProbIndex reg[REG_SIZE]; // stored 64 values
+  // ProbIndex reg[REG_SIZE]; // stored 64 values
 	
 	#pragma HLS ARRAY_PARTITION variable=st complete dim=1
-  #pragma HLS ARRAY_PARTITION variable=reg complete dim=1
+  //  // up a level
 	
 	for (int ii = 0; ii < REG_SIZE; ii++) {
-		#pragma HLS UNROLL
+		#pragma HLS PIPELINE II=1
 		st[ii] = {-1, std::numeric_limits<float>::lowest()};
 		reg[ii] = {-1, std::numeric_limits<float>::lowest()};
 	}
 	
   systolic_sort:
-  for (int i = 0; i < MODEL_TOKENS / SM_FL_ELEM; i++) {
-    fdata_v_t temp = s_logit.read();
-		int tmp_dx = s_val.read();
-		ss_vector:
-    for (int j = 0; j < SM_FL_ELEM; j++) {
-      #pragma HLS PIPELINE
-      //shift register 
-      for (int k = 0; k < (REG_SIZE - 1); k++) { st[k] = st[k + 1]; }
-      st[REG_SIZE - 1] = {(short)(tmp_dx + j), temp[j]};
+  for (int i = 0; i < (M_DIM + REG_SIZE); i++) {
+		ProbIndex tmp_pi = ss_val.read();
+      for (int k = 0; k < (REG_SIZE - 1); k++) { 
+				#pragma HLS UNROLL
+				st[k] = st[k + 1]; // shift registers in action
+				}
+      st[REG_SIZE - 1] = tmp_pi; 
       
       for (int k = 0; k < REG_SIZE; k++) {
+				#pragma HLS UNROLL
         if (st[k].prob > reg[k].prob) {
           ProbIndex swap = reg[k];
           reg[k] = st[k];
           st[k] = swap;
         }
       }
-    }
+    // }
   }
-
-  flush:
-  for (int i = 0; i < REG_SIZE; i++) {
-    #pragma HLS PIPELINE
-    for (int k = 0; k < (REG_SIZE - 1); k++) { st[k] = st[k + 1]; }
-    st[REG_SIZE - 1] = {-1, std::numeric_limits<float>::lowest()};
-    
-    for (int k = 0; k < REG_SIZE; k++) {
-      // if (st[k].prob > reg[k].prob) {
-      //   ProbIndex swap = reg[k];
-      //   reg[k] = st[k];
-      //   st[k] = swap;
-      // }
-			bool do_swap = (st[k].prob > reg[k].prob);
-			ProbIndex next_reg = do_swap ? st[k] : reg[k];
-			ProbIndex next_st = do_swap ? reg[k] : st[k];
-
-			reg[k] = next_reg;
-			st[k] = next_st;
-    }
-
-
-  }
+}
   
   // finished sort. reg now should have largest REG_SIZE (64) values, with max_val @ reg[REG_SIZE-1]
-
+/* ================================================= separate function ===============================*/
+void ss_final(ProbIndex *reg, int* pick, const float temperature, const float coin){
   const my_float_t INV_TEMP = 1/temperature;
   my_float_t max_val = reg[(REG_SIZE - 1)].prob;
   my_float_t final_soft_sum = 0.0f;
@@ -202,31 +180,40 @@ void systolic_sort(hls::stream<hls::vector<T, N>> &s_logit, hls::stream<int> &s_
 }
 
 template<typename T, size_t N, int P>
-void gemv_split(hls::vector<T, N> *out, hls::stream<hls::vector<T, N>> &sys_sort, hls::stream<int> &sys_val, hls::stream<T> (&gemv_out)[P], const int M_DIM, const int BOOP){
+void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], const int M_DIM, const int BOOP){
 	
 	const int offset = MODEL_TOKENS / (N * P);
 	typedef hls::vector<T, N> gdata_v_t;
 	const int c_idx = M_DIM / (P * N);
-	gdata_v_t min;
-	std::fill(min.begin(), min.end(), std::numeric_limits<float>::lowest());
 	for (int i = 0; i < c_idx; i++) {
 		for (int j = 0; j < P; j++) {
-			#pragma HLS UNROLL
+			// #pragma HLS UNROLL
 			gdata_v_t data;
+			int idx = i + j*offset;
 			for (int k = 0; k < N; k++) {
 				#pragma HLS PIPELINE II=1
-				data[k] = gemv_out[j].read();
+				
+				T temp = gemv_out[j].read();
+				ProbIndex ss_val;
+				data[k] = temp;
+				if (!BOOP) {
+					ss_val.prob = std::numeric_limits<my_float_t>::lowest();
+				} else {
+					ss_val.prob = temp;
+				}
+				ss_val.index = idx + k;
+
+				sys_sort.write(ss_val);
 			}
-			int idx = i + j*offset;
 			out[idx] = data;
-			if (BOOP == 0) {
-				sys_sort.write(data);
-				sys_val.write(idx);
-			}
-			else {
-			sys_sort.write(min);
-			sys_val.write(0);
-			}
 		}
+	}
+
+	ProbIndex ss_val = {32420, std::numeric_limits<my_float_t>::lowest()};
+	
+	flush:
+	for (int i = 0; i < REG_SIZE; i++) {
+		#pragma HLS PIPELINE II=1
+		sys_sort.write(ss_val);
 	}
 }

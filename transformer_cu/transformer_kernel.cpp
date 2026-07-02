@@ -11,6 +11,7 @@
 #include <exception>
 #include <hls_fence.h>
 #include <iterator>
+#include <limits>
 #include <sys/types.h>
 
 constexpr int mm_thr = 2;
@@ -110,7 +111,7 @@ void cu_selecter(	/*s_fdata_v_t &s_tokens,*/ hls::stream<my_float_t> &tok_sf, s_
 						break;
 	}
 }
-void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1, 
+void df_region(	fdata_v_t *out, ProbIndex *ss_reg, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1, 
 								idata_v_t *w_0, idata_v_t *w_1, hls::stream<my_float_t> &s_tok_sf, s_idata_v_t &s_tok_q, 
 								const int rn, const int rm, const int sf_reg, const int w_reg, const int layer,  const int boop,
 								const float temperature, const float coin, int* pick){
@@ -119,8 +120,9 @@ void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1,
 	hls::stream<my_float_t> s_out[mm_thr];
 	s_fdata_v_t tok_sf[mm_thr];
 	s_idata_v_t tok_q[mm_thr];
-	s_fdata_v_t sys_sort;
-	hls::stream<int> sys_val;
+	hls::stream<ProbIndex> ss_val;
+	// s_fdata_v_t sys_sort;
+	// hls::stream<int> sys_val;
 	
 		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
@@ -139,8 +141,8 @@ void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1,
 
 	// gemv_combo(out, s_out, rm);
 	// gemv_split(out, s_out, rm);
-	gemv_split(out, sys_sort, sys_val, s_out, rm, boop);
-	systolic_sort(sys_sort, sys_val, pick, temperature, coin);
+	gemv_split(out, ss_val, s_out, rm, boop);
+	systolic_sort(ss_val, ss_reg, rm);
 }
 
 void transformer_cu(
@@ -227,9 +229,12 @@ void transformer_cu(
 	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
 	// s_fdata_v_t internal_stream[2];
 	fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM] = {};
+	ProbIndex ss_reg[REG_SIZE];
 	std::fill(internal_token->begin(), internal_token->end(), 0);
+	
 	#pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
 	#pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=uram
+	#pragma HLS ARRAY_PARTITION variable=reg complete dim=1
 	
 	keys runner;
 	// runner.stop = 0;
@@ -279,14 +284,15 @@ void transformer_cu(
 
 		cu_selecter(s_tok_sf, s_tok_w, weights, internal_token, key_cache, value_cache, runner, tt);
 		
-		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_tok_sf, s_tok_w, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER, runner.stop,
+		df_region(internal_token, ss_reg, w_sf_0, w_sf_1, w_0, w_1, s_tok_sf, s_tok_w, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER, runner.stop,
 		temperature, coin, pick);
 	}
 	#ifdef __DEBUG__
 		mm2mm_store(tokens, internal_token, MODEL_TOKENS);
 	#endif
 	#ifndef __DEBUG__
-		systolic_sort(internal_token, pick, temperature, coin);
+		// systolic_sort(internal_token, pick, temperature, coin);
+		ss_final(ss_reg, pick, temperature, coin);
 	#endif
 	return;
 }
