@@ -102,7 +102,7 @@ struct ProbIndex{
 
 // template<typename T, size_t N>
 void systolic_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_DIM){
-    
+  // #pragma HLS INLINE
   // ProbIndex init = {0, std::numeric_limits<float>::lowest()};
   ProbIndex st[REG_SIZE]; // systolic temp array
   // ProbIndex reg[REG_SIZE]; // stored 64 values
@@ -118,6 +118,7 @@ void systolic_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_D
 	
   systolic_sort:
   for (int i = 0; i < (M_DIM + REG_SIZE); i++) {
+		#pragma HLS pipeline II=3
 		ProbIndex tmp_pi = ss_val.read();
       for (int k = 0; k < (REG_SIZE - 1); k++) { 
 				#pragma HLS UNROLL
