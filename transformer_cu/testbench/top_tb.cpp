@@ -303,8 +303,9 @@ int top_tb(){
 	file_size = w2_output.tellg();
 	w2_output.seekg(0, std::ios::beg);
 	
-	w2_output.read(goa, file_size/2);
-	w2_output.read(goa + logits_size/2, file_size/2);
+	// w2_output.read(goa, file_size/2);
+	// w2_output.read(goa + logits_size/2, file_size/2);
+	w2_output.read(goa, file_size);
 
 
 	// w1_output.seekg(0, std::ios::end);
@@ -419,6 +420,9 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	// memcpy(value_arr[0].data(), value_arr_a.data(), cache_size);
 	memcpy(key_arr_a.data(), key_arr[0].data(), cache_size);
 	memcpy(value_arr_a.data(), value_arr[0].data(), cache_size);
+	float random_u32 = 0.999;
+	float temperature = 0.009;
+	int pick;
 
 	/* ================================== read data into array =================================== */
 
@@ -430,6 +434,26 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 /* remember - if it's suppsoed to be m_axi, no need to create a stream. just use the created vector, ie: foo_arr.data() */
 
 	/* ============================ write inputs to the streams ====================== */
+
+	/*
+	void transformer_cu(
+				fdata_v_t *tokens,
+				fdata_v_t *w_sf_0, idata_v_t *w_0, 
+				fdata_v_t *w_sf_1, idata_v_t *w_1, 
+				fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
+				const int POS,
+				const int QKV_W, const int QKV_sf_W,
+				const int Out_W, const int Out_sf_W,
+				const int FF_w1w3_W, const int FF_w1w3_sf_W,
+				const int FF_w2_W, const int FF_w2_sf_W, 
+				const int Embed_W, const int Embed_sf_W, 
+				const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
+			#ifdef __DEBUG__
+				const int faker ,const int INIT, const int CURR_LAYER, const int NEXT_STATE,
+			#endif
+				const float temperature, const float coin, int* pick
+			)
+			*/
 		
 
 int curr_pos = 150;
@@ -442,13 +466,24 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
 								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
 								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 8, 1, 0, 0
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 
+								#ifdef __DEBUG__
+									8, 1, 0, 0,
+								#endif
+								temperature, random_u32, &pick//8, 1, 0, 0
 								);
-	int zz = output_arr.size();
-	std::fill(output_arr.begin() + 96,output_arr.begin() + zz / 2 - 1, 0);
-	std::fill(output_arr.begin() + zz / 2 + 96,output_arr.end(), 0);
+	// int zz = output_arr.size();
+	// std::fill(output_arr.begin() + 96, output_arr.begin() + zz / 2 - 1, 0);
+	// std::fill(output_arr.begin() + zz / 2 + 96, output_arr.end(), 0);
+	std::fill(output_arr.begin() + 192, output_arr.end(), 0);
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	parse_results<fdata_v_t, float>(golden_output_arr, output_arr);
+
+	
+	std::cout<< "================================ Top - k Data =============================="<<std::endl;
+	// for (int ii = 0; ii < 64; ii++) {
+		std::cout << " Final pick:\t"<< pick <<std::endl;
+	// }
 	// std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	// parse_results<mfdata_v_t, float>(tok_w1_out_arr[0], tok_w1_out_arr[1]);
 
