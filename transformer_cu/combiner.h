@@ -196,7 +196,7 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::s
 				T temp = gemv_out[j].read();
 				ProbIndex ss_val;
 				data[k] = temp;
-				if (!BOOP) {
+				if (BOOP) {
 					ss_val.prob = std::numeric_limits<my_float_t>::lowest();
 				} else {
 					ss_val.prob = temp;
