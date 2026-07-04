@@ -250,6 +250,8 @@ void mha_kernel(hls::stream<my_float_t> &sf,
 	s_fdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
 	s_fdata_v_t max_tok_out;
 	hls::stream<my_float_t> q_max_val;
+	#pragma HLS STREAM variable=q_max_val				depth=4
+	#pragma HLS STREAM variable=max_tok_out			depth=32
 	s_mfdata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
 	s_mfdata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
 	s_mfdata_v_t s_key_cache_in, s_query, s_value_cache_in, s_query_r, s_key_cache_in_r;
