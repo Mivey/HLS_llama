@@ -28,6 +28,9 @@ struct keys {
 	int w;
 	int INIT;
 	int stop;
+	#ifdef __DEBUG__
+	int faker;
+	#endif
 } ;
 
 struct axi_reg{
@@ -60,6 +63,10 @@ void cu_selecter(	/*s_fdata_v_t &s_tokens,*/ hls::stream<my_float_t> &tok_sf, s_
 	r.curr_state = r.next_state;
 	r.AXI_SEL = 0;
 	r.CURR_LAYER = r.next_layer;
+
+	#ifdef __DEBUG__
+	r.stop--;
+	#endif
 	// r.INIT =  ((r.next_state == 0) && (r.CURR_LAYER == 0)) ? 1 : 0;
 	switch (r.curr_state) {
 	case 0 :	rmsnorm_kernel(tok_w, tok_sf, diff, weights, r.CURR_LAYER, r.INIT, tt.rms_att_W / sizeof(fdata_v_t)); 
@@ -128,6 +135,7 @@ void df_region(	fdata_v_t *out, ProbIndex *ss_reg, fdata_v_t *w_sf_0, fdata_v_t 
 		#pragma HLS STREAM variable=tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=s_tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
 		#pragma HLS STREAM variable=tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
+		#pragma HLS STREAM variable=ss_val depth = 64
 
 	// quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, rn);
 
@@ -228,13 +236,13 @@ void transformer_cu(
 
 	// fdata_v_t internal_diff[MODEL_HIDDEN_DIM/SM_FL_ELEM * 2];
 	// s_fdata_v_t internal_stream[2];
-	fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM] = {};
+	fdata_v_t internal_token[MODEL_TOKENS/SM_FL_ELEM];// = {};
 	ProbIndex ss_reg[REG_SIZE];
-	std::fill(internal_token->begin(), internal_token->end(), 0);
+	// std::fill(internal_token->begin(), internal_token->end(), 0);
 	
 	#pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
 	#pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=uram
-	#pragma HLS ARRAY_PARTITION variable=reg complete dim=1
+	#pragma HLS ARRAY_PARTITION variable=ss_reg complete dim=1
 	
 	keys runner;
 	// runner.stop = 0;
@@ -270,10 +278,13 @@ void transformer_cu(
 	#ifdef __DEBUG__
 		runner.next_layer = CURR_LAYER;
 		runner.next_state = NEXT_STATE;
+		runner.faker = faker;
+		runner.stop = faker;
 	#endif
 
-	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, MODEL_TOKENS);
-	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, MODEL_TOKENS);
+	// mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, MODEL_TOKENS);
+	// mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, MODEL_TOKENS);
+	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS);
 
 	for(int ii = 0; ii < faker; ii++) {
 		
@@ -281,18 +292,20 @@ void transformer_cu(
 		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/MODEL_SCALING_FACTOR
 		s_idata_v_t s_tok_w;
 		#pragma HLS STREAM variable=s_tok_w depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
+			
 
 		cu_selecter(s_tok_sf, s_tok_w, weights, internal_token, key_cache, value_cache, runner, tt);
+		
 		
 		df_region(internal_token, ss_reg, w_sf_0, w_sf_1, w_0, w_1, s_tok_sf, s_tok_w, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER, runner.stop,
 		temperature, coin, pick);
 	}
-	#ifdef __DEBUG__
-		mm2mm_store(tokens, internal_token, MODEL_TOKENS);
-	#endif
-	#ifndef __DEBUG__
+	// #ifdef __DEBUG__
+	// 	mm2mm_store(tokens, internal_token, MODEL_TOKENS);
+	// #endif
+	// #ifndef __DEBUG__
 		// systolic_sort(internal_token, pick, temperature, coin);
 		ss_final(ss_reg, pick, temperature, coin);
-	#endif
+	// #endif
 	return;
 }
