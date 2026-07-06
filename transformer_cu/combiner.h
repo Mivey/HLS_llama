@@ -88,3 +88,132 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<T> (&gemv_out)[P], const int
 		}
 	}
 }
+
+
+/*====================================================================================================================================*/
+
+constexpr int REG_SIZE = 64;
+
+struct ProbIndex{
+  short index;
+  my_float_t prob;
+};
+
+// template<typename T, size_t N>
+void systolic_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_DIM){
+  // #pragma HLS INLINE
+  // ProbIndex init = {0, std::numeric_limits<float>::lowest()};
+  ProbIndex st[REG_SIZE]; // systolic temp array
+  // ProbIndex reg[REG_SIZE]; // stored 64 values
+	
+	#pragma HLS ARRAY_PARTITION variable=st complete dim=1
+  //  // up a level
+	
+	for (int ii = 0; ii < REG_SIZE; ii++) {
+		#pragma HLS PIPELINE II=1
+		st[ii] = {-1, std::numeric_limits<float>::lowest()};
+		reg[ii] = {-1, std::numeric_limits<float>::lowest()};
+	}
+	
+  systolic_sort:
+  for (int i = 0; i < (M_DIM + REG_SIZE); i++) {
+		#pragma HLS pipeline II=3
+		ProbIndex tmp_pi = ss_val.read();
+      for (int k = 0; k < (REG_SIZE - 1); k++) { 
+				#pragma HLS UNROLL
+				st[k] = st[k + 1]; // shift registers in action
+				}
+      st[REG_SIZE - 1] = tmp_pi; 
+      
+      for (int k = 0; k < REG_SIZE; k++) {
+				#pragma HLS UNROLL
+        if (st[k].prob > reg[k].prob) {
+          ProbIndex swap = reg[k];
+          reg[k] = st[k];
+          st[k] = swap;
+        }
+      }
+    // }
+  }
+}
+  
+  // finished sort. reg now should have largest REG_SIZE (64) values, with max_val @ reg[REG_SIZE-1]
+/* ================================================= separate function ===============================*/
+void ss_final(ProbIndex *reg, int* pick, const float temperature, const float coin){
+  const my_float_t INV_TEMP = 1/temperature;
+  my_float_t max_val = reg[(REG_SIZE - 1)].prob;
+  my_float_t final_soft_sum = 0.0f;
+
+  softmax_exp_loop:
+	for (int i = 0; i < REG_SIZE; i++) {
+    #pragma HLS PIPELINE
+    my_float_t curr_val = reg[i].prob;
+		my_float_t calc = hls::expf((curr_val - max_val) * INV_TEMP);
+		final_soft_sum += calc;
+		reg[i].prob = calc;
+	}
+	my_float_t inv_soft_sum = 1.0f/final_soft_sum;
+
+	softmax_normalize_loop:
+	for (int i = 0; i < REG_SIZE; i++) {
+    #pragma HLS PIPELINE
+    reg[i].prob *= inv_soft_sum;
+	}  
+  
+  my_float_t coin_sum = 0.0f;
+	bool found = false;
+
+	*pick = reg[REG_SIZE - 1].index;
+  
+  coin_flip:
+  for (int i = (REG_SIZE - 1); i >= 0; i--) {
+		#pragma HLS PIPELINE
+		
+    coin_sum += reg[i].prob;
+		
+    if (coin_sum > coin && !found) {
+			*pick = reg[i].index;
+      found = true;
+    }
+  }
+  return;
+}
+
+template<typename T, size_t N, int P>
+void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], const int M_DIM, const int BOOP){
+	
+	const int offset = MODEL_TOKENS / (N * P);
+	typedef hls::vector<T, N> gdata_v_t;
+	const int c_idx = M_DIM / (P * N);
+	for (int i = 0; i < c_idx; i++) {
+		for (int j = 0; j < P; j++) {
+			// #pragma HLS UNROLL
+			gdata_v_t data;
+			int idx = i + j*offset;
+			for (int k = 0; k < N; k++) {
+				#pragma HLS PIPELINE II=1
+				
+				T temp = gemv_out[j].read();
+				ProbIndex ss_val;
+				data[k] = temp;
+				if (BOOP) {
+					ss_val.prob = std::numeric_limits<my_float_t>::lowest();
+				} else {
+					ss_val.prob = temp;
+				}
+				ss_val.index = idx + k;
+
+				sys_sort.write(ss_val);
+			}
+			out[idx] = data;
+		}
+	}
+
+	ProbIndex ss_val = {32420, std::numeric_limits<my_float_t>::lowest()};
+	
+	flush:
+	for (int i = 0; i < REG_SIZE; i++) {
+		#pragma HLS PIPELINE II=1
+		sys_sort.write(ss_val);
+	}
+}

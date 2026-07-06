@@ -432,7 +432,10 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	/* ============================ write inputs to the streams ====================== */
 		
 
-int curr_pos = 150;
+	int curr_pos = 199;
+	float random_u32 = 0.999;
+	float temperature = 0.009;
+	int pick;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
 transformer_cu(	output_arr.data(), //output_arr.data(), 
 								sf_w_arr.data(), quant_w_arr.data(), 
@@ -442,7 +445,11 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 								axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
 								axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
 								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 8, 1, 0, 0
+								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 
+								#ifdef __DEBUG__
+								8	, 1, 0, 0,
+								#endif
+								temperature, random_u32, &pick
 								);
 	int zz = output_arr.size();
 	std::fill(output_arr.begin() + 96,output_arr.begin() + zz / 2 - 1, 0);

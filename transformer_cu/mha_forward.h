@@ -2,11 +2,11 @@
 #ifndef MARK_FORWARD
 #define MARK_FORWARD
 
-// #define __DEBUG__
+#define __DEBUG__
 // #include "fast_common.h"
-#ifdef  __DEBUG__
-	#include "hls_print.h"
-#endif
+// #ifdef  __DEBUG__
+// 	#include "hls_print.h"
+// #endif
 #include <cstddef>
 #include <cstdint>
 #include <hls_stream.h>
