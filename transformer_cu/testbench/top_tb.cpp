@@ -57,8 +57,9 @@ int top_tb(){
 	std::ifstream input_tokens("seed_199/199_01_rms_att_in.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/TOP_25_xb2_mm_output_A1.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary); 
-	std::ifstream w2_output("seed_199/199_15a_ffn2_out.bin", std::ios::binary);
+	// std::ifstream w2_output("seed_199/199_15a_ffn2_out.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_199/199_15_ffn2_out.bin", std::ios::binary);
+	std::ifstream w2_output("seed_199/199_03_query_out.bin", std::ios::binary);
 	// std::ifstream w2_output("seed_199/199_logits_out.bin", std::ios::binary);
 	std::ifstream w1_output("seed_42069/150_output_w1_tokens.bin", std::ios::binary);
 	std::ifstream w3_output("seed_42069/150_output_w3_tokens.bin", std::ios::binary);
@@ -323,6 +324,8 @@ int top_tb(){
 	// jump 768 values
 	// read 64
 
+	std::vector<mfdata_v_t> key_arr_a(cache_cnt);
+	std::vector<mfdata_v_t> value_arr_a(cache_cnt);
 	std::vector<std::vector<mfdata_v_t>> key_arr(2, std::vector<mfdata_v_t>(cache_cnt));
 	std::vector<std::vector<mfdata_v_t>> value_arr(2, std::vector<mfdata_v_t>(cache_cnt));
 
@@ -335,7 +338,8 @@ out_key_dat.read(raw_token_major_buf.data(), cache_size);
 
 // 2. Prepare your destination head-major buffer
 // We can cast this directly into your existing key_arr
-char* dest_ptr = reinterpret_cast<char*>(key_arr[0].data());
+char* dest_ptr = reinterpret_cast<char*>(key_arr_a.data());
+// char* dest_ptr = reinterpret_cast<char*>(key_arr[0].data());
 const char* src_ptr = raw_token_major_buf.data();
 
 // 3. In-memory Transpose
@@ -360,7 +364,8 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 
 out_value_dat.read(raw_token_major_buf.data(), cache_size);
 
-dest_ptr = reinterpret_cast<char*>(value_arr[0].data());
+dest_ptr = reinterpret_cast<char*>(value_arr_a.data());
+// dest_ptr = reinterpret_cast<char*>(value_arr[0].data());
 
 // 3. In-memory Transpose
 for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
@@ -410,16 +415,14 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 
 	std::vector<mfdata_v_t> key_in_arr(tokens_cnt * 3);
 	std::vector<mfdata_v_t> value_in_arr(tokens_cnt * 3);
-	std::vector<mfdata_v_t> key_arr_a(cache_cnt);
-	std::vector<mfdata_v_t> value_arr_a(cache_cnt);
 
 
 	// w2_output.read(reinterpret_cast<char *>(golden_output_arr.data()), tokens_size);
 
 	// memcpy(key_arr[0].data(), key_arr_a.data(), cache_size);
 	// memcpy(value_arr[0].data(), value_arr_a.data(), cache_size);
-	memcpy(key_arr_a.data(), key_arr[0].data(), cache_size);
-	memcpy(value_arr_a.data(), value_arr[0].data(), cache_size);
+	// memcpy(key_arr_a.data(), key_arr[0].data(), cache_size);
+	// memcpy(value_arr_a.data(), value_arr[0].data(), cache_size);
 	float random_u32 = 0.999;
 	float temperature = 0.009;
 	int pick;
@@ -456,7 +459,7 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 			*/
 		
 
-int curr_pos = 150;
+int curr_pos = 199;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
 transformer_cu(	output_arr.data(), //output_arr.data(), 
 								sf_w_arr.data(), quant_w_arr.data(), 
@@ -468,7 +471,7 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
 								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 
 								#ifdef __DEBUG__
-									8, 1, 0, 0,
+								1	, 1, 0, 0,
 								#endif
 								temperature, random_u32, &pick//8, 1, 0, 0
 								);

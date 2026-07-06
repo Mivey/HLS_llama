@@ -2,7 +2,7 @@
 #ifndef MARK_FORWARD
 #define MARK_FORWARD
 
-// #define __DEBUG__
+#define __DEBUG__
 // #include "fast_common.h"
 // #ifdef  __DEBUG__
 // 	#include "hls_print.h"

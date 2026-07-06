@@ -24,7 +24,7 @@ void new_rmsnorm(hls::stream<my_float_t> &c_rms, s_fdata_v_t &o, s_fdata_v_t &d,
 		
     fdata_v_t tss = tmp * tmp;
 		fdata_v_t wss = tmp * w.read();
-		arr[i] = tmp;
+		arr[i] = wss;
 		
 		o.write(wss);
 		
@@ -37,12 +37,13 @@ void new_rmsnorm(hls::stream<my_float_t> &c_rms, s_fdata_v_t &o, s_fdata_v_t &d,
 	}
 
   my_float_t fss = (ftss / MODEL_ELEMENTS + 1e-5);	
-  c_rms.write(1.0f/hls::sqrtf(fss));
+	my_float_t c_rms_data = 1.0f/hls::sqrtf(fss);
+  c_rms.write(c_rms_data);
 
 	array_write:
 	for (int i = 0; i < (MODEL_ELEMENTS / SM_FL_ELEM); i++) {
 		#pragma HLS PIPELINE II=1
-		x[i] = arr[i];
+		x[i] = arr[i] * c_rms_data;
 	}
 }
 

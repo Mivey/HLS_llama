@@ -125,25 +125,25 @@ void df_region(	fdata_v_t *out, ProbIndex *ss_reg, fdata_v_t *w_sf_0, fdata_v_t 
 	
 	#pragma HLS DATAFLOW
 	hls::stream<my_float_t> s_out[mm_thr];
-	s_fdata_v_t tok_sf[mm_thr];
-	s_idata_v_t tok_q[mm_thr];
+	s_fdata_v_t s_i_tok_sf[mm_thr];
+	s_idata_v_t s_i_tok_q[mm_thr];
 	hls::stream<ProbIndex> ss_val;
 	// s_fdata_v_t sys_sort;
 	// hls::stream<int> sys_val;
 	
 		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
-		#pragma HLS STREAM variable=tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
+		#pragma HLS STREAM variable=s_i_tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=s_tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
-		#pragma HLS STREAM variable=tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
+		#pragma HLS STREAM variable=s_i_tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
 		#pragma HLS STREAM variable=ss_val depth = 64
 
 	// quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, rn);
 
-	inf_split_tee(tok_sf, s_tok_sf, (rn / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
-	inf_split_tee(tok_q, s_tok_q, (rn / MAX_QUANT_ELEM));
+	inf_split_tee(s_i_tok_sf, s_tok_sf, (rn / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
+	inf_split_tee(s_i_tok_q, s_tok_q, (rn / MAX_QUANT_ELEM));
 
-	GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
-	GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
+	GeMV_kernel(s_out[0], s_i_tok_sf[0], s_i_tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, sf_reg, w_reg);
+	GeMV_kernel(s_out[1], s_i_tok_sf[1], s_i_tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, sf_reg, w_reg);
 	// GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
 	// GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
 
@@ -300,9 +300,9 @@ void transformer_cu(
 		df_region(internal_token, ss_reg, w_sf_0, w_sf_1, w_0, w_1, s_tok_sf, s_tok_w, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER, runner.stop,
 		temperature, coin, pick);
 	}
-	// #ifdef __DEBUG__
-	// 	mm2mm_store(tokens, internal_token, MODEL_TOKENS);
-	// #endif
+	#ifdef __DEBUG__
+		mm2mm_store(tokens, internal_token, MODEL_ELEMENTS);
+	#endif
 	// #ifndef __DEBUG__
 		// systolic_sort(internal_token, pick, temperature, coin);
 		ss_final(ss_reg, pick, temperature, coin);

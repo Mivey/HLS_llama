@@ -18,17 +18,20 @@ void new_rmsnorm(hls::stream<my_float_t> &c_rms, s_fdata_v_t &o, s_fdata_v_t &d,
   rms_mac:
   for (int i = 0; i < (MODEL_ELEMENTS / SM_FL_ELEM); i++) {
     #pragma HLS PIPELINE II=1
-		fdata_v_t tmp;
+		fdata_v_t tmp, tmpi, tmpq;
 
 		if (INIT == 1) {
 			tmp = d.read();
 		}else {
-			tmp = x[i] + d.read();
+			tmpi = x[i];
+			tmpq = d.read();
+			tmp = tmpi + tmpq;
+			// tmp = x[i] + d.read();
 		}
 		
     fdata_v_t tss = tmp * tmp;
 		fdata_v_t wss = tmp * w.read();
-		arr[i] = tmp;
+		arr[i] = wss;
 		
 		o.write(wss);
 		
@@ -41,12 +44,13 @@ void new_rmsnorm(hls::stream<my_float_t> &c_rms, s_fdata_v_t &o, s_fdata_v_t &d,
 	}
 
   my_float_t fss = (ftss / MODEL_ELEMENTS + 1e-5);	
-  c_rms.write(1.0f/hls::sqrtf(fss));
+	my_float_t c_rms_data = 1.0f/hls::sqrtf(fss);
+  c_rms.write(c_rms_data);
 
 	array_write:
 	for (int i = 0; i < (MODEL_ELEMENTS / SM_FL_ELEM); i++) {
 		#pragma HLS PIPELINE II=1
-		x[i] = arr[i];
+		x[i] = arr[i] * c_rms_data;
 	}
 }
 
@@ -132,6 +136,7 @@ void rmsnorm_kernel(s_idata_v_t &s_w, hls::stream<my_float_t> &s_sf, fdata_v_t *
 	#pragma HLS STREAM variable=s_tokens_out depth=ratio
 	#pragma HLS STREAM variable=s_abs_out depth=ratio
 	#pragma HLS STREAM variable=s_weights depth=ratio/4
+	#pragma HLS STREAM variable=max_val depth=MODEL_NUM_HEADS
 	
 	#pragma HLS BIND_STORAGE variable=s_tokens type=fifo impl=bram
 	#pragma HLS BIND_STORAGE variable=s_diff type=fifo impl=bram
