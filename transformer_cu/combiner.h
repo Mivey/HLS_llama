@@ -74,7 +74,7 @@ void gemv_combo(hls::vector<T, N> *out, hls::stream<T> (&gemv_out)[P], const int
 template<typename T, size_t N, int P>
 void gemv_split(hls::vector<T, N> *out, hls::stream<T> (&gemv_out)[P], const int M_DIM){
 	
-	const int offset = MODEL_TOKENS / (N * P);
+	const int offset = INTERNAL_DATA_SIZE / (N * P);
 	typedef hls::vector<T, N> gdata_v_t;
 	const int c_idx = M_DIM / (P * N);
 	for (int i = 0; i < c_idx; i++) {
@@ -93,6 +93,7 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<T> (&gemv_out)[P], const int
 /*====================================================================================================================================*/
 
 constexpr int REG_SIZE = 64;
+constexpr int ARR_PART = 2;
 
 struct ProbIndex{
   short index;
@@ -180,9 +181,9 @@ void ss_final(ProbIndex *reg, int* pick, const float temperature, const float co
 }
 
 template<typename T, size_t N, int P>
-void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], const int M_DIM, const int BOOP){
+void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], const int M_DIM, const bool BOOP){
 	
-	const int offset = MODEL_TOKENS / (N * P);
+	const int offset = INTERNAL_DATA_SIZE / (N * P);
 	typedef hls::vector<T, N> gdata_v_t;
 	const int c_idx = M_DIM / (P * N);
 	for (int i = 0; i < c_idx; i++) {
@@ -205,7 +206,10 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::s
 
 				sys_sort.write(ss_val);
 			}
-			out[idx] = data;
+			if (BOOP) {
+				out[idx] = data;
+			}
+			// out[idx] = data;
 		}
 	}
 
