@@ -236,7 +236,7 @@ int top_tb(){
 	const int rms_w_size = MODEL_ELEMENTS * 4 * layer_cnt;
 	const int tokens_size = MODEL_ELEMENTS * 4;
 	const int tok_w1_size = MODEL_HIDDEN_DIM * 4;
-	const int logits_size = MODEL_TOKENS * sizeof(float);//* MODEL_TOKENS * 4;//
+	const int logits_size = INTERNAL_DATA_SIZE * sizeof(float);//* MODEL_TOKENS * 4;//
 	const int logits_quant_size = MODEL_ELEMENTS * MODEL_TOKENS * 1;
 	const int logits_sf_size = MODEL_ELEMENTS * MODEL_TOKENS / MODEL_SCALING_FACTOR * 4;
 	// const int sf_el = MODEL_ELEMENTS / 64;
@@ -278,7 +278,7 @@ int top_tb(){
 	std::vector<fdata_v_t> swiglu_arr(hd_tok_cnt * 2);
 	std::vector<adata_v_t> mha_tokens_arr((tokens_size / (sizeof(adata_v_t))));
 	std::vector<fdata_v_t> output_arr(logits_cnt);
-	std::vector<fdata_v_t> input_arr(logits_cnt);
+	// std::vector<fdata_v_t> input_arr(logits_cnt);
 	std::vector<fdata_v_t> golden_output_arr(logits_cnt);
 	// std::vector<mfdata_v_t> val_in_rope_arr(tokens_cnt);
 	// std::vector<mfdata_v_t> key_in_rope_arr(tokens_cnt);
@@ -432,7 +432,7 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	/* ============================ write inputs to the streams ====================== */
 		
 
-	int curr_pos = 199;
+	int curr_pos = 150;
 	float random_u32 = 0.999;
 	float temperature = 0.009;
 	int pick;
