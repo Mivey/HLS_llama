@@ -2,7 +2,7 @@
 #ifndef MARK_FORWARD
 #define MARK_FORWARD
 
-#define __DEBUG__
+// #define __DEBUG__
 
 #include <cstddef>
 #include <cstdint>
@@ -198,7 +198,7 @@ void mha_input_data(hls::stream<hls::vector<T, M>> &out, hls::vector<T, N> *in, 
 	
 	const size_t COUNT = MODEL_ELEMENTS / N;
 	const size_t factor = offset / MODEL_HEAD_SIZE - MODEL_NUM_HEADS;
-	const size_t m_offset = (size_t) ((INTERNAL_DATA_SIZE / (2 * MODEL_HEAD_SIZE)) + factor - (MODEL_NUM_HEADS * 3 / 2)) * MODEL_HEAD_SIZE;
+	const size_t m_offset = (size_t) ((INTERNAL_DATA_SIZE / (2 * MODEL_HEAD_SIZE)) + factor - (MODEL_NUM_HEADS * 1 / 2)) * MODEL_HEAD_SIZE;
 	int tot_off;
 	if ((BOUNDRY == 1) && (factor >= (MODEL_NUM_HEADS / 2))) {
 		tot_off =(m_offset / N);
@@ -317,7 +317,8 @@ void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int c
 	mm2mm_writer:
 	for (int i = 0; i < vCount; i++) {
 		#pragma HLS PIPELINE II=1
-		mm_out[i] = mm_in[i];
+		hls::vector<T, N> tmp = mm_in[i];
+		mm_out[i] = tmp; //mm_in[i];
 	}
 }
 
@@ -470,8 +471,8 @@ void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>>
 
 void transformer_cu(	//s_fdata_v_t (&tok_sf)[mm_thr] , s_idata_v_t (&tok_q)[mm_thr],
 								fdata_v_t *tokens, //fdata_v_t *bokens, 
-								fdata_v_t *w_sf_0, idata_v_t *w_0, 
-								fdata_v_t *w_sf_1, idata_v_t *w_1, 
+								mfdata_v_t *w_sf_0, idata_v_t *w_0, 
+								mfdata_v_t *w_sf_1, idata_v_t *w_1, 
 								fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
 								const int POS, //const int N_DIM, const int M_DIM, 
 								const int QKV_W, const int QKV_sf_W,

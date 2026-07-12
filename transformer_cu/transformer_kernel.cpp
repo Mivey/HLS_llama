@@ -72,7 +72,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
 						r.M_DIM = MODEL_ELEMENTS * 3; // QKV
-						r.w_sf = tt.QKV_sf_W / sizeof(fdata_v_t);
+						r.w_sf = tt.QKV_sf_W / sizeof(mfdata_v_t);
 						r.w = tt.QKV_W / sizeof(idata_v_t);
 						r.INIT = 0;
 						break;
@@ -82,7 +82,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
 						r.M_DIM = MODEL_ELEMENTS; // Out
-						r.w_sf = tt.Out_sf_W / sizeof(fdata_v_t);
+						r.w_sf = tt.Out_sf_W / sizeof(mfdata_v_t);
 						r.w = tt.Out_W / sizeof(idata_v_t);
 						break;
 						
@@ -91,7 +91,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
 						r.M_DIM = MODEL_HIDDEN_DIM * 2; // gate & up
-						r.w_sf = tt.FF_w1w3_sf_W / sizeof(fdata_v_t);
+						r.w_sf = tt.FF_w1w3_sf_W / sizeof(mfdata_v_t);
 						r.w = tt.FF_w1w3_W / sizeof(idata_v_t);
 						break;
 						
@@ -101,14 +101,14 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						//current GeMV dimensions:
 						r.N_DIM = MODEL_HIDDEN_DIM; // 2048 tokens
 						r.M_DIM = MODEL_ELEMENTS; // down
-						r.w_sf = tt.FF_w2_sf_W / sizeof(fdata_v_t);
+						r.w_sf = tt.FF_w2_sf_W / sizeof(mfdata_v_t);
 						r.w = tt.FF_w2_W / sizeof(idata_v_t);
 						break;
 						
 	case 4 :	rmsnorm_kernel(s_tokens, diff, weights, res_con, 0, 0, tt.rms_final_W/ sizeof(fdata_v_t)); 
 						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
 						r.M_DIM = MODEL_TOKENS; // embeddings out
-						r.w_sf = tt.Embed_sf_W / sizeof(fdata_v_t);
+						r.w_sf = tt.Embed_sf_W / sizeof(mfdata_v_t);
 						r.w = tt.Embed_W / sizeof(idata_v_t);
 						r.AXI_SEL = 1;
 						// r.stop = 1;
@@ -117,7 +117,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 	}
 }
 
-void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1, 
+void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1, 
 								idata_v_t *w_0, idata_v_t *w_1, s_fdata_v_t &s_cu_sel_in, ProbIndex *ss_reg,
 								const int rn, const int rm, const int sf_reg, const int w_reg, const int layer,
 								const bool FINAL_FLAG){
@@ -151,8 +151,8 @@ void df_region(	fdata_v_t *out, fdata_v_t *w_sf_0, fdata_v_t *w_sf_1,
 
 void transformer_cu(
 				fdata_v_t *tokens,
-				fdata_v_t *w_sf_0, idata_v_t *w_0, 
-				fdata_v_t *w_sf_1, idata_v_t *w_1, 
+				mfdata_v_t *w_sf_0, idata_v_t *w_0, 
+				mfdata_v_t *w_sf_1, idata_v_t *w_1, 
 				fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
 				const int POS,
 				const int QKV_W, const int QKV_sf_W,
@@ -176,16 +176,16 @@ void transformer_cu(
 	constexpr int CACHE_DEPTH = MODEL_ELEMENTS * MODEL_SEQUENCE_LEN * MODEL_NUM_LAYERS / MAX_FL_ELEM;
 	constexpr int TOK_DEPTH = MODEL_ELEMENTS / MAX_FL_ELEM;
 	constexpr int HD_QUANT_DEPTH = q_size / MAX_QUANT_ELEM;//MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 2 / MAX_QUANT_ELEM;
-	constexpr int HD_SF_DEPTH = sf_size / SM_FL_ELEM; //MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 2 / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+	constexpr int HD_SF_DEPTH = sf_size / MAX_FL_ELEM; //MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 2 / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
 	constexpr int TOK_OUT_DEPTH = INTERNAL_DATA_SIZE / SM_FL_ELEM;
 	constexpr int MHA_DEPTH = MODEL_ELEMENTS / MID_FL_ELEM * 3;
 	
 
 	#pragma HLS INTERFACE mode=m_axi port=tokens 				bundle=w_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
-	#pragma HLS INTERFACE mode=m_axi port=w_sf_0 				bundle=D_TOK_W_SF_0 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/SM_DW * 8)	
-	#pragma HLS INTERFACE mode=m_axi port=w_0 					bundle=D_W_GEMM_0 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 	//	num_read_outstanding=32 
-	#pragma HLS INTERFACE mode=m_axi port=w_sf_1 				bundle=D_TOK_W_SF_1 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/SM_DW * 8)	
-	#pragma HLS INTERFACE mode=m_axi port=w_1 					bundle=D_W_GEMM_1 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 	//	num_read_outstanding=32 
+	#pragma HLS INTERFACE mode=m_axi port=w_sf_0 				bundle=D_TOK_W_SF_0 		depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/MAX_DW * 8)		num_read_outstanding=16
+	#pragma HLS INTERFACE mode=m_axi port=w_0 					bundle=D_W_GEMM_0 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 		num_read_outstanding=64 
+	#pragma HLS INTERFACE mode=m_axi port=w_sf_1 				bundle=D_TOK_W_SF_1		 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/MAX_DW * 8)		num_read_outstanding=16
+	#pragma HLS INTERFACE mode=m_axi port=w_1 					bundle=D_W_GEMM_1 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 		num_read_outstanding=64 
 	#pragma HLS INTERFACE mode=m_axi port=weights				bundle=w_n_t_gemm 		depth=RMS_DEPTH				offset=slave max_read_burst_length=(4096/SM_DW * 8)
 	#pragma HLS INTERFACE mode=m_axi port=value_cache		bundle=vc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(4096/MAX_DW * 8)
 	#pragma HLS INTERFACE mode=m_axi port=key_cache			bundle=kc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(4096/MAX_DW * 8)

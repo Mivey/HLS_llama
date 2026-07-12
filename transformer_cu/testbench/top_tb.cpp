@@ -135,7 +135,7 @@ int top_tb(){
 	size_t sf_size = (q_size * sizeof(my_float_t) / (sizeof(int8_t) * MODEL_SCALING_FACTOR));
 	
 	std::vector<idata_v_t> quant_w_arr(q_size / sizeof(idata_v_t));
-	std::vector<fdata_v_t> sf_w_arr(sf_size / sizeof(fdata_v_t));
+	std::vector<mfdata_v_t> sf_w_arr(sf_size / sizeof(mfdata_v_t));
 	std::vector<fdata_v_t> rms_w_arr(rms_size / sizeof(fdata_v_t));
 	
 	char * q_ptr = reinterpret_cast<char*>(quant_w_arr.data());
