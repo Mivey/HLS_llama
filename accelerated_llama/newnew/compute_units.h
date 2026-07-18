@@ -290,10 +290,14 @@ RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORW
 			size_t rms_size = (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)) * sizeof(float);
 			size_t sf_size = (q_size * sizeof(float) / (sizeof(int8_t) * MODEL_SCALING_FACTOR));
 			
-			parent_rms_bo = xrt::bo(device, q_size, 0);
-			parent_w_bo = xrt::bo(device, rms_size, 0);
+			parent_rms_bo = xrt::bo(device, rms_size, 0);
+			parent_w_bo = xrt::bo(device, q_size, 0);
 			parent_sf_bo = xrt::bo(device, sf_size, 0);
-			
+			/*
+				Should I have parent_w_0_bo and parent_w_1_bo instead? 
+				then I'd do the same for the sf_bo?
+				If i were to split them into two, based on what I do here in the code, do I need to worry about violating any kind of 4k boundry?
+			*/
 			
 			char* q_ptr = parent_w_bo.map<char*>();
 			char* sf_ptr = parent_sf_bo.map<char*>();
