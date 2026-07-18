@@ -136,7 +136,7 @@ class ForwardBlock{
 			try {
 				device = xrt::device(device_id);
 				std::cout << "device name:     " << device.get_info<xrt::info::device::name>() << "\n";
-     		std::cout << "device bdf:      " << device.get_info<xrt::info::device::bdf>() << "\n";
+     			std::cout << "device bdf:      " << device.get_info<xrt::info::device::bdf>() << "\n";
 				uuid = device.load_xclbin(binaryFile);
 				// kernel = xrt::kernel(device, uuid, "transformer_cu");
 				transformer_ip = xrt::ip(device, uuid, "transformer_cu");

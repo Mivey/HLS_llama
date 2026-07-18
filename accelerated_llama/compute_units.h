@@ -327,18 +327,33 @@ RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORW
 		void run_init(){
 
 			/*
-			void transformer_cu(	
-				fdata_v_t *tokens,
-				fdata_v_t *w_sf_0, idata_v_t *w_0, 
-				fdata_v_t *w_sf_1, idata_v_t *w_1, 
-				fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
-				const int POS, const int N_DIM, const int M_DIM, 
-				const int QKV_W, const int QKV_sf_W,
-				const int Out_W, const int Out_sf_W,
-				const int FF_w1w3_W, const int FF_w1w3_sf_W,
-				const int FF_w2_W, const int FF_w2_sf_W, 
-				const int Embed_W, const int Embed_sf_W, 
-				const int rms_att_W, const int rms_ffn_W, const int rms_final_W
+				void transformer_cu(	
+								fdata_v_t *tokens, 
+								mfdata_v_t *w_sf_0, 
+								idata_v_t *w_0, 
+								mfdata_v_t *w_sf_1, 
+								idata_v_t *w_1, 
+								fdata_v_t *weights, 
+								mfdata_v_t *key_cache, 
+								mfdata_v_t *value_cache, 
+								const int POS,
+								const int QKV_W, 
+								const int QKV_sf_W,
+								const int Out_W, 
+								const int Out_sf_W,
+								const int FF_w1w3_W, 
+								const int FF_w1w3_sf_W,
+								const int FF_w2_W, 
+								const int FF_w2_sf_W, 
+								const int Embed_W, 
+								const int Embed_sf_W, 
+								const int rms_att_W, 
+								const int rms_ffn_W, 
+								const int rms_final_W,
+								const float temperature, 
+								const float coin, 
+								int* pick
+				);
 				*/
 			
 			transformer_run = xrt::run(kernel);
@@ -369,3 +384,5 @@ RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORW
 		}
 
 };
+
+

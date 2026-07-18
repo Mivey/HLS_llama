@@ -6,7 +6,7 @@
 #include <memory>
 // #include "forward.h"
 #include "hls_task.h"
-#include "mha.h"
+#include "mha.h" // for vec_down converter
 #include "mha_forward.h"
 
 constexpr size_t TOK_QUANT_MAX =  (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM);
