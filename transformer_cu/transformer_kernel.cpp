@@ -123,9 +123,9 @@ void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1,
 								const bool FINAL_FLAG){
 	
 	#pragma HLS DATAFLOW
-	hls::stream<my_float_t> s_tok_sf, s_out[mm_thr];
-	s_fdata_v_t tok_sf[mm_thr];
-	s_idata_v_t s_tok_q, tok_q[mm_thr];
+	hls::stream<my_float_t> s_tok_sf, s_out;
+	s_fdata_v_t tok_sf;
+	s_idata_v_t s_tok_q, tok_q;
 	hls::stream<ProbIndex> sys_sort;
 	
 		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
@@ -138,10 +138,13 @@ void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1,
 	inf_split_tee(tok_sf, s_tok_sf, (rn / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
 	inf_split_tee(tok_q, s_tok_q, (rn / MAX_QUANT_ELEM));
 
-	GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
-	GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
+	// This may be way overkill. I think I only need one.
 	// GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
 	// GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
+
+
+	GeMV_kernel(s_out, s_tok_sf, s_tok_q, w_sf_0, w_0, rn, rm, layer * 2 + 0, 0, sf_reg, w_reg);
+	// modified the 7th element, and removed the splitting logic.
 
 	// gemv_combo(out, s_out, rm);
 	// gemv_split(out, s_out, rm);

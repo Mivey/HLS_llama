@@ -8,7 +8,7 @@
 #include "hls_task.h"
 
 constexpr size_t TOK_QUANT_MAX =  (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM);
-constexpr size_t TOK_SF_MAX = (MODEL_HIDDEN_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM));
+constexpr size_t TOK_SF_MAX = (MODEL_HIDDEN_DIM / (MODEL_SCALING_FACTOR));
 constexpr int UF = 1;
 
 // void quantizer_kernel(s_fdata_v_t &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM){
@@ -169,7 +169,7 @@ void quant_out( hls::stream<my_float_t> &tok_sf_out, s_idata_v_t &tok_out, s_fda
 	tok_sf_out.write(dscale);
 }
 
-void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM){
+void quantizer_kernel(hls::stream<my_float_t> &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM){
 	
 	const size_t SF_COUNT = N_DIM / MODEL_SCALING_FACTOR;
 	const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
@@ -191,9 +191,9 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
 
 
 void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t &w_sf, \
-											s_idata_v_t &tok, s_fdata_v_t &tok_sf, const int N_DIM, const int M_DIM){
+											s_idata_v_t &tok, hls::stream<my_float_t> &tok_sf, const int N_DIM, const int M_DIM){
 
-	const int sfCount = N_DIM / (SM_FL_ELEM * MODEL_SCALING_FACTOR);
+	const int sfCount = N_DIM / (MODEL_SCALING_FACTOR);
 	const int TOK_ARR_SIZE = N_DIM / MAX_QUANT_ELEM;
 	const int SUM_FACTOR = MODEL_SCALING_FACTOR / MAX_QUANT_ELEM;
 	// const int SF_2_Q_RATIO = MODEL_SCALING_FACTOR / MAX_QUANT_ELEM;
@@ -201,7 +201,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 	//for now, assume idvt is 512 and only 512. 256 and 128 would require amm_calc to have 
 	// another factor that handles 
 	
-	fdata_v_t arr_sf[TOK_SF_MAX];
+	my_float_t arr_sf[TOK_SF_MAX];
 	idata_v_t arr[TOK_QUANT_MAX];
   #pragma HLS BIND_STORAGE variable=arr_sf type=ram_2p impl=bram
   // #pragma HLS BIND_STORAGE variable=arr impl=srl
@@ -211,9 +211,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 		#pragma HLS PIPELINE II=1
   	#pragma HLS LOOP_TRIPCOUNT max = TOK_SF_MAX min=MODEL_ELEMENTS/(MODEL_SCALING_FACTOR * SM_FL_ELEM )  
 		arr_sf[i] = tok_sf.read();
-		for (size_t j = 0; j < ( SM_FL_ELEM); j++) {
-			arr[i * (SM_FL_ELEM) + j] = tok.read();
-		}
+		arr[i] = tok.read();
 	}
 	
 	amm_calc:
@@ -224,7 +222,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 		for (size_t j = 0 ; j < sfCount; j++) {
   	#pragma HLS LOOP_TRIPCOUNT max = TOK_SF_MAX min=MODEL_ELEMENTS/(MODEL_SCALING_FACTOR * SM_FL_ELEM )  
 			//read the next set of scaling factors
-			fdata_v_t vec_tok_sf = arr_sf[j];
+			// fdata_v_t vec_tok_sf = arr_sf[j];
 			fdata_v_t vec_w_sf = w_sf.read();
 			// my_float_t tmp_sum = 0.0f;
 			amm_k_calc:
@@ -232,7 +230,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 				//do our calculations
 				#pragma HLS PIPELINE II=1
 				
-				my_float_t cur_tok_sf = vec_tok_sf[k];
+				my_float_t cur_tok_sf = arr_sf[j * SM_FL_ELEM + k];
 				my_float_t cur_w_sf = vec_w_sf[k];
 				
 				//read the next set of weights
@@ -310,7 +308,7 @@ void GeMV_kernel(fdata_v_t *out, fdata_v_t *fl_tok, fdata_v_t *w_sf, idata_v_t *
 	hls::stream<my_float_t> wtok;
 	hls::stream<my_float_t> wtok_sf;
 	hls::stream<my_float_t> out_thread[mm_thr];
-	s_fdata_v_t d_tok_sf[mm_thr];
+	hls::stream<my_float_t> d_tok_sf[mm_thr];
 	s_idata_v_t d_tok[mm_thr];
 	s_fdata_v_t d_wsf[mm_thr];
 	s_idata_v_t d_w[mm_thr];
