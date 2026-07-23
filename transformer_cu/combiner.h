@@ -140,7 +140,7 @@ void systolic_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_D
   
   // finished sort. reg now should have largest REG_SIZE (64) values, with max_val @ reg[REG_SIZE-1]
 /* ================================================= separate function ===============================*/
-void ss_final(ProbIndex *reg, int* pick, const float temperature, const float coin){
+void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const float coin){
   const my_float_t INV_TEMP = 1/temperature;
   my_float_t max_val = reg[(REG_SIZE - 1)].prob;
   my_float_t final_soft_sum = 0.0f;
@@ -163,8 +163,9 @@ void ss_final(ProbIndex *reg, int* pick, const float temperature, const float co
   
   my_float_t coin_sum = 0.0f;
 	bool found = false;
+	fdata_v_t tpick;
 
-	*pick = reg[REG_SIZE - 1].index;
+	tpick[0] = reg[REG_SIZE - 1].index;
   
   coin_flip:
   for (int i = (REG_SIZE - 1); i >= 0; i--) {
@@ -173,10 +174,11 @@ void ss_final(ProbIndex *reg, int* pick, const float temperature, const float co
     coin_sum += reg[i].prob;
 		
     if (coin_sum > coin && !found) {
-			*pick = reg[i].index;
+			tpick[0] = reg[i].index;
       found = true;
     }
   }
+	pick[0] = tpick;
   return;
 }
 
