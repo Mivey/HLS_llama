@@ -7,7 +7,7 @@ void rms_mm2s_data(s_fdata_v_t &out, fdata_v_t *in, const int cnt){
 	mm2s_input_data(out, in, cnt/2, 0, (INTERNAL_DATA_SIZE / (SM_FL_ELEM * 2)));
 }
 
-void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_ELEM], s_fdata_v_t &w, const int INIT){
+void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t *x, s_fdata_v_t &w, const bool INIT){
   
   fdata_v_t arr[MODEL_ELEMENTS/SM_FL_ELEM];
 	const int acc_lag = 16;
@@ -17,8 +17,9 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_EL
   for (int i = 0; i < (MODEL_ELEMENTS / SM_FL_ELEM); i++) {
     #pragma HLS PIPELINE
 
-		if (INIT == 1) { 	x[i] = d.read();	}
-		else { 						x[i] += d.read(); }
+		// if (INIT) { 	x[i] = d.read();	}
+		// else { 				x[i] += d.read(); }
+		x[i] += d.read();
 		
     fdata_v_t tss = x[i] * x[i];
 		ss[i % acc_lag] += tss.reduce_add();
@@ -44,7 +45,7 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t x[MODEL_ELEMENTS/SM_FL_EL
 }
 
 
-void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t *diff, fdata_v_t *weights, fdata_v_t *res_con, const int CURR_LAYER, const int INIT, const int offset){
+void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t *diff, fdata_v_t *weights, fdata_v_t *res_con, const int CURR_LAYER, const bool INIT, const int offset){
 
 	#pragma HLS DATAFLOW
 	s_fdata_v_t s_weights, s_tokens, s_diff;
