@@ -2,7 +2,7 @@
 #ifndef MARK_FORWARD
 #define MARK_FORWARD
 
-// #define __DEBUG__
+#define __DEBUG__
 
 #include <cstddef>
 #include <cstdint>

@@ -26,7 +26,10 @@ struct keys {
 	int next_state = 0;
 	int w_sf;
 	int w;
-	int INIT;
+	bool INIT;
+	#ifdef __DEBUG__
+	int SAVE_ADDR;
+	#endif
 	// int stop;
 } ;
 
@@ -52,7 +55,7 @@ struct axi_reg{
 
 void cu_selecter(	s_fdata_v_t &s_tokens,
 									fdata_v_t *weights, fdata_v_t *diff, //adata_v_t *mha_tokens, fdata_v_t *w1w3,
-									adata_v_t *key_cache, adata_v_t *value_cache, 
+									adata_v_t *key_cache, adata_v_t *value_cache, fdata_v_t *res_con,
 									keys &r, axi_reg &tt){ //todo: remove POS, it's apart of the axi_reg keyring
 	// add back init
 	// remove case 5
@@ -62,7 +65,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 	r.CURR_LAYER = r.next_layer;
 	r.FINAL_FLAG = 1;
 	
-	static fdata_v_t res_con[MODEL_ELEMENTS];
+	// static fdata_v_t res_con[MODEL_ELEMENTS];
 	#pragma HLS BIND_STORAGE variable=res_con type=ram_t2p impl=bram
 	#pragma HLS ARRAY_PARTITION variable=res_con dim=1 type=cyclic factor=2
 	// r.INIT =  ((r.next_state == 0) && (r.CURR_LAYER == 0)) ? 1 : 0;
@@ -75,6 +78,9 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 						r.w_sf = tt.QKV_sf_W / sizeof(mfdata_v_t);
 						r.w = tt.QKV_W / sizeof(idata_v_t);
 						r.INIT = 0;
+						#ifdef __DEBUG__
+						r.SAVE_ADDR += r.SAVE_ADDR + MODEL_ELEMENTS/SM_FL_ELEM;
+						#endif
 						break;
 						
 	case 1 :	mha_kernel(s_tokens, diff, key_cache, value_cache, tt.POS, r.CURR_LAYER); 
@@ -118,9 +124,14 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 }
 
 void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1, 
-								idata_v_t *w_0, idata_v_t *w_1, s_fdata_v_t &s_cu_sel_in, ProbIndex *ss_reg,
-								const int rn, const int rm, const int sf_reg, const int w_reg, const int layer,
-								const bool FINAL_FLAG){
+								idata_v_t *w_0, idata_v_t *w_1, s_fdata_v_t &s_cu_sel_in, ProbIndex *ss_reg, 
+								const keys r
+								// const int rn, const int rm, const int sf_reg, const int w_reg, const int layer,
+								// const bool FINAL_FLAG
+								#ifdef __DEBUG__
+								, fdata_v_t *data_out//, const int SA
+								#endif
+								){
 	
 	#pragma HLS DATAFLOW
 	hls::stream<my_float_t> s_tok_sf, s_out[mm_thr];
@@ -132,17 +143,22 @@ void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1,
 		#pragma HLS STREAM variable=tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=s_tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
 		#pragma HLS STREAM variable=tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
+		
+	#ifndef __DEBUG__
+	quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, r.N_DIM);
+	#endif
+	#ifdef __DEBUG__
+		quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, r.N_DIM, data_out, r.SAVE_ADDR);
+	#endif
 
-	quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, rn);
+	inf_split_tee(tok_sf, s_tok_sf, (r.N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
+	inf_split_tee(tok_q, s_tok_q, (r.N_DIM / MAX_QUANT_ELEM));
 
-	inf_split_tee(tok_sf, s_tok_sf, (rn / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
-	inf_split_tee(tok_q, s_tok_q, (rn / MAX_QUANT_ELEM));
-
-	GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, rn, rm/2, layer * 2 + 0, 0, sf_reg, w_reg);
-	GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, rn, rm/2, layer * 2 + 1, rm/2, sf_reg, w_reg);
+	GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, r.N_DIM, r.M_DIM/2, r.CURR_LAYER * 2 + 0, 0, r.w_sf, r.w);
+	GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, r.N_DIM, r.M_DIM/2, r.CURR_LAYER * 2 + 1, r.M_DIM/2, r.w_sf, r.w);
 	
-	gemv_split(out, sys_sort, s_out, rm, FINAL_FLAG);
-	systolic_sort(sys_sort, ss_reg, rm);
+	gemv_split(out, sys_sort, s_out, r.M_DIM, r.FINAL_FLAG);
+	systolic_sort(sys_sort, ss_reg, r.M_DIM);
 }
 
 void transformer_cu(
@@ -158,7 +174,7 @@ void transformer_cu(
 				const int Embed_W, const int Embed_sf_W, 
 				const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
 			#ifdef __DEBUG__
-				const int faker ,const int INIT, const int CURR_LAYER, const int NEXT_STATE,
+				const int faker ,const int INIT, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
 			#endif
 				const float temperature, const float coin//, int* pick
 			){
@@ -175,9 +191,13 @@ void transformer_cu(
 	constexpr int HD_SF_DEPTH = sf_size / MAX_FL_ELEM; 
 	constexpr int TOK_OUT_DEPTH = INTERNAL_DATA_SIZE / SM_FL_ELEM;
 	constexpr int MHA_DEPTH = MODEL_ELEMENTS / MID_FL_ELEM * 3;
+	constexpr int RECORD_DEPTH = ((MODEL_ELEMENTS * 3  + MODEL_HIDDEN_DIM) * 12 + MODEL_ELEMENTS) * 64 / SM_FL_ELEM;
 	
 
 	#pragma HLS INTERFACE mode=m_axi port=tokens 				bundle=w_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
+	#ifdef __DEBUG__
+		#pragma HLS INTERFACE mode=m_axi port=data_out 				bundle=w_n_t_gemm 		depth=RECORD_DEPTH 	offset=slave max_write_burst_length=16
+	#endif
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_0 				bundle=D_TOK_W_SF_0 		depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/MAX_DW * 8)		num_read_outstanding=16
 	#pragma HLS INTERFACE mode=m_axi port=w_0 					bundle=D_W_GEMM_0 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 		num_read_outstanding=64 
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_1 				bundle=D_TOK_W_SF_1		 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/MAX_DW * 8)		num_read_outstanding=16
@@ -220,11 +240,13 @@ void transformer_cu(
 			#pragma HLS INTERFACE mode=s_axilite port=INIT 							bundle=control
 			#pragma HLS INTERFACE mode=s_axilite port=CURR_LAYER 				bundle=control
 			#pragma HLS INTERFACE mode=s_axilite port=NEXT_STATE 				bundle=control
+			#pragma HLS INTERFACE mode=s_axilite port=data_out 				bundle=control
 	#endif
 	#pragma HLS INTERFACE mode=s_axilite port=temperature			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=coin		bundle=control
 	
 	fdata_v_t internal_token[INTERNAL_DATA_SIZE/SM_FL_ELEM];
+	fdata_v_t res_con[MODEL_ELEMENTS / SM_FL_ELEM]{};
 	ProbIndex ss_reg[REG_SIZE];
 	
 	#pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
@@ -262,6 +284,7 @@ void transformer_cu(
 	#ifdef __DEBUG__
 		runner.next_layer = CURR_LAYER;
 		runner.next_state = NEXT_STATE;
+		runner.SAVE_ADDR = 0;
 	#endif
 	
 	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, INTERNAL_DATA_SIZE);
@@ -272,8 +295,15 @@ void transformer_cu(
 		s_fdata_v_t s_cu_sel_out;
 		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		
-		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, runner, tt);
-		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, ss_reg, runner.N_DIM, runner.M_DIM, runner.w_sf, runner.w, runner.CURR_LAYER, runner.FINAL_FLAG);
+		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, res_con, runner, tt);
+		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, ss_reg, runner
+								#ifdef __DEBUG__
+								, data_out
+								#endif
+		);
+		#ifdef __DEBUG__
+		runner.SAVE_ADDR += runner.N_DIM/SM_FL_ELEM;
+		#endif
 	}
 	#ifdef __DEBUG__
 		mm2mm_store(tokens, internal_token, INTERNAL_DATA_SIZE);
