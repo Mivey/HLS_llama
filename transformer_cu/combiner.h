@@ -112,12 +112,13 @@ void systolic_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_D
 	
 	for (int ii = 0; ii < REG_SIZE; ii++) {
 		#pragma HLS PIPELINE II=1
-		st[ii] = {-1, std::numeric_limits<float>::lowest()};
-		reg[ii] = {-1, std::numeric_limits<float>::lowest()};
+		st[ii] = {-1, std::numeric_limits<my_float_t>::lowest()};
+		reg[ii] = {-1, std::numeric_limits<my_float_t>::lowest()};
 	}
 	
   systolic_sort:
   for (int i = 0; i < (M_DIM + REG_SIZE); i++) {
+		#pragma HLS LOOP_TRIPCOUNT max=(MODEL_TOKENS + REG_SIZE)
 		#pragma HLS pipeline II=3
 		ProbIndex tmp_pi = ss_val.read();
       for (int k = 0; k < (REG_SIZE - 1); k++) { 
@@ -138,12 +139,62 @@ void systolic_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_D
   }
 }
   
+void insertion_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_DIM){
+  // #pragma HLS INLINE
+  // ProbIndex init = {0, std::numeric_limits<float>::lowest()};
+  ProbIndex st[REG_SIZE]; // systolic temp array
+  // ProbIndex reg[REG_SIZE]; // stored 64 values
+	
+	#pragma HLS ARRAY_PARTITION variable=st complete dim=1
+  //  // up a level
+	init_loop:
+	for (int ii = 0; ii < REG_SIZE; ii++) {
+		#pragma HLS UNROLL
+		st[ii] = {-1, std::numeric_limits<my_float_t>::lowest()};
+		// reg[ii] = {-1, std::numeric_limits<my_float_t>::lowest()};
+	}
+	
+  systolic_sort:
+  for (int i = 0; i < (M_DIM + REG_SIZE); i++) {
+		#pragma HLS pipeline II=3
+		ProbIndex tmp_pi = ss_val.read();
+		ProbIndex current = tmp_pi;
+		
+		for (int k = 0; k < REG_SIZE; k++) {
+			#pragma HLS UNROLL
+			if (current.prob > st[k].prob) {
+				ProbIndex swap = st[k];
+				st[k] = current;
+				current = swap;
+			}
+		}
+  }
+	
+	copy_out:
+	for (int i = 0; i < REG_SIZE; i++) {
+		#pragma HLS UNROLL
+		reg[i] = st[i];
+	}
+}
+  
   // finished sort. reg now should have largest REG_SIZE (64) values, with max_val @ reg[REG_SIZE-1]
 /* ================================================= separate function ===============================*/
-void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const float coin){
-  const my_float_t INV_TEMP = 1/temperature;
+void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const float topp, const float coin){
+  
+	const my_float_t INV_TEMP = (temperature == 0) ? 1.0f : 1/temperature; 
+	fdata_v_t tpick;
+	
+	if (temperature < 0.0f) {
+		// if greedy selection or w/e, bypass it all and just return the biggest value.
+		tpick[0] = (my_float_t) reg[REG_SIZE - 1].index;
+		pick[0] = tpick;
+		return;
+	}
+	
   my_float_t max_val = reg[(REG_SIZE - 1)].prob;
   my_float_t final_soft_sum = 0.0f;
+	my_float_t sm_reg[REG_SIZE];
+	#pragma HLS ARRAY_PARTITION variable=sm_reg dim=1 type=complete
 
   softmax_exp_loop:
 	for (int i = 0; i < REG_SIZE; i++) {
@@ -151,33 +202,25 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
     my_float_t curr_val = reg[i].prob;
 		my_float_t calc = hls::expf((curr_val - max_val) * INV_TEMP);
 		final_soft_sum += calc;
-		reg[i].prob = calc;
+		sm_reg[i] = calc;
 	}
 	my_float_t inv_soft_sum = 1.0f/final_soft_sum;
+	int sel_val = reg[REG_SIZE -1].index;
+	my_float_t accum_top{};
+	const my_float_t target_val = (topp < coin) ? topp : coin;
+	// if temperature is zero, then it's gready. If not, then temp 
 
 	softmax_normalize_loop:
-	for (int i = 0; i < REG_SIZE; i++) {
+	for (int i = (REG_SIZE - 1); i >= 0; i--) {
     #pragma HLS PIPELINE
-    reg[i].prob *= inv_soft_sum;
+		accum_top += sm_reg[i] * inv_soft_sum;
+    // reg[i].prob *= inv_soft_sum;
+		if (accum_top > target_val) {
+			sel_val = reg[i].index;
+			break;
+		}
 	}  
-  
-  my_float_t coin_sum = 0.0f;
-	bool found = false;
-	fdata_v_t tpick;
-
-	tpick[0] = reg[REG_SIZE - 1].index;
-  
-  coin_flip:
-  for (int i = (REG_SIZE - 1); i >= 0; i--) {
-		#pragma HLS PIPELINE
-		
-    coin_sum += reg[i].prob;
-		
-    if (coin_sum > coin && !found) {
-			tpick[0] = reg[i].index;
-      found = true;
-    }
-  }
+  tpick[0] = (my_float_t) sel_val;
 	pick[0] = tpick;
   return;
 }
