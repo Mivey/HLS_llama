@@ -153,10 +153,12 @@ void vec_down_converter(hls::stream<hls::vector<my_float_t, N>> &out, hls::strea
 	
 	mha_WAR_store: // convert N_t to M_t (ie fdata_v_t to mfdata_v_t)
 	for (int i = 0;  i < N_cnt / ratio; i++) {
+		#pragma HLS LOOP_TRIPCOUNT min=(MODEL_ELEMENTS * MODEL_ELEMENTS / (2 * MODEL_SCALING_FACTOR * SM_FL_ELEM) / ratio) max=(MODEL_TOKENS * MODEL_ELEMENTS / (2 * MODEL_SCALING_FACTOR * SM_FL_ELEM))
 		// #pragma hls PIPELINE II=1
 		M_t mtmp = in.read();
 		for (int j = 0; j < ratio; j++) {
 			#pragma HLS PIPELINE II=1
+			#pragma HLS LOOP_TRIPCOUNT max=ratio
 			N_t tmp;
 			for (int k = 0; k < N; k++) {
 				tmp[k] = mtmp[j * N + k];

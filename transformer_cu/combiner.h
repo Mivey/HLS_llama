@@ -156,6 +156,7 @@ void insertion_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_
 	
   systolic_sort:
   for (int i = 0; i < (M_DIM + REG_SIZE); i++) {
+		#pragma HLS LOOP_TRIPCOUNT max=(MODEL_TOKENS + REG_SIZE)
 		#pragma HLS pipeline II=3
 		ProbIndex tmp_pi = ss_val.read();
 		ProbIndex current = tmp_pi;
@@ -232,6 +233,7 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::s
 	typedef hls::vector<T, N> gdata_v_t;
 	const int c_idx = M_DIM / (P * N);
 	for (int i = 0; i < c_idx; i++) {
+		#pragma hls LOOP_TRIPCOUNT min=(MODEL_ELEMENTS / (P * N)) max=(MODEL_TOKENS / (P * N))
 		for (int j = 0; j < P; j++) {
 			// #pragma HLS UNROLL
 			gdata_v_t data;
