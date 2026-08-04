@@ -1,5 +1,6 @@
 #include "mha_forward.h"
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <hls_stream.h>
@@ -192,23 +193,23 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
 		return;
 	}
 	
-  my_float_t max_val = reg[(REG_SIZE - 1)].prob;
-  my_float_t final_soft_sum = 0.0f;
-	my_float_t sm_reg[REG_SIZE];
+  float_t max_val = reg[(REG_SIZE - 1)].prob;
+  float_t final_soft_sum = 0.0f;
+	float_t sm_reg[REG_SIZE];
 	#pragma HLS ARRAY_PARTITION variable=sm_reg dim=1 type=complete
 
   softmax_exp_loop:
 	for (int i = 0; i < REG_SIZE; i++) {
     #pragma HLS PIPELINE
-    my_float_t curr_val = reg[i].prob;
-		my_float_t calc = hls::expf((curr_val - max_val) * INV_TEMP);
+    float_t curr_val = reg[i].prob;
+		float_t calc = hls::expf((curr_val - max_val) * INV_TEMP);
 		final_soft_sum += calc;
 		sm_reg[i] = calc;
 	}
-	my_float_t inv_soft_sum = 1.0f/final_soft_sum;
+	float_t inv_soft_sum = 1.0f/final_soft_sum;
 	int sel_val = reg[REG_SIZE -1].index;
-	my_float_t accum_top{};
-	const my_float_t target_val = (topp < coin) ? topp : coin;
+	float_t accum_top{};
+	const float_t target_val = (topp < coin) ? topp : coin;
 	// if temperature is zero, then it's gready. If not, then temp 
 
 	softmax_normalize_loop:

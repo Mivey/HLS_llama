@@ -4,6 +4,8 @@
 // #include "quantizer.h"
 #include "rope.h"
 #include <algorithm>
+#include <cmath>
+#include <cstddef>
 #include <fenv.h>
 #include <hls_math.h>
 #include <limits>
@@ -95,12 +97,12 @@ NEEDS REWRITE:
 			bf16 to float?
 */
 
-void wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
+void wide_mha_iterate(hls::stream<float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
 	
 	const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
-	const my_float_t score_scalar = 1.0f / sqrtf((float) MODEL_HEAD_SIZE);
+	const float_t score_scalar = 1.0f / sqrtf((float) MODEL_HEAD_SIZE);
 	std::array<mfdata_v_t, (array_size)> query_arr;
-	my_float_t att = 0.0f;
+	float_t att = 0.0f;
 	
 	mfdata_v_t kc_arr[array_size];
 	#pragma HLS ARRAY_PARTITION variable=kc_arr complete
@@ -131,25 +133,26 @@ void wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfda
 				att += tmpa[n] * tmpb[n];
 			}
 		}
-		out.write(att * score_scalar);
+		float_t write_out = att * score_scalar;
+		out.write(write_out);
 		att = 0.0f;
 	}
 }
 
-void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> &att_in, const int POS){
+void wide_mha_softmax(hls::stream<float_t> &att_out, hls::stream<float_t> &att_in, const int POS){
 	
 	const int tPOS = (POS / 4 + 1) * 4;
 	int nPOS = POS;
 	const int LATENCY = 4;//MAX_FL_ELEM * 2;
-	my_float_t att_arr[MODEL_SEQUENCE_LEN] = {std::numeric_limits<float>::lowest()};
-	my_float_t fatt_arr[MODEL_SEQUENCE_LEN] = {0.0f};
+	float_t att_arr[MODEL_SEQUENCE_LEN] = {std::numeric_limits<float>::lowest()};
+	float_t fatt_arr[MODEL_SEQUENCE_LEN]{};
 	#pragma HLS ARRAY_PARTITION variable=att_arr cyclic factor=4
 	#pragma HLS ARRAY_PARTITION variable=fatt_arr cyclic factor=4
-	my_float_t max_val = std::numeric_limits<float>::lowest();
+	float_t max_val = std::numeric_limits<float>::lowest();
 
 	int elements = 0;
 	int in_off = 0;
-	my_float_t tmp_arr[32];
+	float_t tmp_arr[32];
 	#pragma HLS ARRAY_PARTITION variable=tmp_arr complete
 	multi_read:
 	while (nPOS > 0) {
@@ -185,33 +188,33 @@ void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> 
 		max_val = (max_val < tmp_arr[0]) ? tmp_arr[0] : max_val;		
 		in_off +=32;
 	}
-	my_float_t final_soft_sum = 0.0f;
+	float_t final_soft_sum = 0.0f;
 	
 	softmax_exp_loop:
 	for (int i = 0; i < tPOS; i++) {
 	#pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
 		#pragma HLS PIPELINE
 		#pragma HLS UNROLL factor=4
-		my_float_t calc = hls::expf((att_arr[i] - max_val));
+		float_t calc = hls::expf((att_arr[i] - max_val));
 		final_soft_sum += calc;
 		fatt_arr[i] = calc;
 	}
-	my_float_t inv_soft_sum = 1.0f/final_soft_sum;
+	float_t inv_soft_sum = 1.0f/final_soft_sum;
 
 	softmax_normalize_loop:
 	for (int i = 0; i < POS; i++) {
 		// #pragma HLS LOOP_TRIPCOUNT max=(SEQ_LEN + 1) min=1
 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN
 		#pragma HLS PIPELINE
-		my_float_t tempa = fatt_arr[i] * inv_soft_sum;
+		float_t tempa = fatt_arr[i] * inv_soft_sum;
 		att_out.write(tempa) ;
 	}
 }
 
-void wide_mha_weighted_sum(s_fdata_v_t &xb, hls::stream<my_float_t>  &att_in, s_mfdata_v_t &value_cache, const int POS){
+void wide_mha_weighted_sum(s_fdata_v_t &xb, hls::stream<float_t>  &att_in, s_mfdata_v_t &value_cache, const int POS){
 
 	constexpr int ARR_SIZE = MODEL_HEAD_SIZE / MAX_FL_ELEM;
-	mfdata_v_t xb_arr[ARR_SIZE] = {0.0f};
+	mfdata_v_t xb_arr[ARR_SIZE]{};
 	mfdata_v_t vc_arr[ARR_SIZE];
 	#pragma HLS ARRAY_PARTITION variable=xb_arr complete
 	#pragma HLS ARRAY_PARTITION variable=vc_arr complete
@@ -220,10 +223,19 @@ void wide_mha_weighted_sum(s_fdata_v_t &xb, hls::stream<my_float_t>  &att_in, s_
 	for (size_t t = 0; t < POS; t++){
 		#pragma HLS PIPELINE
 		#pragma HLS LOOP_TRIPCOUNT max=(MODEL_SEQUENCE_LEN + 1) min=1
-		my_float_t val = att_in.read();
+		float_t val = att_in.read();
 		for (size_t ii = 0; ii < ARR_SIZE; ii++){
 			#pragma HLS UNROLL
-			xb_arr[ii] += /*att_arr[t]*/ val * value_cache.read();// vc_arr[i];
+			mfdata_v_t vc_dat = value_cache.read();
+			mfdata_v_t tmp_xb;
+			mfdata_v_t xb = xb_arr[ii];
+			for (size_t jj = 0; jj < MAX_FL_ELEM; jj++) {
+				#pragma HLS UNROLL
+				float_t foo = val * vc_dat[jj] + xb[jj];
+				my_float_t bar = foo;
+				tmp_xb[jj] = bar;
+			}
+			xb_arr[ii] = tmp_xb;//xb_arr[ii] + val * value_cache.read();// vc_arr[i];
 		}
 	}
 	mha_ws_stream_out_xb: // set all values to zero
@@ -281,7 +293,7 @@ void mha_kernel(s_fdata_v_t &output,
 	for (size_t i = 0; i < MODEL_NUM_HEADS; i++) {
 		#pragma HLS DATAFLOW
 		
-		hls::stream<my_float_t> mha_it_sm, att_sm_ws;
+		hls::stream<float_t> mha_it_sm, att_sm_ws;
 		#pragma HLS STREAM variable=mha_it_sm depth=256
 		#pragma HLS BIND_STORAGE variable=mha_it_sm type=fifo impl=bram
 		#pragma HLS STREAM variable=att_sm_ws depth=256

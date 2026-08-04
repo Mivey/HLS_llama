@@ -43,7 +43,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 	for (size_t i = 0; i < M_DIM; i++) {
 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
 		//output M_DIM float elements
-		my_float_t sum_out = 0;
+		float_t sum_out = 0;
 		for (size_t j = 0 ; j < sfCount; j++) {
   	#pragma HLS LOOP_TRIPCOUNT max = TOK_SF_MAX min=MODEL_ELEMENTS/(MODEL_SCALING_FACTOR * SM_FL_ELEM )  
 			//read the next set of scaling factors
@@ -54,9 +54,9 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 				//do our calculations
 				#pragma HLS PIPELINE II=1
 				
-				my_float_t cur_tok_sf = vec_tok_sf[k];
-				my_float_t cur_w_sf = vec_w_sf[k];
-				
+				// my_float_t cur_tok_sf = vec_tok_sf[k];
+				// my_float_t cur_w_sf = vec_w_sf[k];
+				float_t cur_tok_sf = vec_tok_sf[k] * vec_w_sf[k];
 				//read the next set of weights
 				idata_v_t curr_tok;
 				idata_v_t curr_w;
@@ -71,10 +71,11 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 				for (size_t m = 0; m < MAX_QUANT_ELEM; m++) {
 					prod += (int32_t) curr_w[m] * curr_tok[m];
 				}
-				sum_out += (float)prod * cur_tok_sf * cur_w_sf;
+				sum_out += (float_t)prod * cur_tok_sf;// * cur_w_sf + sum_out;
 			}
 		}
-		out.write(sum_out);
+		my_float_t sum_write = sum_out;
+		out.write(sum_write);
 	}
 	
 }
@@ -110,8 +111,8 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
   // #pragma HLS BIND_STORAGE variable=tok type=ram_2p impl=uram
 	idata_v_t w_arr[TOK_QUANT_MAX];
 
-	hls::stream<my_float_t> wtok;
-	hls::stream<my_float_t> wtok_sf;
+	// hls::stream<my_float_t> wtok;
+	// hls::stream<my_float_t> wtok_sf;
 	hls::stream<my_float_t> out_thread[mm_thr];
 	s_fdata_v_t d_tok_sf[mm_thr];
 	s_idata_v_t d_tok[mm_thr];

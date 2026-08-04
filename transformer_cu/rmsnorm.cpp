@@ -1,5 +1,6 @@
 #include "rmsnorm.h"
 #include "mha_forward.h"
+#include <cmath>
 
 void rms_mm2s_data(s_fdata_v_t &out, fdata_v_t *in, const int cnt){
 	// #pragma HLS PIPELINE off
@@ -11,7 +12,7 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t *x, s_fdata_v_t &w, const
   
   fdata_v_t arr[MODEL_ELEMENTS/SM_FL_ELEM];
 	const int acc_lag = 16;
-  my_float_t ss[acc_lag] = {0.0f}; 
+  float_t ss[acc_lag] = {0.0f}; 
   
   rms_mac:
   for (int i = 0; i < (MODEL_ELEMENTS / SM_FL_ELEM); i++) {
@@ -19,13 +20,31 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t *x, s_fdata_v_t &w, const
 
 		// if (INIT) { 	x[i] = d.read();	}
 		// else { 				x[i] += d.read(); }
-		x[i] += d.read();
+		fdata_v_t tmp_d = d.read();
+		fdata_v_t tmp_x = x[i];
+		fdata_v_t tmp_dx;
+		float_t ss_ra = 0;
+		for (int j = 0 ; j < SM_FL_ELEM; j++) {
+			#pragma HLS UNROLL
+			float_t foo = tmp_d[j] + tmp_x[j];
+			float_t bar = foo * foo;
+			tmp_dx[j] = foo;
+			ss_ra += bar;
+		}
 		
-    fdata_v_t tss = x[i] * x[i];
-		ss[i % acc_lag] += tss.reduce_add();
+		x[i] = tmp_dx;
+    // fdata_v_t tss = tmp_tss;
+		
+		ss[i % acc_lag] += ss_ra;
+		// float_t foo;
+		// for (int j = 0; j < SM_FL_ELEM; j++) {
+		// 	#pragma hls UNROLL
+		// 	float_t bar = tss[j];
+		// 	foo += bar;
+		// }
 		arr[i] = x[i];
   }
-	my_float_t ftss = 0.0f;
+	float_t ftss = 0.0f;
 	
 	rms_sum:
 	for (int i = 0; i < acc_lag; i++) {
@@ -33,14 +52,21 @@ void rmsnorm(s_fdata_v_t &o, s_fdata_v_t &d, fdata_v_t *x, s_fdata_v_t &w, const
 		ftss += ss[i];
 	}
 
-  my_float_t fss = (ftss / MODEL_ELEMENTS + 1e-5);
+  float_t fss = (ftss / MODEL_ELEMENTS + 1e-5);
   fss = 1.0f/hls::sqrtf(fss);
 
   data_out:
   for (int i = 0 ; i < MODEL_ELEMENTS/SM_FL_ELEM; i++) {
     #pragma HLS PIPELINE II=1
 		fdata_v_t tw = w.read();
-    o.write(arr[i] * fss * tw);
+		fdata_v_t rw = arr[i];
+		fdata_v_t o_data;
+		for (int j = 0; j < SM_FL_ELEM; j++) {
+			#pragma HLS UNROLL
+			float_t foo = rw[j] * tw[j] * fss;
+			o_data[j] = foo;
+		}
+    o.write(o_data);//arr[i] * fss * tw);
   }
 }
 

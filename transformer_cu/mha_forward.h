@@ -26,15 +26,34 @@ constexpr float Q_FACTOR = ((QUANT%4)==0) ? \
                  static_cast<float>((1<<(QUANT - 1)) - 1) : 127;
 
 /* ************************************* */
+struct fast_bf16{
+	ap_uint<16> bits;
+	
+	fast_bf16() {}
+
+	// convert float to bf16
+	fast_bf16(float f) {
+		#pragma HLS INLINE
+		ap_uint<32> float_bits = reinterpret_cast<ap_uint<32>&>(f);
+		bits = float_bits(31, 16);
+	}
+
+	operator float() const {
+		#pragma HLS INLINE
+		ap_uint<32> float_bits = (bits, ap_uint<16>(0));
+		return reinterpret_cast<float&>(float_bits);
+	}
+};
 // typedef ap_float<32, 8> my_float_t;
-typedef float my_float_t;
+// typedef float my_float_t;
+typedef fast_bf16 my_float_t;
 typedef int8_t my_quant_data_t;
 /* ************************************* */
 
 constexpr size_t MAX_DW = 512;
 constexpr size_t MID_DW = 512;
 constexpr size_t QUANT_MODIFIER = 1;//(MAX_DW == 512) ? 2 : 1;
-constexpr size_t SM_DW = 128;
+constexpr size_t SM_DW = 64;
 constexpr size_t MAX_FL_ELEM = (MAX_DW / (sizeof(my_float_t) * 8));
 constexpr size_t MID_FL_ELEM = (MID_DW / (sizeof(my_float_t) * 8));
 constexpr size_t MAX_QUANT_ELEM = ((MAX_DW / QUANT_MODIFIER) / (sizeof(my_quant_data_t) * 8));
@@ -113,7 +132,7 @@ void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vEl
 		
 		elem_dist_loop:
 		for (int j = 0; j < N; j++) {
-			#pragma hjls LOOP_TRIPCOUNT max=N
+			#pragma HLS LOOP_TRIPCOUNT max=N
 			elem_per_stream_loop:
 			for (int k = 0; k < vElem; k++) {
 				#pragma HLS PIPELINE II=1

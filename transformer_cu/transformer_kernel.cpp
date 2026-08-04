@@ -184,7 +184,7 @@ void transformer_cu(
 	constexpr int MHA_DEPTH = MODEL_ELEMENTS / MID_FL_ELEM * 3;
 	constexpr int RECORD_DEPTH = ((MODEL_ELEMENTS * 3  + MODEL_HIDDEN_DIM) * 12 + MODEL_ELEMENTS) * 64 / SM_FL_ELEM;
 
-	#pragma HLS INTERFACE mode=m_axi port=tokens 				bundle=w_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
+	#pragma HLS INTERFACE mode=m_axi port=tokens 				bundle=w_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=64//(2048/SM_DW*8)
 	#ifdef __DEBUG__
 		#pragma HLS INTERFACE mode=m_axi port=data_out 				bundle=w_n_t_gemm 		depth=RECORD_DEPTH 	offset=slave max_write_burst_length=16
 	#endif
@@ -192,7 +192,7 @@ void transformer_cu(
 	#pragma HLS INTERFACE mode=m_axi port=w_0 					bundle=D_W_GEMM_0 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 		num_read_outstanding=64 
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_1 				bundle=D_TOK_W_SF_1		 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/MAX_DW * 8)		num_read_outstanding=16
 	#pragma HLS INTERFACE mode=m_axi port=w_1 					bundle=D_W_GEMM_1 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 		num_read_outstanding=64 
-	#pragma HLS INTERFACE mode=m_axi port=weights				bundle=w_n_t_gemm 		depth=RMS_DEPTH				offset=slave max_read_burst_length=(4096/SM_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=weights				bundle=w_n_t_gemm 		depth=RMS_DEPTH				offset=slave max_read_burst_length=64//(2048/SM_DW * 8)
 	#pragma HLS INTERFACE mode=m_axi port=value_cache		bundle=vc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(4096/MAX_DW * 8)
 	#pragma HLS INTERFACE mode=m_axi port=key_cache			bundle=kc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(4096/MAX_DW * 8)
 
