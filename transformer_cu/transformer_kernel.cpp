@@ -186,7 +186,7 @@ void transformer_cu(
 
 	#pragma HLS INTERFACE mode=m_axi port=tokens 				bundle=w_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
 	#ifdef __DEBUG__
-		#pragma HLS INTERFACE mode=m_axi port=data_out 				bundle=w_n_t_gemm 		depth=RECORD_DEPTH 	offset=slave max_write_burst_length=16
+		#pragma HLS INTERFACE mode=m_axi port=data_out 				bundle=w_n_t_gemm 		depth=RECORD_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
 	#endif
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_0 				bundle=D_TOK_W_SF_0 		depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/MAX_DW * 8)		num_read_outstanding=16
 	#pragma HLS INTERFACE mode=m_axi port=w_0 					bundle=D_W_GEMM_0 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 		num_read_outstanding=64 
@@ -268,6 +268,7 @@ void transformer_cu(
 		runner.next_layer = CURR_LAYER;
 		runner.next_state = NEXT_STATE;
 		runner.SAVE_ADDR = 0;
+		mm2mm_store(res_con, data_out, MODEL_ELEMENTS);
 	#endif
 	
 	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, INTERNAL_DATA_SIZE);
@@ -287,9 +288,10 @@ void transformer_cu(
 		runner.SAVE_ADDR += runner.N_DIM/SM_FL_ELEM;
 		#endif
 	}
-	// #ifdef __DEBUG__
-	// 	mm2mm_store(tokens, internal_token, INTERNAL_DATA_SIZE);
-	// #endif
+	#ifdef __DEBUG__
+		mm2mm_store(tokens, internal_token, INTERNAL_DATA_SIZE);
+
+	#endif
 	// #ifndef __DEBUG__
 		ss_final(ss_reg, tokens, temperature, 0.9, coin);
 	// #endif

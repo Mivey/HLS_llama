@@ -124,6 +124,7 @@ int top_tb(){
 	size_t w1w3_sf_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 2 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
 	size_t w2_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(int8_t);
 	size_t w2_sf_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
+	size_t data_out_size = ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3) * MODEL_NUM_LAYERS * MODEL_ELEMENTS) * sizeof(my_float_t);
 
 	
 	// file.seekg(0, std::ios::end);
@@ -137,6 +138,8 @@ int top_tb(){
 	std::vector<idata_v_t> quant_w_arr(q_size / sizeof(idata_v_t));
 	std::vector<mfdata_v_t> sf_w_arr(sf_size / sizeof(mfdata_v_t));
 	std::vector<fdata_v_t> rms_w_arr(rms_size / sizeof(fdata_v_t));
+	std::vector<fdata_v_t> data_out_arr(data_out_size / sizeof(fdata_v_t));
+	std::fill(data_out_arr.begin(), data_out_arr.end(), 0);
 	
 	char * q_ptr = reinterpret_cast<char*>(quant_w_arr.data());
 	char *sf_ptr = reinterpret_cast<char*>(sf_w_arr.data());
@@ -447,9 +450,9 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 								axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
 								axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 
 								#ifdef __DEBUG__
-								8	, 1, 0, 0,
+								8	, 1, 0, data_out_arr.data(),
 								#endif
-								temperature, random_u32, &pick
+								temperature, random_u32
 								);
 	int zz = output_arr.size();
 	std::fill(output_arr.begin() + 96,output_arr.begin() + zz / 2 - 1, 0);
@@ -468,3 +471,21 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 	return 0;
 
 }
+
+
+// void transformer_cu(
+// 				fdata_v_t *tokens,
+// 				mfdata_v_t *w_sf_0, idata_v_t *w_0, 
+// 				mfdata_v_t *w_sf_1, idata_v_t *w_1, 
+// 				fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
+// 				const int POS,
+// 				const int QKV_W, const int QKV_sf_W,
+// 				const int Out_W, const int Out_sf_W,
+// 				const int FF_w1w3_W, const int FF_w1w3_sf_W,
+// 				const int FF_w2_W, const int FF_w2_sf_W, 
+// 				const int Embed_W, const int Embed_sf_W, 
+// 				const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
+// 			#ifdef __DEBUG__
+// 				const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
+// 			#endif
+// 				const float temperature, const float coin//, int* pick

@@ -1,5 +1,6 @@
 #include "mha_forward.h"
 #include <cassert>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <hls_stream.h>
@@ -187,7 +188,7 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
 	
 	if (temperature < 0.0f) {
 		// if greedy selection or w/e, bypass it all and just return the biggest value.
-		tpick[0] = (my_float_t) reg[REG_SIZE - 1].index;
+		tpick[0] = reinterpret_cast<float_t&>(reg[REG_SIZE - 1].index);
 		pick[0] = tpick;
 		return;
 	}
@@ -221,7 +222,8 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
 			break;
 		}
 	}  
-  tpick[0] = (my_float_t) sel_val;
+  // tpick[0] = (my_float_t) sel_val;
+	tpick[0] = reinterpret_cast<float_t&>(sel_val);
 	pick[0] = tpick;
   return;
 }
