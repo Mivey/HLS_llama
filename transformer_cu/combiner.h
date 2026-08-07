@@ -1,11 +1,5 @@
 #include "mha_forward.h"
-#include <cassert>
-#include <cmath>
-#include <cstddef>
 #include <cstdint>
-#include <hls_stream.h>
-#include <hls_vector.h>
-#include <utils/x_hls_defines.h>
 
 const int BURST_LEN = 8;
 template<typename T, size_t N, int M, int P> // M = burst, P = # of gemv outputs
@@ -185,10 +179,11 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
   
 	const my_float_t INV_TEMP = (temperature == 0) ? 1.0f : 1/temperature; 
 	fdata_v_t tpick;
-	
+	int32_t padd_pick = (int32_t) reg[REG_SIZE - 1].index;
 	if (temperature < 0.0f) {
 		// if greedy selection or w/e, bypass it all and just return the biggest value.
-		tpick[0] = reinterpret_cast<float_t&>(reg[REG_SIZE - 1].index);
+		// int32_t padd_pick = (int32_t) reg[REG_SIZE - 1].index;
+		tpick[0] = reinterpret_cast<float_t&>(padd_pick);
 		pick[0] = tpick;
 		return;
 	}

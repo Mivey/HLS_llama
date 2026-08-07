@@ -1,0 +1,1 @@
+./runq stories110M_q8.bin -n 256 -i "There was a dog" -s 69420
