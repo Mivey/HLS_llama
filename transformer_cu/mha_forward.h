@@ -2,6 +2,7 @@
 #ifndef MARK_FORWARD
 #define MARK_FORWARD
 
+#include <cmath>
 #define __DEBUG__
 
 #include <cstddef>
@@ -391,6 +392,29 @@ void swiglu(hls::stream<T> &hb_out, hls::stream<T> &hb_in, hls::stream<T> &hb2_i
 		for (int j = 0; j < elem; j++) {
 			#pragma HLS UNROLL
 			eval[j] = val[j] / ( 1.0f + hls::expf(-1 * val[j])) * tmp_hb2[j];
+		}
+		hb_out.write(eval);
+	}
+}
+
+template<size_t M = 4, typename T, size_t N>
+void swiglu(hls::stream<hls::vector<T, N>> &hb_out, hls::stream<hls::vector<T, N>> &hb_in, hls::stream<hls::vector<T, N>> &hb2_in){
+	// int elem = sizeof(T)/ sizeof(my_float_t);
+	typedef hls::vector<T, N> tmp_t;
+	const int HD_N_RATIO = MODEL_HIDDEN_DIM / N;
+	for (int i = 0 ; i < HD_N_RATIO; i++) {
+	// #pragma HLS pipeline II=4
+		tmp_t val = hb_in.read();
+		tmp_t tmp_hb2 = hb2_in.read();
+		tmp_t eval;
+		for (int j = 0; j < N; j++) {
+			#pragma HLS UNROLL factor = M
+			#pragma HLS PIPELINE
+			float_t tmpa = 1.0f + hls::expf(- val[j]);
+			float_t tmpb = hls::recipf(tmpa);
+			float_t tmpc = tmp_hb2[j] * val[j];
+			// eval[j] = val[j] / ( 1.0f + hls::expf(-1 * val[j])) * tmp_hb2[j];
+			eval[j] = tmpc * tmpb;
 		}
 		hb_out.write(eval);
 	}

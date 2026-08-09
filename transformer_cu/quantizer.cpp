@@ -1,6 +1,7 @@
 
 #include "quantizer.h"
 #include "mha_forward.h"
+#include <sys/types.h>
 
 
 void debug_abs_intake(s_fdata_v_t &tokens_out, s_fdata_v_t &abs_tokens, s_fdata_v_t &tokens_in, 
@@ -104,8 +105,7 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
 	
 	const size_t SF_COUNT = N_DIM / MODEL_SCALING_FACTOR;
 	const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
-	// #pragma HLS STREAM variable=tok_out depth=64
-	// #pragma HLS STREAM variable=tok_sf_out depth=64
+	
 	for (int i = 0; i < SF_COUNT; i++) {
 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR min=MODEL_ELEMENTS / MODEL_SCALING_FACTOR
 		#pragma HLS DATAFLOW
@@ -123,7 +123,7 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
 
 void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM, 
 											fdata_v_t *data_out, const int SAVE_ADDR){
-	
+												
 	const size_t SF_COUNT = N_DIM / MODEL_SCALING_FACTOR;
 	const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
 	// #pragma HLS STREAM variable=tok_out depth=64

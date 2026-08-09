@@ -15,21 +15,25 @@
 constexpr int mm_thr = 2;
 struct keys {
 	bool FINAL_FLAG = 1;
-	int n = 0;
-	int CURR_LAYER = 0;
-	int next_layer = 0;
-	int AXI_SEL = 0;
 	int N_DIM = MODEL_ELEMENTS;
 	int M_DIM = MODEL_ELEMENTS;
-	int curr_state = 0;
-	int next_state = 0;
+	int CURR_LAYER = 0;
 	int w_sf;
 	int w;
-	bool INIT;
 	#ifdef __DEBUG__
+	bool INIT;
 	int SAVE_ADDR;
 	#endif
-} ;
+};
+
+struct fsm_data {
+	// bool AXI_SEL = 0;
+	int n = 0;
+	int next_layer = 0;
+	int curr_state = 0;
+	int next_state = 0;
+	
+};
 
 struct axi_reg{
 	int POS;
@@ -51,79 +55,96 @@ struct axi_reg{
 };
 
 void cu_selecter(	s_fdata_v_t &s_tokens,
-									fdata_v_t *weights, fdata_v_t *diff,
-									adata_v_t *key_cache, adata_v_t *value_cache, fdata_v_t *res_con,
-									keys &r, axi_reg &tt){ 
-	r.curr_state = r.next_state;
-	r.AXI_SEL = 0;
-	r.CURR_LAYER = r.next_layer;
+					fdata_v_t *weights, fdata_v_t *diff,
+					adata_v_t *key_cache, adata_v_t *value_cache, fdata_v_t *res_con,
+					keys &r, fsm_data &fd, axi_reg &tt, hls::stream<keys> &key_out){ 
+	fd.curr_state = fd.next_state;
+	// r.AXI_SEL = 0;
+	r.CURR_LAYER = fd.next_layer;
 	r.FINAL_FLAG = 1;
 	
 	#pragma HLS BIND_STORAGE variable=res_con type=ram_t2p impl=bram
 	#pragma HLS ARRAY_PARTITION variable=res_con dim=1 type=cyclic factor=2
+
+	#ifdef __DEBUG__
+		r.SAVE_ADDR += (r.N_DIM / SM_FL_ELEM);
+	#endif
 	
-	switch (r.curr_state) {
-	case 0 :	rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, r.INIT, tt.rms_att_W / sizeof(fdata_v_t)); 
-						r.next_state++;
-						//current GeMV dimensions:
-						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-						r.M_DIM = MODEL_ELEMENTS * 3; // QKV
-						r.w_sf = tt.QKV_sf_W / sizeof(mfdata_v_t);
-						r.w = tt.QKV_W / sizeof(idata_v_t);
-						r.INIT = 0;
-						#ifdef __DEBUG__
-						r.SAVE_ADDR += r.SAVE_ADDR + MODEL_ELEMENTS/SM_FL_ELEM;
-						#endif
-						break;
+	switch (fd.curr_state) {
+	case 0 :	
+		fd.next_state++;
+		//current GeMV dimensions:
+		r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+		r.M_DIM = MODEL_ELEMENTS * 3; // QKV
+		r.w_sf = tt.QKV_sf_W / sizeof(mfdata_v_t);
+		r.w = tt.QKV_W / sizeof(idata_v_t);
+		#ifdef __DEBUG__
+			if (r.INIT == true) {
+				r.SAVE_ADDR = 0;
+				r.INIT = false;
+			} 
+		#endif
+		key_out.write(r);
+		rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_att_W / sizeof(fdata_v_t)); 
+		break;
 						
-	case 1 :	mha_kernel(s_tokens, diff, key_cache, value_cache, tt.POS, r.CURR_LAYER); 
-						r.next_state++;
-						//current GeMV dimensions:
-						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-						r.M_DIM = MODEL_ELEMENTS; // Out
-						r.w_sf = tt.Out_sf_W / sizeof(mfdata_v_t);
-						r.w = tt.Out_W / sizeof(idata_v_t);
-						break;
+	case 1 :	
+		fd.next_state++;
+		//current GeMV dimensions:
+		r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+		r.M_DIM = MODEL_ELEMENTS; // Out
+		r.w_sf = tt.Out_sf_W / sizeof(mfdata_v_t);
+		r.w = tt.Out_W / sizeof(idata_v_t);
+		key_out.write(r);
+		mha_kernel(s_tokens, diff, key_cache, value_cache, tt.POS, r.CURR_LAYER); 
+		break;
 						
-	case 2 :	rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, 0, tt.rms_ffn_W / sizeof(fdata_v_t));
-						r.next_state++;
-						//current GeMV dimensions:
-						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-						r.M_DIM = MODEL_HIDDEN_DIM * 2; // gate & up
-						r.w_sf = tt.FF_w1w3_sf_W / sizeof(mfdata_v_t);
-						r.w = tt.FF_w1w3_W / sizeof(idata_v_t);
-						break;
+	case 2 :	
+		fd.next_state++;
+		//current GeMV dimensions:
+		r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+		r.M_DIM = MODEL_HIDDEN_DIM * 2; // gate & up
+		r.w_sf = tt.FF_w1w3_sf_W / sizeof(mfdata_v_t);
+		r.w = tt.FF_w1w3_W / sizeof(idata_v_t);
+		key_out.write(r);
+		rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_ffn_W / sizeof(fdata_v_t));
+		break;
 						
-	case 3 :	swiglu_kernel(s_tokens, diff); 
-						r.next_layer = r.CURR_LAYER + 1;
-						r.next_state = (r.next_layer == MODEL_NUM_LAYERS) ? 4 : 0;
-						//current GeMV dimensions:
-						r.N_DIM = MODEL_HIDDEN_DIM; // 2048 tokens
-						r.M_DIM = MODEL_ELEMENTS; // down
-						r.w_sf = tt.FF_w2_sf_W / sizeof(mfdata_v_t);
-						r.w = tt.FF_w2_W / sizeof(idata_v_t);
-						break;
+	case 3 :	
+		fd.next_layer = r.CURR_LAYER + 1;
+		fd.next_state = (fd.next_layer == MODEL_NUM_LAYERS) ? 4 : 0;
+		//current GeMV dimensions:
+		r.N_DIM = MODEL_HIDDEN_DIM; // 2048 tokens
+		r.M_DIM = MODEL_ELEMENTS; // down
+		r.w_sf = tt.FF_w2_sf_W / sizeof(mfdata_v_t);
+		r.w = tt.FF_w2_W / sizeof(idata_v_t);
+		key_out.write(r);
+		swiglu_kernel(s_tokens, diff); 
+		break;
 						
-	case 4 :	rmsnorm_kernel(s_tokens, diff, weights, res_con, 0, 0, tt.rms_final_W/ sizeof(fdata_v_t)); 
-						r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-						r.M_DIM = MODEL_TOKENS; // embeddings out
-						r.w_sf = tt.Embed_sf_W / sizeof(mfdata_v_t);
-						r.w = tt.Embed_W / sizeof(idata_v_t);
-						r.AXI_SEL = 1;
-						r.CURR_LAYER = 0;
-						break;
+	case 4 :	
+		r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+		r.M_DIM = MODEL_TOKENS; // embeddings out
+		r.w_sf = tt.Embed_sf_W / sizeof(mfdata_v_t);
+		r.w = tt.Embed_W / sizeof(idata_v_t);
+		r.FINAL_FLAG = false;
+		r.CURR_LAYER = 0;
+		key_out.write(r);
+		rmsnorm_kernel(s_tokens, diff, weights, res_con, 0, tt.rms_final_W/ sizeof(fdata_v_t)); 
+		break;
 	}
 }
 
 void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1, 
-								idata_v_t *w_0, idata_v_t *w_1, s_fdata_v_t &s_cu_sel_in, ProbIndex *ss_reg, 
-								const keys r
-								#ifdef __DEBUG__
-								, fdata_v_t *data_out
-								#endif
-								){
-	
-	#pragma HLS DATAFLOW
+				idata_v_t *w_0, idata_v_t *w_1, s_fdata_v_t &s_cu_sel_in, ProbIndex *ss_reg, 
+				hls::stream<keys> &vec_cnt
+				#ifdef __DEBUG__
+				, fdata_v_t *data_out
+				#endif
+				){
+	keys r = vec_cnt.read();
+	// #pragma HLS DATAFLOW // actually can't I then change this to inline if I do use dataflow in the transformer_kernel?
+	#pragma HLS INLINE
 	hls::stream<my_float_t> s_tok_sf, s_out[mm_thr];
 	s_fdata_v_t tok_sf[mm_thr];
 	s_idata_v_t s_tok_q, tok_q[mm_thr];
@@ -238,10 +259,11 @@ void transformer_cu(
 	#pragma HLS ARRAY_PARTITION variable=ss_reg complete dim=1
 	
 	keys runner;
+	fsm_data fd;
 	runner.INIT = 1;
 	
-	runner.next_layer = 0;
-	runner.next_layer = 0;
+	fd.next_layer = 0;
+	fd.next_layer = 0;
 	axi_reg tt = {
 		POS, 
 		0, 
@@ -265,8 +287,8 @@ void transformer_cu(
 		const int faker = MODEL_NUM_LAYERS * 4 + 1;
 	#endif
 	#ifdef __DEBUG__
-		runner.next_layer = CURR_LAYER;
-		runner.next_state = NEXT_STATE;
+		fd.next_layer = CURR_LAYER;
+		fd.next_state = NEXT_STATE;
 		runner.SAVE_ADDR = 0;
 		mm2mm_store(res_con, data_out, MODEL_ELEMENTS);
 	#endif
@@ -276,17 +298,16 @@ void transformer_cu(
 
 	for(int ii = 0; ii < faker; ii++) {
 		s_fdata_v_t s_cu_sel_out;
+		hls::stream<keys> vec_cnt;
 		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
+		#pragma HLS DATAFLOW // Then I could have this here?
 		
-		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, res_con, runner, tt);
-		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, ss_reg, runner
+		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, res_con, runner, fd, tt, vec_cnt);
+		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, ss_reg, vec_cnt
 								#ifdef __DEBUG__
 								, data_out
 								#endif
 		);
-		#ifdef __DEBUG__
-		runner.SAVE_ADDR += runner.N_DIM/SM_FL_ELEM;
-		#endif
 	}
 	#ifdef __DEBUG__
 		mm2mm_store(tokens, internal_token, INTERNAL_DATA_SIZE);
