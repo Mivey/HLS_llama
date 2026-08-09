@@ -142,14 +142,16 @@ void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1,
 				, fdata_v_t *data_out
 				#endif
 				){
-	keys r = vec_cnt.read();
-	// #pragma HLS DATAFLOW // actually can't I then change this to inline if I do use dataflow in the transformer_kernel?
-	#pragma HLS INLINE
+	const keys r = vec_cnt.read();
+	#pragma HLS DATAFLOW // actually can't I then change this to inline if I do use dataflow in the transformer_kernel?
+	// #pragma HLS INLINE
 	hls::stream<my_float_t> s_tok_sf, s_out[mm_thr];
 	hls::stream<fdata_v_t> tok_sf[mm_thr];
 	s_idata_v_t s_tok_q, tok_q[mm_thr];
 	hls::stream<ProbIndex> sys_sort;
 	
+		#pragma HLS STREAM variable=s_out depth=MODEL_SCALING_FACTOR
+#pragma HLS BIND_STORAGE variable=s_out type=fifo impl=bram
 		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
 		#pragma HLS STREAM variable=s_tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
@@ -162,11 +164,11 @@ void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1,
 		quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, r.N_DIM, data_out, r.SAVE_ADDR);
 	#endif
 
-	inf_split_tee(tok_sf, s_tok_sf, (r.N_DIM / (MODEL_SCALING_FACTOR)));
+	inf_split_tee(tok_sf, s_tok_sf, (r.N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
 	inf_split_tee(tok_q, s_tok_q, (r.N_DIM / MAX_QUANT_ELEM));
 
-	GeMV_PE_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, r.N_DIM, r.M_DIM/2, r.CURR_LAYER * 2 + 0, 0, r.w_sf, r.w);
-	GeMV_PE_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, r.N_DIM, r.M_DIM/2, r.CURR_LAYER * 2 + 1, r.M_DIM/2, r.w_sf, r.w);
+	GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, r.N_DIM, r.M_DIM/2, r.CURR_LAYER * 2 + 0, 0, r.w_sf, r.w);
+	GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, r.N_DIM, r.M_DIM/2, r.CURR_LAYER * 2 + 1, r.M_DIM/2, r.w_sf, r.w);
 	
 	gemv_split(out, sys_sort, s_out, r.M_DIM, r.FINAL_FLAG);
 	// systolic_sort(sys_sort, ss_reg, r.M_DIM);
@@ -300,7 +302,7 @@ void transformer_cu(
 		s_fdata_v_t s_cu_sel_out;
 		hls::stream<keys> vec_cnt;
 		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
-		#pragma HLS DATAFLOW // Then I could have this here?
+		#pragma HLS DATAFLOW 
 		
 		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, res_con, runner, fd, tt, vec_cnt);
 		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, ss_reg, vec_cnt

@@ -93,8 +93,6 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 	const int qCount = N_DIM / MAX_QUANT_ELEM;
 	
 	#pragma HLS DATAFLOW
-	s_fdata_v_t tokens("tokens");
-	#pragma HLS STREAM variable=tokens depth = 16// MODEL_HIDDEN_DIM/MAX_FL_ELEM
 	s_mfdata_v_t s_wsf("s_wsf");
 #pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=uram
 	#pragma HLS STREAM variable=s_wsf type=fifo depth=4096
@@ -104,15 +102,11 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 	s_idata_v_t s_w("s_w");
 #pragma HLS BIND_STORAGE variable=s_w type=fifo impl=bram
 	#pragma HLS STREAM variable=s_w type=fifo depth=16
-	s_fdata_v_t dist_wsf[mm_thr];
-	s_idata_v_t dist_w[mm_thr];
 	
 	#pragma HLS STREAM variable=tok_q type=fifo depth=32
   // #pragma HLS BIND_STORAGE variable=tok type=ram_2p impl=uram
 	idata_v_t w_arr[TOK_QUANT_MAX];
 
-	hls::stream<my_float_t> wtok;
-	hls::stream<my_float_t> wtok_sf;
 	hls::stream<my_float_t> out_thread[mm_thr];
 	s_fdata_v_t d_tok_sf[mm_thr];
 	s_idata_v_t d_tok[mm_thr];
@@ -122,10 +116,8 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 	#pragma HLS STREAM variable=d_w depth = 4096// MODEL_HIDDEN_DIM/MAX_FL_ELEM
 #pragma HLS BIND_STORAGE variable=d_w type=fifo impl=uram
 #pragma HLS BIND_STORAGE variable=d_wsf type=fifo impl=uram
-	s_fdata_v_t s_out("s_out");
 	
 
-	// tok_load_input(tokens, fl_tok, N_DIM);
 	inf_split_tee(d_tok_sf, tok_sf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
 	inf_split_tee(d_tok, tok_q, (N_DIM / MAX_QUANT_ELEM));
 	
@@ -142,32 +134,10 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 	}
 	
 	rr_merge<my_float_t, mm_thr>(out, out_thread, M_DIM);
-	// s2mm_output_data(out, s_out, M_DIM / SM_FL_ELEM, (W_Off / SM_FL_ELEM));
-	// s_mm_output_sel(out, xb_out, s_out, M_DIM/SM_FL_ELEM, (W_Off / SM_FL_ELEM), AXI_SEL);
 	return;
 }
 
 void GeMV_PE_kernel(hls::stream<my_float_t> &out, hls::stream<fdata_v_t> &tok_sf, s_idata_v_t &tok_q, mfdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg){
-	
-	constexpr int HD_QUANT_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS  / MAX_QUANT_ELEM;
-	constexpr int HD_SF_DEPTH = MODEL_HIDDEN_DIM * MODEL_ELEMENTS * MODEL_NUM_LAYERS / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
-	constexpr int TOK_DEPTH = MODEL_HIDDEN_DIM / SM_FL_ELEM;
-	constexpr int TOK_OUT_DEPTH = MODEL_HIDDEN_DIM / SM_FL_ELEM;
-
-	
-	#pragma HLS INTERFACE mode=m_axi port=w_sf 		bundle=D_TOK_W_SF 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/SM_DW * 8)	
-#pragma HLS INTERFACE mode=m_axi port=w bundle=D_W_GEMM depth=HD_QUANT_DEPTH max_read_burst_length=(4096/MAX_DW*8) num_read_outstanding=32 offset=slave
-
-
-	#pragma HLS INTERFACE mode=s_axilite port=w_sf 				bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=w 					bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=N_DIM 			bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=M_DIM 			bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=CURR_LAYER 			bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=W_Off 			bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=sf_reg 			bundle=control
-#pragma HLS INTERFACE mode=s_axilite port=w_reg 			bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=return			bundle=control
 	
 	const int w_count = N_DIM * M_DIM / MAX_QUANT_ELEM;
 	const int mf_sf_count = N_DIM * M_DIM / (MODEL_SCALING_FACTOR * MAX_FL_ELEM);
