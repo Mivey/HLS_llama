@@ -1,6 +1,7 @@
 // #include "../forward.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstring>
 #include <hls_math.h>
@@ -165,7 +166,9 @@ std::vector<fdata_v_t> dummy_sf((MODEL_HIDDEN_DIM * MODEL_ELEMENTS / MODEL_SCALI
 	std::vector<fdata_v_t> actual_arr(tokens_cnt);
 	std::vector<fdata_v_t> tok_w1_arr(tokens_cnt);
 	std::vector<fdata_v_t> tok_w2_arr(tok_w1_cnt);
+	std::vector<float_t> tok_w2fp_arr(tok_w1_cnt * SM_FL_ELEM);
 	std::vector<fdata_v_t> rms_final_arr(rms_w_cnt);
+	std::array<float_t, MODEL_ELEMENTS> out_arr;
 
 	std::vector<idata_v_t> wq_q_arr(quant_data_cnt);
 	std::vector<fdata_v_t> wq_sf_arr(sf_data_cnt);
@@ -192,7 +195,7 @@ std::vector<fdata_v_t> dummy_sf((MODEL_HIDDEN_DIM * MODEL_ELEMENTS / MODEL_SCALI
 	std::vector<fdata_v_t> w3_sf_arr(hd_sf_cnt);
 
 	std::vector<idata_v_t> w2_q_arr(hd_tok_cnt);
-	std::vector<fdata_v_t> w2_sf_arr(hd_sf_cnt);
+	std::vector<mfdata_v_t> w2_sf_arr(hd_sf_cnt / 4);
 
 	std::vector<std::vector<fdata_v_t>> key_arr(2, std::vector<fdata_v_t>(cache_cnt));
 	std::vector<std::vector<fdata_v_t>> value_arr(2, std::vector<fdata_v_t>(cache_cnt));
@@ -208,6 +211,7 @@ std::vector<fdata_v_t> dummy_sf((MODEL_HIDDEN_DIM * MODEL_ELEMENTS / MODEL_SCALI
 	key_output.read(reinterpret_cast<char *>(tok_out_arr[0].data()), tokens_size);
 	// w1w3_tokens.read(reinterpret_cast<char *>(tok_w1_arr.data()), tokens_size);
 	w2_tokens.read(reinterpret_cast<char *>(tok_w2_arr.data()), tok_w1_size);
+	w2_tokens.read(reinterpret_cast<char *>(tok_w2fp_arr.data()), tok_w1_size);
 	// w1_output.read(reinterpret_cast<char *>(tok_w1_out_arr[0].data()), tok_w1_size);
 	w2_output.read(reinterpret_cast<char *>(golden_arr.data()), tokens_size);
 	
@@ -233,8 +237,21 @@ std::vector<fdata_v_t> dummy_sf((MODEL_HIDDEN_DIM * MODEL_ELEMENTS / MODEL_SCALI
 
 /* ===================================== Declare the streams ========================================= */
 /* remember - if it's suppsoed to be m_axi, no need to create a stream. just use the created vector, ie: foo_arr.data() */
-
+	
 	/* ============================ write inputs to the streams ====================== */
+	hls::stream<float_t> data_out;
+	hls::stream<idata_v_t> s_tok_q;
+	hls::stream<float_t> s_tok_sf;
+	hls::stream<fdata_v_t> s_tok_w2_arr;
+	#pragma HLS STREAM variable=data_out depth = MODEL_HIDDEN_DIM
+	#pragma HLS STREAM variable=s_tok_q depth = MODEL_HIDDEN_DIM
+	#pragma HLS STREAM variable=s_tok_sf depth = MODEL_HIDDEN_DIM
+	#pragma HLS STREAM variable=s_tok_w2_arr depth = MODEL_HIDDEN_DIM
+	// #pragma HLS STREAM variable=data_out depth = MODEL_HIDDEN_DIM
+
+	for (int i = 0; i < (MODEL_HIDDEN_DIM / SM_FL_ELEM); i++) {
+		s_tok_w2_arr.write(tok_w2_arr[i]);
+	}
 		
 
 int curr_pos = 150;
@@ -247,9 +264,21 @@ int curr_pos = 150;
 
 	// matmult_kernel(tok_w1_out_arr[1].data(), tok_w1_arr.data(), w1_sf_arr.data(), w1_q_arr.data(), MODEL_ELEMENTS, MODEL_HIDDEN_DIM, 0, 0);
 	// matmult_kernel(tok_w1_out_arr[1].data(), tok_w1_arr.data(), w1_sf_arr.data(), w1_q_arr.data(), MODEL_ELEMENTS, MODEL_HIDDEN_DIM, 0);
-	GeMV_kernel(actual_arr.data(), tok_w2_arr.data(), w2_sf_arr.data(), w2_q_arr.data(), MODEL_HIDDEN_DIM, MODEL_ELEMENTS, 0, 0);
+	// GeMV_kernel(actual_arr.data(), tok_w2_arr.data(), w2_sf_arr.data(), w2_q_arr.data(), MODEL_HIDDEN_DIM, MODEL_ELEMENTS, 0, 0);
+	// quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_tok_q, tok_w2_arr, MODEL_HIDDEN_DIM)
+	quantizer_kernel(s_tok_sf, s_tok_q, s_tok_w2_arr, MODEL_HIDDEN_DIM);
+	GeMV_PE_kernel(data_out, s_tok_sf, s_tok_q, w2_sf_arr.data(), w2_q_arr.data(), MODEL_HIDDEN_DIM, MODEL_ELEMENTS, 0, 0, 0, 0);
+	// GeMV_PE_kernel(out_arr, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, mfdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg)
 	// matmult_kernel(tok_w2_out_arr[1].data(), tok_w2_arr.data(), w2_sf_arr.data(), w2_q_arr.data(), MODEL_HIDDEN_DIM, MODEL_ELEMENTS, 0);
 	
+	for (int i = 0;  i < (MODEL_ELEMENTS / SM_FL_ELEM); i++) {
+		
+		fdata_v_t tmp{};
+		for (int j = 0; j < SM_FL_ELEM; j++) {
+			tmp[j] = data_out.read();
+		}
+		actual_arr[i] = tmp;
+	}
 	/*  ====================================== process the results ============================ */
 	// std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	// parse_results<fdata_v_t, float>(tok_out_arr[0], tok_out_arr[1]);
