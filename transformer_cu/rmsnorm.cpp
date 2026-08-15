@@ -50,11 +50,13 @@ void rmsnorm_kernel(s_fdata_v_t &s_tokens_out, fdata_v_t *diff, fdata_v_t *weigh
 	#pragma HLS DATAFLOW
 	s_fdata_v_t s_weights, s_tokens, s_diff;
 	const int ratio = MODEL_ELEMENTS / SM_FL_ELEM;
+	const int bram_depth = 64;
+	
+	#pragma HLS STREAM variable=s_diff depth=bram_depth
+	#pragma HLS STREAM variable=s_weights depth=ratio
 	
 	#pragma HLS STREAM variable=s_tokens depth=ratio
-	#pragma HLS STREAM variable=s_diff depth=ratio
 	#pragma HLS STREAM variable=s_tokens_out depth=ratio
-	#pragma HLS STREAM variable=s_weights depth=ratio
 	
 	#pragma HLS BIND_STORAGE variable=s_tokens type=fifo impl=bram
 	#pragma HLS BIND_STORAGE variable=s_diff type=fifo impl=bram

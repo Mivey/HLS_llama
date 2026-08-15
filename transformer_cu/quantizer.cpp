@@ -112,7 +112,7 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
 		hls::stream<my_float_t> max_val;
 		s_fdata_v_t tokens_out, abs_tokens;
 		#pragma HLS STREAM variable=tokens_out depth=64
-		#pragma HLS STREAM variable=max_val depth=TOK_COUNT
+		#pragma HLS STREAM variable=max_val depth=4 //TOK_COUNT
 		#pragma HLS STREAM variable=abs_tokens depth=64
 		
 		abs_intake(tokens_out, abs_tokens, tokens);
@@ -134,7 +134,7 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
 		hls::stream<my_float_t> max_val;
 		s_fdata_v_t tokens_out, abs_tokens;
 		#pragma HLS STREAM variable=tokens_out depth=64
-		#pragma HLS STREAM variable=max_val depth=TOK_COUNT
+		#pragma HLS STREAM variable=max_val depth=4 //TOK_COUNT
 		#pragma HLS STREAM variable=abs_tokens depth=64
 		
 		debug_abs_intake(tokens_out, abs_tokens, tokens, data_out, SAVE_ADDR, i);

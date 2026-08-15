@@ -24,6 +24,9 @@ struct keys {
 	bool INIT;
 	int SAVE_ADDR;
 	#endif
+	#ifdef __ULTRADEBUG__
+	int mmSAVE_ADDR;
+	#endif
 };
 
 struct fsm_data {
@@ -37,8 +40,8 @@ struct fsm_data {
 
 struct axi_reg{
 	int POS;
-	int N_DIM;
-	int M_DIM; 
+	int N_DIM = 0;
+	int M_DIM = 0; 
 	int QKV_W;
 	int QKV_sf_W;
 	int Out_W;
@@ -69,6 +72,9 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 	#ifdef __DEBUG__
 		r.SAVE_ADDR += (r.N_DIM / SM_FL_ELEM);
 	#endif
+	#ifdef __ULTRADEBUG__
+		r.mmSAVE_ADDR += (r.M_DIM / SM_FL_ELEM);
+	#endif
 	
 	switch (fd.curr_state) {
 	case 0 :	
@@ -80,7 +86,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 		r.w = tt.QKV_W / sizeof(idata_v_t);
 		#ifdef __DEBUG__
 			if (r.INIT == true) {
-				r.SAVE_ADDR = 0;
+				// r.SAVE_ADDR = 0;
 				r.INIT = false;
 			} 
 		#endif
@@ -141,6 +147,9 @@ void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1,
 				#ifdef __DEBUG__
 				, fdata_v_t *data_out
 				#endif
+				#ifdef __ULTRADEBUG__
+				, fdata_v_t *GeMV_data_out
+				#endif
 				){
 	const keys r = vec_cnt.read();
 	#pragma HLS DATAFLOW // actually can't I then change this to inline if I do use dataflow in the transformer_kernel?
@@ -150,19 +159,26 @@ void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1,
 	s_idata_v_t s_tok_q, tok_q[mm_thr];
 	hls::stream<ProbIndex> sys_sort;
 	
-		#pragma HLS STREAM variable=s_out depth=MODEL_SCALING_FACTOR
-#pragma HLS BIND_STORAGE variable=s_out type=fifo impl=bram
-		#pragma HLS STREAM variable=s_tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
-		#pragma HLS STREAM variable=tok_sf depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
-		#pragma HLS STREAM variable=s_tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
-		#pragma HLS STREAM variable=tok_q depth=MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
+	#pragma HLS STREAM variable=s_out depth=16 //MODEL_SCALING_FACTOR
+	#pragma HLS BIND_STORAGE variable=s_out type=fifo impl=bram
+	#pragma HLS STREAM variable=s_tok_sf depth=4 //MODEL_HIDDEN_DIM/SM_FL_ELEM
+	#pragma HLS STREAM variable=tok_sf depth=4 //MODEL_HIDDEN_DIM/SM_FL_ELEM
+	#pragma HLS STREAM variable=s_tok_q depth=4 //MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
+	#pragma HLS STREAM variable=tok_q depth=8 //MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
+	#pragma HLS STREAM variable=sys_sort depth=64
 		
-	#ifndef __DEBUG__
-	quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, r.N_DIM);
-	#endif
+	// #ifndef __DEBUG__
+	// quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, r.N_DIM);
+	// #endif
+	// #ifdef __DEBUG__
+	// 	quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, r.N_DIM, data_out, r.SAVE_ADDR);
+	// #endif
+
+	quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, r.N_DIM
 	#ifdef __DEBUG__
-		quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, r.N_DIM, data_out, r.SAVE_ADDR);
+		, data_out, r.SAVE_ADDR
 	#endif
+	);
 
 	inf_split_tee(tok_sf, s_tok_sf, (r.N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
 	inf_split_tee(tok_q, s_tok_q, (r.N_DIM / MAX_QUANT_ELEM));
@@ -170,7 +186,11 @@ void df_region(	fdata_v_t *out, mfdata_v_t *w_sf_0, mfdata_v_t *w_sf_1,
 	GeMV_kernel(s_out[0], tok_sf[0], tok_q[0], w_sf_0, w_0, r.N_DIM, r.M_DIM/2, r.CURR_LAYER * 2 + 0, 0, r.w_sf, r.w);
 	GeMV_kernel(s_out[1], tok_sf[1], tok_q[1], w_sf_1, w_1, r.N_DIM, r.M_DIM/2, r.CURR_LAYER * 2 + 1, r.M_DIM/2, r.w_sf, r.w);
 	
-	gemv_split(out, sys_sort, s_out, r.M_DIM, r.FINAL_FLAG);
+	gemv_split(out, sys_sort, s_out, r.M_DIM, r.FINAL_FLAG
+								#ifdef __ULTRADEBUG__
+									, GeMV_data_out, r.mmSAVE_ADDR
+								#endif
+								);
 	// systolic_sort(sys_sort, ss_reg, r.M_DIM);
 	insertion_sort(sys_sort, ss_reg, r.M_DIM);
 }
@@ -190,6 +210,9 @@ void transformer_cu(
 			#ifdef __DEBUG__
 				const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
 			#endif
+			#ifdef __ULTRADEBUG__
+				fdata_v_t *GeMV_data_out,
+			#endif
 				const float temperature, const float coin//, int* pick
 			){
 	
@@ -205,19 +228,23 @@ void transformer_cu(
 	constexpr int HD_SF_DEPTH = sf_size / MAX_FL_ELEM; 
 	constexpr int TOK_OUT_DEPTH = INTERNAL_DATA_SIZE / SM_FL_ELEM;
 	constexpr int MHA_DEPTH = MODEL_ELEMENTS / MID_FL_ELEM * 3;
-	constexpr int RECORD_DEPTH = ((MODEL_ELEMENTS * 3  + MODEL_HIDDEN_DIM) * 12 + MODEL_ELEMENTS) * 64 / SM_FL_ELEM;
+	constexpr int RECORD_DEPTH = ((MODEL_ELEMENTS * 3  + MODEL_HIDDEN_DIM) * 12 + MODEL_ELEMENTS) / SM_FL_ELEM;
 
 	#pragma HLS INTERFACE mode=m_axi port=tokens 				bundle=w_n_t_gemm 		depth=TOK_OUT_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
 	#ifdef __DEBUG__
 		#pragma HLS INTERFACE mode=m_axi port=data_out 				bundle=w_n_t_gemm 		depth=RECORD_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
+	#endif
+	#ifdef __ULTRADEBUG__
+		#pragma HLS INTERFACE mode=m_axi port=GeMV_data_out 				bundle=w_n_t_gemm 		depth=RECORD_DEPTH 	offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
+	#pragma HLS INTERFACE mode=s_axilite port=GeMV_data_out 					bundle=control
 	#endif
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_0 				bundle=D_TOK_W_SF_0 		depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/MAX_DW * 8)		num_read_outstanding=16
 	#pragma HLS INTERFACE mode=m_axi port=w_0 					bundle=D_W_GEMM_0 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 		num_read_outstanding=64 
 	#pragma HLS INTERFACE mode=m_axi port=w_sf_1 				bundle=D_TOK_W_SF_1		 	depth=HD_SF_DEPTH 		offset=slave max_read_burst_length=(4096/MAX_DW * 8)		num_read_outstanding=16
 	#pragma HLS INTERFACE mode=m_axi port=w_1 					bundle=D_W_GEMM_1 		depth=HD_QUANT_DEPTH 	offset=slave max_read_burst_length=(4096/MAX_DW * 8) 		num_read_outstanding=64 
 	#pragma HLS INTERFACE mode=m_axi port=weights				bundle=w_n_t_gemm 		depth=RMS_DEPTH				offset=slave max_read_burst_length=(4096/SM_DW * 8)
-	#pragma HLS INTERFACE mode=m_axi port=value_cache		bundle=vc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(4096/MAX_DW * 8)
-	#pragma HLS INTERFACE mode=m_axi port=key_cache			bundle=kc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(4096/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=value_cache		bundle=vc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(512/MAX_DW * 8)
+	#pragma HLS INTERFACE mode=m_axi port=key_cache			bundle=kc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(512/MAX_DW * 8)
 
 	#pragma HLS INTERFACE mode=s_axilite port=tokens 				bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=w_sf_0 				bundle=control
@@ -257,12 +284,12 @@ void transformer_cu(
 	ProbIndex ss_reg[REG_SIZE];
 	
 	#pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
-	#pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=uram
+	#pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=bram
 	#pragma HLS ARRAY_PARTITION variable=ss_reg complete dim=1
 	
 	keys runner;
 	fsm_data fd;
-	runner.INIT = 1;
+	// runner.INIT = 1;
 	
 	fd.next_layer = 0;
 	fd.next_layer = 0;
@@ -289,9 +316,12 @@ void transformer_cu(
 		const int faker = MODEL_NUM_LAYERS * 4 + 1;
 	#endif
 	#ifdef __DEBUG__
+		runner.INIT = 1;
 		fd.next_layer = CURR_LAYER;
 		fd.next_state = NEXT_STATE;
 		runner.SAVE_ADDR = 0;
+		runner.N_DIM = 0;
+		runner.M_DIM = 0;
 		mm2mm_store(res_con, data_out, MODEL_ELEMENTS);
 	#endif
 	
@@ -302,14 +332,18 @@ void transformer_cu(
 		s_fdata_v_t s_cu_sel_out;
 		hls::stream<keys> vec_cnt;
 		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
-		#pragma HLS DATAFLOW 
+		// #pragma HLS DATAFLOW 
 		
 		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, res_con, runner, fd, tt, vec_cnt);
 		df_region(internal_token, w_sf_0, w_sf_1, w_0, w_1, s_cu_sel_out, ss_reg, vec_cnt
 								#ifdef __DEBUG__
 								, data_out
 								#endif
+								#ifdef __ULTRADEBUG__
+								, GeMV_data_out
+								#endif
 		);
+		
 	}
 	#ifdef __DEBUG__
 		mm2mm_store(tokens, internal_token, INTERNAL_DATA_SIZE);

@@ -4,6 +4,7 @@
 
 #include <cmath>
 #define __DEBUG__
+// #define __ULTRADEBUG__
 
 #include <cstddef>
 #include <cstdint>
@@ -114,10 +115,10 @@ void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vEl
 		
 		elem_dist_loop:
 		for (int j = 0; j < N; j++) {
-			#pragma hjls LOOP_TRIPCOUNT max=N
+			#pragma HLS LOOP_TRIPCOUNT max=N
 			elem_per_stream_loop:
 			for (int k = 0; k < vElem; k++) {
-				#pragma HLS PIPELINE II=1
+			#pragma HLS PIPELINE II=1 //style=flp
 				#pragma HLS LOOP_TRIPCOUNT min=(MODEL_ELEMENTS / (MODEL_SCALING_FACTOR * SM_FL_ELEM)) max=(MODEL_TOKENS/MAX_QUANT_ELEM)
 				T data = in.read();
 				out[j].write(data);
@@ -181,7 +182,8 @@ void mm2s_input_data(hls::stream<T> &out, T *in, const size_t COUNT, const size_
 	AXI4_to_STREAM:
 	for (int i = 0; i < COUNT; i++) {
 		#pragma HLS PIPELINE II=1
-		out.write(in[i + offset]);
+		T tmp = in[i + offset];
+		out.write(tmp);
 	}
 }
 
@@ -484,7 +486,7 @@ void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>>
 	
 	hls::fence(output, input);
 	
-	#pragma HLS STREAM variable=input depth=48
+	#pragma HLS STREAM variable=input depth=4
 	#pragma HLS STREAM variable=output depth=4
 	store_to_m_axi: 
 		for (int j = 0; j < vec_per_head; j++) {
@@ -510,6 +512,9 @@ void transformer_cu(
 								const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
 							#ifdef __DEBUG__
 									const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
+							#endif
+							#ifdef __ULTRADEBUG__
+								fdata_v_t *GeMV_data_out,
 							#endif
 								const float temperature, const float coin
 				);

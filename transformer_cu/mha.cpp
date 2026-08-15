@@ -247,44 +247,45 @@ void mha_kernel(s_fdata_v_t &output,
                 mfdata_v_t *value_cache, 
                 const int POS, const int CURR_LAYER){
 
-	s_fdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
-	s_fdata_v_t max_tok_out;
-	hls::stream<my_float_t> q_max_val;
-	#pragma HLS STREAM variable=q_max_val				depth=4
-	#pragma HLS STREAM variable=max_tok_out			depth=32
-	s_mfdata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
-	s_mfdata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
-	s_mfdata_v_t s_key_cache_in, s_query, s_value_cache_in, s_query_r, s_key_cache_in_r;
 	const size_t VAL_START = (INTERNAL_DATA_SIZE / 2) / MODEL_HEAD_SIZE + MODEL_NUM_HEADS / 2;
 	const size_t KEY_START = MODEL_NUM_HEADS;
 
-  #pragma HLS STABLE variable=POS
-  #pragma HLS STABLE variable=CURR_LAYER
-
-	#pragma HLS STREAM variable=s_key_cache_in depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
-	#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
-	#pragma HLS STREAM variable=output depth=MODEL_ELEMENTS / SM_FL_ELEM
-	#pragma HLS STREAM variable=s_value_cache_in depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
-	#pragma HLS STREAM variable=s_query depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
-	#pragma HLS STREAM variable=s_query_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
-	#pragma HLS STREAM variable=xb_ws_q depth=8 //good
-	#pragma HLS STREAM variable=s_key_cache_to_kernel depth=1024 //good
-	#pragma HLS STREAM variable=s_value_cache_to_kernel depth=1024 //good
-	
-	#pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo impl=bram
-	#pragma HLS BIND_STORAGE variable=s_query type=fifo impl=bram
-	#pragma HLS BIND_STORAGE variable=s_query_r type=fifo impl=bram
-	#pragma HLS BIND_STORAGE variable=s_key_cache_to_kernel type=fifo impl=uram
-	#pragma HLS BIND_STORAGE variable=s_value_cache_to_kernel type=fifo impl=uram
-
 	mha_num_head:
 	for (size_t i = 0; i < MODEL_NUM_HEADS; i++) {
+		s_fdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
+		s_fdata_v_t max_tok_out;
+		hls::stream<my_float_t> q_max_val;
+		#pragma HLS STREAM variable=q_max_val				depth=4
+		#pragma HLS STREAM variable=max_tok_out			depth=32
+		s_mfdata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
+		s_mfdata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
+		s_mfdata_v_t s_key_cache_in, s_query, s_value_cache_in, s_query_r, s_key_cache_in_r;
+
+		#pragma HLS STABLE variable=POS
+		#pragma HLS STABLE variable=CURR_LAYER
+
+		#pragma HLS STREAM variable=s_key_cache_in depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
+		#pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
+		#pragma HLS STREAM variable=output depth=MODEL_ELEMENTS / SM_FL_ELEM
+		#pragma HLS STREAM variable=s_value_cache_in depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
+		#pragma HLS STREAM variable=s_query depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
+		#pragma HLS STREAM variable=s_query_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
+		#pragma HLS STREAM variable=xb_ws_q depth=8 //good
+		#pragma HLS STREAM variable=s_key_cache_to_kernel depth=32 //good
+		#pragma HLS STREAM variable=s_value_cache_to_kernel depth=1024 //good
+
+		#pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo impl=bram
+		#pragma HLS BIND_STORAGE variable=s_query type=fifo impl=bram
+		#pragma HLS BIND_STORAGE variable=s_query_r type=fifo impl=bram
+		#pragma HLS BIND_STORAGE variable=s_key_cache_to_kernel type=fifo impl=bram
+		#pragma HLS BIND_STORAGE variable=s_value_cache_to_kernel type=fifo impl=bram
+
 		#pragma HLS DATAFLOW
 		
 		hls::stream<my_float_t> mha_it_sm, att_sm_ws;
-		#pragma HLS STREAM variable=mha_it_sm depth=256
+		#pragma HLS STREAM variable=mha_it_sm depth=192
 		#pragma HLS BIND_STORAGE variable=mha_it_sm type=fifo impl=bram
-		#pragma HLS STREAM variable=att_sm_ws depth=256
+		#pragma HLS STREAM variable=att_sm_ws depth=192
 		#pragma HLS BIND_STORAGE variable=att_sm_ws type=fifo impl=bram
 
 		mha_input_data(s_query_r, tokens, i * MODEL_HEAD_SIZE, 0); //read query first

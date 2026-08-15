@@ -45,7 +45,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 	for (size_t i = 0; i < M_DIM; i++) {
 		#pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
 		//output M_DIM float elements
-		my_float_t sum_out = 0;
+		float_t sum_out = 0;
 		for (size_t j = 0 ; j < sfCount; j++) {
   	#pragma HLS LOOP_TRIPCOUNT max = TOK_SF_MAX min=MODEL_ELEMENTS/(MODEL_SCALING_FACTOR * SM_FL_ELEM )  
 			//read the next set of scaling factors
@@ -56,8 +56,8 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 				//do our calculations
 				#pragma HLS PIPELINE II=1
 				
-				my_float_t cur_tok_sf = vec_tok_sf[k];
-				my_float_t cur_w_sf = vec_w_sf[k];
+				float_t cur_tok_sf = vec_tok_sf[k] * vec_w_sf[k];
+				// my_float_t cur_w_sf = vec_w_sf[k];
 				
 				//read the next set of weights
 				idata_v_t curr_tok;
@@ -73,7 +73,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
 				for (size_t m = 0; m < MAX_QUANT_ELEM; m++) {
 					prod += (int32_t) curr_w[m] * curr_tok[m];
 				}
-				sum_out += (float)prod * cur_tok_sf * cur_w_sf;
+				sum_out += (float_t)prod * cur_tok_sf;// * cur_w_sf;
 			}
 		}
 		out.write(sum_out);
@@ -94,14 +94,14 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 	
 	#pragma HLS DATAFLOW
 	s_mfdata_v_t s_wsf("s_wsf");
-#pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=uram
-	#pragma HLS STREAM variable=s_wsf type=fifo depth=4096
+#pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=bram
+	#pragma HLS STREAM variable=s_wsf type=fifo depth=16
 	s_fdata_v_t s_vd_wsf("s_vd_wsf");
-#pragma HLS BIND_STORAGE variable=s_vd_wsf type=fifo impl=bram
-	#pragma HLS STREAM variable=s_vd_wsf type=fifo depth=16
+#pragma HLS BIND_STORAGE variable=s_vd_wsf type=fifo impl=uram
+	#pragma HLS STREAM variable=s_vd_wsf type=fifo depth=4096
 	s_idata_v_t s_w("s_w");
-#pragma HLS BIND_STORAGE variable=s_w type=fifo impl=bram
-	#pragma HLS STREAM variable=s_w type=fifo depth=16
+#pragma HLS BIND_STORAGE variable=s_w type=fifo impl=uram
+	#pragma HLS STREAM variable=s_w type=fifo depth=4096
 	
 	#pragma HLS STREAM variable=tok_q type=fifo depth=32
   // #pragma HLS BIND_STORAGE variable=tok type=ram_2p impl=uram
@@ -112,10 +112,12 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 	s_idata_v_t d_tok[mm_thr];
 	s_fdata_v_t d_wsf[mm_thr];
 	s_idata_v_t d_w[mm_thr];
-	#pragma HLS STREAM variable=d_wsf depth = 4096// MODEL_HIDDEN_DIM/MAX_FL_ELEM
-	#pragma HLS STREAM variable=d_w depth = 4096// MODEL_HIDDEN_DIM/MAX_FL_ELEM
-#pragma HLS BIND_STORAGE variable=d_w type=fifo impl=uram
-#pragma HLS BIND_STORAGE variable=d_wsf type=fifo impl=uram
+	#pragma HLS STREAM variable=d_wsf depth = 64// MODEL_HIDDEN_DIM/MAX_FL_ELEM
+	#pragma HLS STREAM variable=d_w depth = 128// MODEL_HIDDEN_DIM/MAX_FL_ELEM
+	#pragma HLS STREAM variable=d_tok_sf depth=4
+	#pragma HLS STREAM variable=d_tok depth=8
+#pragma HLS BIND_STORAGE variable=d_w type=fifo impl=bram
+#pragma HLS BIND_STORAGE variable=d_wsf type=fifo impl=bram
 	
 
 	inf_split_tee(d_tok_sf, tok_sf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
@@ -137,43 +139,43 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 	return;
 }
 
-void GeMV_PE_kernel(hls::stream<my_float_t> &out, hls::stream<fdata_v_t> &tok_sf, s_idata_v_t &tok_q, mfdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg){
+// void GeMV_PE_kernel(hls::stream<my_float_t> &out, hls::stream<fdata_v_t> &tok_sf, s_idata_v_t &tok_q, mfdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg){
 	
-	const int w_count = N_DIM * M_DIM / MAX_QUANT_ELEM;
-	const int mf_sf_count = N_DIM * M_DIM / (MODEL_SCALING_FACTOR * MAX_FL_ELEM);
-	// const int sm_sf_count = N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
-	const int sm_sf_count = N_DIM * M_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
-	const int sfCount = N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
-	const int qCount = N_DIM / MAX_QUANT_ELEM;
-	fdata_v_t tok_sf_arr[TOK_SF_MAX / SM_FL_ELEM];
-	idata_v_t tok_q_arr[TOK_QUANT_MAX];
-#pragma HLS BIND_STORAGE variable=tok_sf_arr type=ram_2p impl=bram
-#pragma HLS BIND_STORAGE variable=tok_q_arr type=ram_2p impl=bram
+// 	const int w_count = N_DIM * M_DIM / MAX_QUANT_ELEM;
+// 	const int mf_sf_count = N_DIM * M_DIM / (MODEL_SCALING_FACTOR * MAX_FL_ELEM);
+// 	// const int sm_sf_count = N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+// 	const int sm_sf_count = N_DIM * M_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+// 	const int sfCount = N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM);
+// 	const int qCount = N_DIM / MAX_QUANT_ELEM;
+// 	fdata_v_t tok_sf_arr[TOK_SF_MAX / SM_FL_ELEM];
+// 	idata_v_t tok_q_arr[TOK_QUANT_MAX];
+// #pragma HLS BIND_STORAGE variable=tok_sf_arr type=ram_2p impl=bram
+// #pragma HLS BIND_STORAGE variable=tok_q_arr type=ram_2p impl=bram
 
-	// quant_arr_kernel(tok_sf_arr, tok_q_arr, tok_sf, tok_q, N_DIM);
-	const int mf_sf_dim_calc = mf_sf_count / M_DIM;
-	const int w_count_dim_calc = w_count / M_DIM;
+// 	// quant_arr_kernel(tok_sf_arr, tok_q_arr, tok_sf, tok_q, N_DIM);
+// 	const int mf_sf_dim_calc = mf_sf_count / M_DIM;
+// 	const int w_count_dim_calc = w_count / M_DIM;
 	
-	// for (int ii = 0; ii < M_DIM; ii++) {
+// 	// for (int ii = 0; ii < M_DIM; ii++) {
 		
-		#pragma HLS DATAFLOW
-		// s_fdata_v_t tokens("tokens");
-		// #pragma HLS STREAM variable=tokens depth = 16// MODEL_HIDDEN_DIM/MAX_FL_ELEM
-		s_mfdata_v_t s_wsf("s_wsf");
-		#pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=uram
-		#pragma HLS STREAM variable=s_wsf type=fifo depth=4096
-		s_fdata_v_t s_vd_wsf("s_vd_wsf");
-		#pragma HLS BIND_STORAGE variable=s_vd_wsf type=fifo impl=uram
-		#pragma HLS STREAM variable=s_vd_wsf type=fifo depth=4096
-		s_idata_v_t s_w("s_w");
-		#pragma HLS BIND_STORAGE variable=s_w type=fifo impl=uram
-		#pragma HLS STREAM variable=s_w type=fifo depth=4096
+// 		#pragma HLS DATAFLOW
+// 		// s_fdata_v_t tokens("tokens");
+// 		// #pragma HLS STREAM variable=tokens depth = 16// MODEL_HIDDEN_DIM/MAX_FL_ELEM
+// 		s_mfdata_v_t s_wsf("s_wsf");
+// 		#pragma HLS BIND_STORAGE variable=s_wsf type=fifo impl=uram
+// 		#pragma HLS STREAM variable=s_wsf type=fifo depth=4096
+// 		s_fdata_v_t s_vd_wsf("s_vd_wsf");
+// 		#pragma HLS BIND_STORAGE variable=s_vd_wsf type=fifo impl=uram
+// 		#pragma HLS STREAM variable=s_vd_wsf type=fifo depth=4096
+// 		s_idata_v_t s_w("s_w");
+// 		#pragma HLS BIND_STORAGE variable=s_w type=fifo impl=uram
+// 		#pragma HLS STREAM variable=s_w type=fifo depth=4096
 		
-		mm2s_input_data(s_wsf, w_sf, mf_sf_count, CURR_LAYER, sf_reg);//, ii, mf_sf_dim_calc);
-		mm2s_input_data(s_w, w, w_count, CURR_LAYER, w_reg);//, ii, w_count_dim_calc);
-		vec_down_converter(s_vd_wsf, s_wsf, sm_sf_count);
+// 		mm2s_input_data(s_wsf, w_sf, mf_sf_count, CURR_LAYER, sf_reg);//, ii, mf_sf_dim_calc);
+// 		mm2s_input_data(s_w, w, w_count, CURR_LAYER, w_reg);//, ii, w_count_dim_calc);
+// 		vec_down_converter(s_vd_wsf, s_wsf, sm_sf_count);
 		
-		alt_mat_mult_main(out, s_w, s_vd_wsf, tok_q, tok_sf, N_DIM, M_DIM);
-	// }
-	return;
-}
+// 		alt_mat_mult_main(out, s_w, s_vd_wsf, tok_q, tok_sf, N_DIM, M_DIM);
+// 	// }
+// 	return;
+// }

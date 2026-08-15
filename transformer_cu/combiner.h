@@ -179,8 +179,8 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
   
 	const my_float_t INV_TEMP = (temperature == 0) ? 1.0f : 1/temperature; 
 	fdata_v_t tpick;
-	int32_t padd_pick = (int32_t) reg[REG_SIZE - 1].index;
-	if (temperature < 0.0f) {
+	int32_t padd_pick = (int32_t) reg[0].index;
+	if (temperature <= 0.0f) {
 		// if greedy selection or w/e, bypass it all and just return the biggest value.
 		// int32_t padd_pick = (int32_t) reg[REG_SIZE - 1].index;
 		tpick[0] = reinterpret_cast<float_t&>(padd_pick);
@@ -188,7 +188,7 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
 		return;
 	}
 	
-  my_float_t max_val = reg[(REG_SIZE - 1)].prob;
+  my_float_t max_val = reg[0].prob;
   my_float_t final_soft_sum = 0.0f;
 	my_float_t sm_reg[REG_SIZE];
 	#pragma HLS ARRAY_PARTITION variable=sm_reg dim=1 type=complete
@@ -224,7 +224,12 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
 }
 
 template<typename T, size_t N, int P>
-void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], const int M_DIM, const bool BOOP){
+void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], 
+								const int M_DIM, const bool BOOP
+								#ifdef __ULTRADEBUG__
+									, fdata_v_t *data_out, const int SAVE_ADDR
+								#endif
+){
 	
 	const int offset = INTERNAL_DATA_SIZE / (N * P);
 	typedef hls::vector<T, N> gdata_v_t;
@@ -235,6 +240,7 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::s
 			// #pragma HLS UNROLL
 			gdata_v_t data;
 			int idx = i + j*offset;
+			int fidx = i * 4 + j * (MODEL_TOKENS / 2);
 			for (int k = 0; k < N; k++) {
 				#pragma HLS PIPELINE II=1
 				
@@ -245,13 +251,18 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::s
 					ss_val.prob = std::numeric_limits<my_float_t>::lowest();
 				} else {
 					ss_val.prob = temp;
+					// ss_val.index = k + j * 4
 				}
-				ss_val.index = idx + k;
+				ss_val.index = fidx + k;
 
 				sys_sort.write(ss_val);
 			}
 			if (BOOP) {
 				out[idx] = data;
+				#ifdef __ULTRADEBUG__
+					int udx = i + j * (M_DIM / (N * P)) + SAVE_ADDR;
+					data_out[udx] = data;
+				#endif
 			}
 			// out[idx] = data;
 		}
@@ -265,3 +276,56 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::s
 		sys_sort.write(ss_val);
 	}
 }
+
+
+
+// template<typename T, size_t N, int P>
+// void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], 
+// 								const int M_DIM, const bool BOOP
+// 								#ifdef __ULTRADEBUG__
+// 									, fdata_v_t *data_out, const int SAVE_ADDR
+// 								#endif
+// 								){
+	
+// 	const int offset = INTERNAL_DATA_SIZE / (N * P);
+// 	typedef hls::vector<T, N> gdata_v_t;
+// 	const int c_idx = M_DIM / (P * N);
+// 	for (int i = 0; i < c_idx; i++) {
+// 		#pragma hls LOOP_TRIPCOUNT min=(MODEL_ELEMENTS / (P * N)) max=(MODEL_TOKENS / (P * N))
+// 		for (int j = 0; j < P; j++) {
+// 			// #pragma HLS UNROLL
+// 			gdata_v_t data;
+// 			int idx = i + j*offset;
+// 			for (int k = 0; k < N; k++) {
+// 				#pragma HLS PIPELINE II=1
+				
+// 				T temp = gemv_out[j].read();
+// 				ProbIndex ss_val;
+// 				data[k] = temp;
+// 				if (BOOP) {
+// 					ss_val.prob = std::numeric_limits<my_float_t>::lowest();
+// 				} else {
+// 					ss_val.prob = temp;
+// 				}
+// 				ss_val.index = idx + k;
+
+// 				sys_sort.write(ss_val);
+// 			}
+// 			if (BOOP) {
+// 				out[idx] = data;
+// 				#ifdef __ULTRADEBUG__
+// 					data_out[idx + ]
+// 				#endif
+// 			}
+// 			// out[idx] = data;
+// 		}
+// 	}
+
+// 	ProbIndex ss_val = {32420, std::numeric_limits<my_float_t>::lowest()};
+	
+// 	flush:
+// 	for (int i = 0; i < REG_SIZE; i++) {
+// 		#pragma HLS PIPELINE II=1
+// 		sys_sort.write(ss_val);
+// 	}
+// }
