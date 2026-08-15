@@ -156,6 +156,7 @@ void parse_results (const std::vector<T> &gold, const std::vector<T> &obs, doubl
     double norm_gold = 0.0;
     double norm_obs = 0.0;
     int total_elements = 0;
+		int foo = gold.size();
 
     for (size_t i = 0; i < gold.size(); i++) {
         for (size_t j = 0; j < gold[i].size(); j++) {
