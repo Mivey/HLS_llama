@@ -112,6 +112,7 @@ void cu_selecter(	s_fdata_v_t &s_tokens,
 		#endif
 		key_out.write(r);
 		rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_att_W / sizeof(fdata_v_t)); 
+		// rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_att_W / sizeof(fdata_v_t)); 
 		#ifdef __DEBUG__
 			fd.SAVE_ADDR += (r.N_DIM / SM_FL_ELEM);
 		#endif
@@ -379,21 +380,25 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
 							s_mfdata_v_t &s_wsf_0, s_mfdata_v_t &s_wsf_1, 
 							s_idata_v_t &s_w_0, s_idata_v_t & s_w_1, const axi_reg &tt,
 			#ifdef __DEBUG__
-				const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
+				const int CTRL_CNT, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
 			#endif
 			#ifdef __ULTRADEBUG__
 				fdata_v_t *GeMV_data_out,
 			#endif 
-			const float_t temperature, const float_t coin
+			const float_t temperature, const float_t coin, const bool rms_flag, const bool pf_dc_flag
 			){
 	
-
+	const int RMS_SIZE = MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1);
 	fdata_v_t internal_token[INTERNAL_DATA_SIZE/SM_FL_ELEM];
 	fdata_v_t res_con[MODEL_ELEMENTS / SM_FL_ELEM]{};
+	fdata_v_t internal_rms_weights[RMS_SIZE];
 	ProbIndex ss_reg[REG_SIZE];
+	float_t internal_coin;
 	
 	#pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
 	#pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=bram
+	#pragma HLS ARRAY_PARTITION variable=internal_rms_weights dim=1 factor=1 type=block
+	#pragma HLS BIND_STORAGE variable=internal_rms_weights type=ram_1p impl=uram
 	#pragma HLS ARRAY_PARTITION variable=ss_reg complete dim=1
 	
 	fsm_data fd;
@@ -401,28 +406,29 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
 	fd.next_layer = 0;
 
 	#ifndef __DEBUG__
-		const int faker = MODEL_NUM_LAYERS * 4 + 1;
+		const int CTRL_CNT = (pf_dc_flag) ? (MODEL_NUM_LAYERS * 4 + 1) : (MODEL_NUM_LAYERS * 4 - 2);
 	#endif
 	#ifdef __DEBUG__
-		// runner.INIT = 1;
 		fd.next_layer = CURR_LAYER;
 		fd.next_state = NEXT_STATE;
-		// runner.SAVE_ADDR = 0;
-		// runner.N_DIM = 0;
-		// runner.M_DIM = 0;
-		mm2mm_store(res_con, data_out, MODEL_ELEMENTS);
+		// mm2mm_store(res_con, data_out, MODEL_ELEMENTS);
 	#endif
+
+	if (rms_flag) {
+		// load weights into memory
+		mm2mm_store(internal_rms_weights, weights, (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)));
+	}
+	
 	
 	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, INTERNAL_DATA_SIZE);
 	mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, INTERNAL_DATA_SIZE);
 
-	for(int ii = 0; ii < faker; ii++) {
+	for(int ii = 0; ii < CTRL_CNT; ii++) {
 		s_fdata_v_t s_cu_sel_out;
 		hls::stream<keys> vec_cnt;
 		#pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
-		// #pragma HLS DATAFLOW 
 		
-		cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, res_con, fd, tt, vec_cnt);
+		cu_selecter(s_cu_sel_out, internal_rms_weights, internal_token, key_cache, value_cache, res_con, fd, tt, vec_cnt);
 		calc_loop(internal_token, ss_reg, s_wsf_0, s_wsf_1, s_w_0, s_w_1, s_cu_sel_out, vec_cnt
 								#ifdef __DEBUG__
 								, data_out
@@ -436,7 +442,6 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
 	// #ifndef __DEBUG__
 		ss_final(ss_reg, tokens, temperature, 0.9, coin);
 }
-
 //=============================================================
 
 
@@ -459,7 +464,8 @@ void transformer_cu(
 			#ifdef __ULTRADEBUG__
 				fdata_v_t *GeMV_data_out,
 			#endif
-				const float temperature, const float coin//, int* pick
+				const float temperature, const float coin, 
+				const bool init_rms_flag, const bool pf_dc_flag//, int* pick
 			){
 	
 	
@@ -491,31 +497,33 @@ void transformer_cu(
 	#pragma HLS INTERFACE mode=m_axi port=value_cache		bundle=vc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(512/MAX_DW * 8)
 	#pragma HLS INTERFACE mode=m_axi port=key_cache			bundle=kc_gemm				depth=CACHE_DEPTH			offset=slave max_read_burst_length=(4096/MAX_DW * 8)	max_write_burst_length=(512/MAX_DW * 8)
 
-	#pragma HLS INTERFACE mode=s_axilite port=tokens 				bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=w_sf_0 				bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=w_0 					bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=w_sf_1 				bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=w_1 					bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=weights				bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=value_cache 	bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=tokens 			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=w_sf_0 			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=w_0 				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=w_sf_1 			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=w_1 				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=weights			bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=value_cache 		bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=key_cache			bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=POS 					bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=QKV_W					bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=POS 				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=QKV_W				bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=QKV_sf_W			bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=Out_W					bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=Out_W				bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=Out_sf_W			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=FF_w1w3_W			bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=FF_w1w3_sf_W	bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=FF_w2_W				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=FF_w1w3_sf_W		bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=FF_w2_W			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=FF_w2_sf_W 		bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=Embed_W				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=Embed_W			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=Embed_sf_W 		bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=rms_att_W			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=rms_ffn_W			bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=rms_final_W		bundle=control
 	#pragma HLS INTERFACE mode=s_axilite port=temperature		bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=coin					bundle=control
-	#pragma HLS INTERFACE mode=s_axilite port=return				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=coin				bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=init_rms_flag		bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=pf_dc_flag		bundle=control
+	#pragma HLS INTERFACE mode=s_axilite port=return			bundle=control
 	
 	#ifdef __DEBUG__
 		#pragma HLS INTERFACE mode=s_axilite port=faker 			bundle=control
@@ -544,6 +552,8 @@ void transformer_cu(
 		rms_ffn_W, 
 		rms_final_W
 	};
+
+
 const int CTRL_CNT = faker;
 #pragma HLS DATAFLOW
 
@@ -567,6 +577,6 @@ calc_fsm(tokens, weights, key_cache, value_cache, s_wsf_0, s_wsf_1, s_w_0, s_w_1
 		#ifdef __ULTRADEBUG__
 			GeMV_data_out,
 		#endif 
-	temperature, coin);
+	temperature, coin, init_rms_flag, pf_dc_flag);
 	return;
 }
