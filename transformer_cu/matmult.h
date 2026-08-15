@@ -10,6 +10,7 @@
 // void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg);
 void GeMV_kernel(hls::stream<my_float_t> &out, hls::stream<fdata_v_t>  &tok_sf, s_idata_v_t &tok_q, mfdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg);
 void GeMV_PE_kernel(hls::stream<my_float_t> &out, hls::stream<fdata_v_t> &tok_sf, s_idata_v_t &tok_q, mfdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg);
+void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, s_mfdata_v_t &s_wsf, s_idata_v_t &s_w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg);
 // void GeMV_kernel(fdata_v_t *out, s_fdata_v_t &xb_out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, fdata_v_t *w_sf, idata_v_t *w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int AXI_SEL);
 
 constexpr size_t TOK_QUANT_MAX =  (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM);
