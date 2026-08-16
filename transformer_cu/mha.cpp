@@ -2,6 +2,7 @@
 #include "mha_forward.h"
 #include "rope.h"
 #include <algorithm>
+#include <cmath>
 #include <fenv.h>
 #include <hls_math.h>
 #include <limits>
@@ -93,7 +94,56 @@ NEEDS REWRITE:
       bf16 to float?
 */
 
-void wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
+void wide_mha_iterate(hls::stream<float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
+  
+  const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
+  const float_t score_scalar = 1.0f / sqrtf((float_t) MODEL_HEAD_SIZE);
+  std::array<mfdata_v_t, (array_size)> query_arr;
+  float_t att = 0.0f;
+	float_t patt[array_size]{};
+	#pragma HLS ARRAY_PARTITION variable=patt dim=1 type=complete
+	
+  
+  // mfdata_v_t kc_arr[array_size];
+  // #pragma HLS ARRAY_PARTITION variable=kc_arr complete
+	#pragma HLS ARRAY_PARTITION variable=query_arr dim=1 type=complete
+  
+  //get 64 elements of query
+  query_loop:
+  for (size_t j = 0; j < array_size; j++){
+    #pragma HLS PIPELINE II=1
+    query_arr[j] = query.read();
+  }
+  
+  pos_loop:
+  for (size_t k = 0; k < POS; k++){
+  #pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
+    //att_array adder tree
+    #pragma HLS PIPELINE
+    // for (int j = 0; j < array_size; j++) {
+    //   mfdata_v_t var = key_cache.read();
+    //   kc_arr[j] = var;
+    // }
+    
+    att_loop:// no name b/c we unroll 
+    for (size_t j = 0; j < array_size; j++){
+      mfdata_v_t tmpa = query_arr[j];
+      mfdata_v_t tmpb = key_cache.read();
+      for (int n = 0; n < MAX_FL_ELEM; n++) {
+        patt[j] += tmpa[n] * tmpb[n];
+      }
+    }
+		for (int j = 0; j < array_size; j++) {
+			#pragma hls UNROLL
+			att += patt[j];
+			patt[j] = 0.0f;
+		}
+    out.write(att * score_scalar);
+    att = 0.0f;
+  }
+}
+
+void old_wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
   
   const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
   const my_float_t score_scalar = 1.0f / sqrtf((float) MODEL_HEAD_SIZE);
@@ -139,15 +189,15 @@ void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> 
   const int tPOS = (POS / 4 + 1) * 4;
   int nPOS = POS;
   const int LATENCY = 4;//MAX_FL_ELEM * 2;
-  my_float_t att_arr[MODEL_SEQUENCE_LEN] = {std::numeric_limits<float>::lowest()};
-  my_float_t fatt_arr[MODEL_SEQUENCE_LEN] = {0.0f};
+  float_t att_arr[MODEL_SEQUENCE_LEN] = {std::numeric_limits<float>::lowest()};
+  float_t fatt_arr[MODEL_SEQUENCE_LEN] = {0.0f};
   #pragma HLS ARRAY_PARTITION variable=att_arr cyclic factor=4
   #pragma HLS ARRAY_PARTITION variable=fatt_arr cyclic factor=4
-  my_float_t max_val = std::numeric_limits<float>::lowest();
+  float_t max_val = std::numeric_limits<float>::lowest();
 
   int elements = 0;
   int in_off = 0;
-  my_float_t tmp_arr[32];
+  float_t tmp_arr[32];
   #pragma HLS ARRAY_PARTITION variable=tmp_arr complete
   multi_read:
   while (nPOS > 0) {
@@ -165,8 +215,9 @@ void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> 
       #pragma HLS PIPELINE II=1
 
       if (i < elements) {
-        tmp_arr[i] = att_in.read();
-        att_arr[in_off + i] = tmp_arr[i];  
+				float_t ntmp = att_in.read();
+        tmp_arr[i] = ntmp;
+        att_arr[in_off + i] = ntmp;  
       }else {
         tmp_arr[i] = std::numeric_limits<float>::lowest();
       }
@@ -176,7 +227,7 @@ void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> 
       #pragma HLS UNROLL
       for (int j = 0; j < stride; j++) {
         #pragma HLS UNROLL
-      tmp_arr[j] = (tmp_arr[j] < tmp_arr[j + stride]) ? tmp_arr[j + stride] : tmp_arr[j];
+      	tmp_arr[j] = (tmp_arr[j] < tmp_arr[j + stride]) ? tmp_arr[j + stride] : tmp_arr[j];
       }
     }
 
