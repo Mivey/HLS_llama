@@ -9,6 +9,10 @@
 #Ignore logs folder and log files
 /logs
 .log
+.rpt
+.vhd
+.v
+
 
 #Ignore lock files
 .lock
@@ -73,10 +77,27 @@ GeMV/testbenches/seed_42069/
 mha/*
 transformer_cu/.cache/
 transformer_cu/.cache/
-transformer_cu/combo_cu/
+# transformer_cu/combo_cu/
 transformer_cu/testbench/seed_42069/*
 transformer_cu/testbench/seed_42069_conv/*
 transformer_cu/testbench/weights/*
 transformer_cu/testbench/seed_199/*
 sampler_cu/.cache
 sampler_cu/sampler_cu/*
+# !transformer_cu/combo_cu/
+# !transformer_cu/combo_cu/hls/syn/report/csynth.rpt
+# !transformer_cu/combo_cu/hls/syn/report/transformer_cu_csynth.rpt
+# Match the folder, but look inside it
+!transformer_cu/combo_cu/
+
+# Ignore everything inside that folder
+transformer_cu/combo_cu/**
+
+# Allow Git to look into the report folder path
+!transformer_cu/combo_cu/hls/
+!transformer_cu/combo_cu/hls/syn/
+!transformer_cu/combo_cu/hls/syn/report/
+
+# Un-ignore your specific file
+!transformer_cu/combo_cu/hls/syn/report/transformer_cu_csynth.rpt
+!transformer_cu/combo_cu/hls/syn/report/csynth.rpt
