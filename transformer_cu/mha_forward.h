@@ -28,8 +28,27 @@ constexpr float Q_FACTOR = ((QUANT%4)==0) ? \
                  static_cast<float>((1<<(QUANT - 1)) - 1) : 127;
 
 /* ************************************* */
+struct fast_bf16{
+  ap_uint<16> bits;
+  
+  fast_bf16() {}
+
+  // convert float to bf16
+  fast_bf16(float f) {
+    #pragma HLS INLINE
+    ap_uint<32> float_bits = reinterpret_cast<ap_uint<32>&>(f);
+    bits = float_bits(31, 16);
+  }
+
+  operator float() const {
+    #pragma HLS INLINE
+    ap_uint<32> float_bits = (bits, ap_uint<16>(0));
+    return reinterpret_cast<float&>(float_bits);
+  }
+};
 // typedef ap_float<32, 8> my_float_t;
 typedef float my_float_t;
+// typedef fast_bf16 my_float_t;
 typedef int8_t my_quant_data_t;
 /* ************************************* */
 
