@@ -489,7 +489,7 @@ void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>>
       output.write(cache_array[j]);
     }
   
-  hls::fence(output, input);
+  // hls::fence(output, input);
   
   #pragma HLS STREAM variable=input depth=4
   #pragma HLS STREAM variable=output depth=4
