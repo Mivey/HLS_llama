@@ -82,108 +82,86 @@ void cu_selecter(  s_fdata_v_t &s_tokens,
   // r.AXI_SEL = 0;
   r.CURR_LAYER = fd.next_layer;
   r.FINAL_FLAG = 1;
-  
-  #pragma HLS BIND_STORAGE variable=res_con type=ram_t2p impl=bram
-  #pragma HLS ARRAY_PARTITION variable=res_con dim=1 type=cyclic factor=2
-
   #ifdef __DEBUG__
     // r.SAVE_ADDR += (r.N_DIM / SM_FL_ELEM);
     r.SAVE_ADDR = fd.SAVE_ADDR;
   #endif
   #ifdef __ULTRADEBUG__
-    // r.mmSAVE_ADDR += (r.M_DIM / SM_FL_ELEM);
+    // fd.mmSAVE_ADDR += (r.M_DIM / SM_FL_ELEM);
     r.mmSAVE_ADDR = fd.mmSAVE_ADDR;
   #endif
+  
+  #pragma HLS BIND_STORAGE variable=res_con type=ram_t2p impl=bram
+  #pragma HLS ARRAY_PARTITION variable=res_con dim=1 type=cyclic factor=2
+
 
   
   switch (fd.curr_state) {
-  case 0 :  
-    fd.next_state++;
-    //current GeMV dimensions:
-    r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-    r.M_DIM = MODEL_ELEMENTS * 3; // QKV
-    r.w_sf = tt.QKV_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.QKV_W / sizeof(idata_v_t);
-    #ifdef __DEBUG__
-      if (r.INIT == true) {
-        // r.SAVE_ADDR = 0;
-        r.INIT = false;
-      } 
-    #endif
-    key_out.write(r);
-    rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_att_W / sizeof(fdata_v_t)); 
-    // rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_att_W / sizeof(fdata_v_t)); 
-    #ifdef __DEBUG__
-      fd.SAVE_ADDR += (r.N_DIM / SM_FL_ELEM);
-    #endif
-    #ifdef __ULTRADEBUG__
-      fd.mmSAVE_ADDR += (r.M_DIM / SM_FL_ELEM);
-    #endif
-    break;
-            
-  case 1 :  
-    fd.next_state++;
-    //current GeMV dimensions:
-    r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-    r.M_DIM = MODEL_ELEMENTS; // Out
-    r.w_sf = tt.Out_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.Out_W / sizeof(idata_v_t);
-    key_out.write(r);
-    mha_kernel(s_tokens, diff, key_cache, value_cache, tt.POS, r.CURR_LAYER); 
-    #ifdef __DEBUG__
-      fd.SAVE_ADDR += (r.N_DIM / SM_FL_ELEM);
-    #endif
-    #ifdef __ULTRADEBUG__
-      fd.mmSAVE_ADDR += (r.M_DIM / SM_FL_ELEM);
-    #endif
-    break;
-            
-  case 2 :  
-    fd.next_state++;
-    //current GeMV dimensions:
-    r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-    r.M_DIM = MODEL_HIDDEN_DIM * 2; // gate & up
-    r.w_sf = tt.FF_w1w3_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.FF_w1w3_W / sizeof(idata_v_t);
-    key_out.write(r);
-    rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_ffn_W / sizeof(fdata_v_t));
-    #ifdef __DEBUG__
-      fd.SAVE_ADDR += (r.N_DIM / SM_FL_ELEM);
-    #endif
-    #ifdef __ULTRADEBUG__
-      fd.mmSAVE_ADDR += (r.M_DIM / SM_FL_ELEM);
-    #endif
-    break;
-            
-  case 3 :  
-    fd.next_layer = r.CURR_LAYER + 1;
-    fd.next_state = (fd.next_layer == MODEL_NUM_LAYERS) ? 4 : 0;
-    //current GeMV dimensions:
-    r.N_DIM = MODEL_HIDDEN_DIM; // 2048 tokens
-    r.M_DIM = MODEL_ELEMENTS; // down
-    r.w_sf = tt.FF_w2_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.FF_w2_W / sizeof(idata_v_t);
-    key_out.write(r);
-    swiglu_kernel(s_tokens, diff); 
-    #ifdef __DEBUG__
-      fd.SAVE_ADDR += (r.N_DIM / SM_FL_ELEM);
-    #endif
-    #ifdef __ULTRADEBUG__
-      fd.mmSAVE_ADDR += (r.M_DIM / SM_FL_ELEM);
-    #endif
-    break;
-            
-  case 4 :  
-    r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-    r.M_DIM = MODEL_TOKENS; // embeddings out
-    r.w_sf = tt.Embed_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.Embed_W / sizeof(idata_v_t);
-    r.FINAL_FLAG = false;
-    r.CURR_LAYER = 0;
-    key_out.write(r);
-    rmsnorm_kernel(s_tokens, diff, weights, res_con, 0, tt.rms_final_W/ sizeof(fdata_v_t)); 
-    break;
+		case 0 :  
+			fd.next_state++;
+			//current GeMV dimensions:
+			r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+			r.M_DIM = MODEL_ELEMENTS * 3; // QKV
+			// r.w_sf = tt.QKV_sf_W / sizeof(mfdata_v_t);
+			// r.w = tt.QKV_W / sizeof(idata_v_t);
+			key_out.write(r);
+			rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_att_W / sizeof(fdata_v_t)); 
+			break;
+							
+		case 1 :  
+			fd.next_state++;
+			//current GeMV dimensions:
+			r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+			r.M_DIM = MODEL_ELEMENTS; // Out
+			// r.w_sf = tt.Out_sf_W / sizeof(mfdata_v_t);
+			// r.w = tt.Out_W / sizeof(idata_v_t);
+			key_out.write(r);
+			mha_kernel(s_tokens, diff, key_cache, value_cache, tt.POS, r.CURR_LAYER); 
+			break;
+							
+		case 2 :  
+			fd.next_state++;
+			//current GeMV dimensions:
+			r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+			r.M_DIM = MODEL_HIDDEN_DIM * 2; // gate & up
+			// r.w_sf = tt.FF_w1w3_sf_W / sizeof(mfdata_v_t);
+			// r.w = tt.FF_w1w3_W / sizeof(idata_v_t);
+			key_out.write(r);
+			rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_ffn_W / sizeof(fdata_v_t));
+			break;
+							
+		case 3 :  
+			fd.next_layer = r.CURR_LAYER + 1;
+			fd.next_state = (fd.next_layer == MODEL_NUM_LAYERS) ? 4 : 0;
+			//current GeMV dimensions:
+			r.N_DIM = MODEL_HIDDEN_DIM; // 2048 tokens
+			r.M_DIM = MODEL_ELEMENTS; // down
+			// r.w_sf = tt.FF_w2_sf_W / sizeof(mfdata_v_t);
+			// r.w = tt.FF_w2_W / sizeof(idata_v_t);
+			key_out.write(r);
+			swiglu_kernel(s_tokens, diff); 
+			break;
+							
+		case 4 :  
+			r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+			r.M_DIM = MODEL_TOKENS; // embeddings out
+			// r.w_sf = tt.Embed_sf_W / sizeof(mfdata_v_t);
+			// r.w = tt.Embed_W / sizeof(idata_v_t);
+			r.FINAL_FLAG = false;
+			r.CURR_LAYER = 0;
+			key_out.write(r);
+			rmsnorm_kernel(s_tokens, diff, weights, res_con, 0, tt.rms_final_W/ sizeof(fdata_v_t)); 
+			break;
   }
+
+  #ifdef __DEBUG__
+    fd.SAVE_ADDR += (r.N_DIM / SM_FL_ELEM);
+    // r.SAVE_ADDR = fd.SAVE_ADDR;
+  #endif
+  #ifdef __ULTRADEBUG__
+    fd.mmSAVE_ADDR += (r.M_DIM / SM_FL_ELEM);
+    // r.mmSAVE_ADDR = fd.mmSAVE_ADDR;
+  #endif
 }
 
 //=============================================================
@@ -194,51 +172,51 @@ keys weight_fsm(const axi_reg &tt, fsm_data &fd){
   r.CURR_LAYER = fd.next_layer;
   
   switch (fd.curr_state) {
-  case 0 :  
-    fd.next_state++;
-    //current GeMV dimensions:
-    r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-    r.M_DIM = MODEL_ELEMENTS * 3; // QKV
-    r.w_sf = tt.QKV_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.QKV_W / sizeof(idata_v_t);
-    break;
-            
-  case 1 :  
-    fd.next_state++;
-    //current GeMV dimensions:
-    r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-    r.M_DIM = MODEL_ELEMENTS; // Out
-    r.w_sf = tt.Out_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.Out_W / sizeof(idata_v_t);
-    break;
-            
-  case 2 :  
-    fd.next_state++;
-    //current GeMV dimensions:
-    r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-    r.M_DIM = MODEL_HIDDEN_DIM * 2; // gate & up
-    r.w_sf = tt.FF_w1w3_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.FF_w1w3_W / sizeof(idata_v_t);
-    break;
-            
-  case 3 :  
-    fd.next_layer = r.CURR_LAYER + 1;
-    fd.next_state = (fd.next_layer == MODEL_NUM_LAYERS) ? 4 : 0;
-    //current GeMV dimensions:
-    r.N_DIM = MODEL_HIDDEN_DIM; // 2048 tokens
-    r.M_DIM = MODEL_ELEMENTS; // down
-    r.w_sf = tt.FF_w2_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.FF_w2_W / sizeof(idata_v_t);
-    break;
-            
-  case 4 :  
-    r.N_DIM = MODEL_ELEMENTS; // 768 tokens
-    r.M_DIM = MODEL_TOKENS; // embeddings out
-    r.w_sf = tt.Embed_sf_W / sizeof(mfdata_v_t);
-    r.w = tt.Embed_W / sizeof(idata_v_t);
-    r.FINAL_FLAG = false;
-    r.CURR_LAYER = 0;
-    break;
+		case 0 :  
+			fd.next_state++;
+			//current GeMV dimensions:
+			r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+			r.M_DIM = MODEL_ELEMENTS * 3; // QKV
+			r.w_sf = tt.QKV_sf_W / sizeof(mfdata_v_t);
+			r.w = tt.QKV_W / sizeof(idata_v_t);
+			break;
+							
+		case 1 :  
+			fd.next_state++;
+			//current GeMV dimensions:
+			r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+			r.M_DIM = MODEL_ELEMENTS; // Out
+			r.w_sf = tt.Out_sf_W / sizeof(mfdata_v_t);
+			r.w = tt.Out_W / sizeof(idata_v_t);
+			break;
+							
+		case 2 :  
+			fd.next_state++;
+			//current GeMV dimensions:
+			r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+			r.M_DIM = MODEL_HIDDEN_DIM * 2; // gate & up
+			r.w_sf = tt.FF_w1w3_sf_W / sizeof(mfdata_v_t);
+			r.w = tt.FF_w1w3_W / sizeof(idata_v_t);
+			break;
+							
+		case 3 :  
+			fd.next_layer = r.CURR_LAYER + 1;
+			fd.next_state = (fd.next_layer == MODEL_NUM_LAYERS) ? 4 : 0;
+			//current GeMV dimensions:
+			r.N_DIM = MODEL_HIDDEN_DIM; // 2048 tokens
+			r.M_DIM = MODEL_ELEMENTS; // down
+			r.w_sf = tt.FF_w2_sf_W / sizeof(mfdata_v_t);
+			r.w = tt.FF_w2_W / sizeof(idata_v_t);
+			break;
+							
+		case 4 :  
+			r.N_DIM = MODEL_ELEMENTS; // 768 tokens
+			r.M_DIM = MODEL_TOKENS; // embeddings out
+			r.w_sf = tt.Embed_sf_W / sizeof(mfdata_v_t);
+			r.w = tt.Embed_W / sizeof(idata_v_t);
+			r.FINAL_FLAG = false;
+			r.CURR_LAYER = 0;
+			break;
   }
   return r;
 }
@@ -329,14 +307,14 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
   const int RMS_SIZE = MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1);
   fdata_v_t internal_token[INTERNAL_DATA_SIZE/SM_FL_ELEM];
   fdata_v_t res_con[MODEL_ELEMENTS / SM_FL_ELEM]{};
-  fdata_v_t internal_rms_weights[RMS_SIZE];
+  // fdata_v_t internal_rms_weights[RMS_SIZE];
   ProbIndex ss_reg[REG_SIZE];
   float_t internal_coin;
   
   #pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
   #pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=bram
-  #pragma HLS ARRAY_PARTITION variable=internal_rms_weights dim=1 factor=1 type=block
-  #pragma HLS BIND_STORAGE variable=internal_rms_weights type=ram_1p impl=uram
+  // #pragma HLS ARRAY_PARTITION variable=internal_rms_weights dim=1 factor=1 type=block
+  // #pragma HLS BIND_STORAGE variable=internal_rms_weights type=ram_1p impl=uram
   #pragma HLS ARRAY_PARTITION variable=ss_reg complete dim=1
   
   fsm_data fd;
@@ -351,7 +329,7 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
 
   if (rms_flag) {
     // load weights into memory
-    mm2mm_store(internal_rms_weights, weights, (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)));
+    mm2mm_store(weights, weights, (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)));
   }
   
   mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, INTERNAL_DATA_SIZE);
@@ -362,7 +340,7 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
     hls::stream<keys> vec_cnt;
     #pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
     
-    cu_selecter(s_cu_sel_out, internal_rms_weights, internal_token, key_cache, value_cache, res_con, fd, tt, vec_cnt);
+    cu_selecter(s_cu_sel_out, weights, internal_token, key_cache, value_cache, res_con, fd, tt, vec_cnt);
     calc_loop(internal_token, ss_reg, s_wsf_0, s_wsf_1, s_w_0, s_w_1, s_cu_sel_out, vec_cnt
       #ifdef __DEBUG__
       , data_out
@@ -387,7 +365,7 @@ void transformer_cu(
         const int FF_w1w3_W, const int FF_w1w3_sf_W,
         const int FF_w2_W, const int FF_w2_sf_W, 
         const int Embed_W, const int Embed_sf_W, 
-        const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
+        const int rms_att_W, const int rms_ffn_W, const int rms_final_W, //const int curr_token,
       #ifdef __DEBUG__
         const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
       #endif

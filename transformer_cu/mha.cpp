@@ -3,6 +3,7 @@
 #include "rope.h"
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <fenv.h>
 #include <hls_math.h>
 #include <limits>
@@ -94,12 +95,13 @@ NEEDS REWRITE:
       bf16 to float?
 */
 
-void wide_mha_iterate(hls::stream<float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
+void wide_mha_iterate(hls::stream<float_t> &out, hls::stream<float_t> &s_max, s_mfdata_v_t &query, s_mfdata_v_t &key_cache, const int POS){
   
   const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
   const float_t score_scalar = 1.0f / sqrtf((float_t) MODEL_HEAD_SIZE);
   std::array<mfdata_v_t, (array_size)> query_arr;
   float_t att = 0.0f;
+	float_t max = std::numeric_limits<float_t>::lowest();
 	float_t patt[array_size]{};
 	#pragma HLS ARRAY_PARTITION variable=patt dim=1 type=complete
 	
@@ -118,18 +120,13 @@ void wide_mha_iterate(hls::stream<float_t> &out, s_mfdata_v_t & query, s_mfdata_
   pos_loop:
   for (size_t k = 0; k < POS; k++){
   #pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
-    //att_array adder tree
-    #pragma HLS PIPELINE
-    // for (int j = 0; j < array_size; j++) {
-    //   mfdata_v_t var = key_cache.read();
-    //   kc_arr[j] = var;
-    // }
-    
-    att_loop:// no name b/c we unroll 
+		#pragma HLS PIPELINE
+    att_loop:
     for (size_t j = 0; j < array_size; j++){
       mfdata_v_t tmpa = query_arr[j];
       mfdata_v_t tmpb = key_cache.read();
       for (int n = 0; n < MAX_FL_ELEM; n++) {
+				#pragma HLS UNROLL
         patt[j] += tmpa[n] * tmpb[n];
       }
     }
@@ -138,156 +135,226 @@ void wide_mha_iterate(hls::stream<float_t> &out, s_mfdata_v_t & query, s_mfdata_
 			att += patt[j];
 			patt[j] = 0.0f;
 		}
-    out.write(att * score_scalar);
+		float_t tmp_comp = att * score_scalar;
+    out.write(tmp_comp);
+		max = (max < att) ? att : max;
     att = 0.0f;
   }
+	s_max.write(max);
 }
 
-void old_wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
+
+// void old_wide_mha_iterate(hls::stream<my_float_t> &out, s_mfdata_v_t & query, s_mfdata_v_t &key_cache, const int POS){
   
-  const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
-  const my_float_t score_scalar = 1.0f / sqrtf((float) MODEL_HEAD_SIZE);
-  std::array<mfdata_v_t, (array_size)> query_arr;
-  my_float_t att = 0.0f;
+//   const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
+//   const my_float_t score_scalar = 1.0f / sqrtf((float) MODEL_HEAD_SIZE);
+//   std::array<mfdata_v_t, (array_size)> query_arr;
+//   my_float_t att = 0.0f;
   
-  mfdata_v_t kc_arr[array_size];
-  #pragma HLS ARRAY_PARTITION variable=kc_arr complete
-  #pragma HLS ARRAY_PARTITION variable=query_arr complete
+//   mfdata_v_t kc_arr[array_size];
+//   #pragma HLS ARRAY_PARTITION variable=kc_arr complete
+//   #pragma HLS ARRAY_PARTITION variable=query_arr complete
   
-  //get 64 elements of query
-  query_loop:
-  for (size_t j = 0; j < array_size; j++){
-    #pragma HLS PIPELINE II=1
-    query_arr[j] = query.read();
-  }
+//   //get 64 elements of query
+//   query_loop:
+//   for (size_t j = 0; j < array_size; j++){
+//     #pragma HLS PIPELINE II=1
+//     query_arr[j] = query.read();
+//   }
   
-  pos_loop:
-  for (size_t k = 0; k < POS; k++){
-  #pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
-    //att_array adder tree
-    #pragma HLS PIPELINE
-    for (int j = 0; j < array_size; j++) {
-      mfdata_v_t var = key_cache.read();
-      kc_arr[j] = var;
-    }
+//   pos_loop:
+//   for (size_t k = 0; k < POS; k++){
+//   #pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
+//     //att_array adder tree
+//     #pragma HLS PIPELINE
+//     for (int j = 0; j < array_size; j++) {
+//       mfdata_v_t var = key_cache.read();
+//       kc_arr[j] = var;
+//     }
     
-    att_loop:// no name b/c we unroll 
-    for (size_t j = 0; j < array_size; j++){
-      mfdata_v_t tmpa = query_arr[j];
-      mfdata_v_t tmpb = kc_arr[j];
-      for (int n = 0; n < MAX_FL_ELEM; n++) {
-        att += tmpa[n] * tmpb[n];
-      }
-    }
-    out.write(att * score_scalar);
-    att = 0.0f;
-  }
-}
+//     att_loop:// no name b/c we unroll 
+//     for (size_t j = 0; j < array_size; j++){
+//       mfdata_v_t tmpa = query_arr[j];
+//       mfdata_v_t tmpb = kc_arr[j];
+//       for (int n = 0; n < MAX_FL_ELEM; n++) {
+//         att += tmpa[n] * tmpb[n];
+//       }
+//     }
+//     out.write(att * score_scalar);
+//     att = 0.0f;
+//   }
+// }
 
-void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<my_float_t> &att_in, const int POS){
+void wide_mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<float_t> &iss, hls::stream<float_t> &s_max, hls::stream<my_float_t> &att_in, const int POS){
   
-  const int tPOS = (POS / 4 + 1) * 4;
+  // const int tPOS = (POS / 4 + 1) * 4;
   int nPOS = POS;
   const int LATENCY = 4;//MAX_FL_ELEM * 2;
-  float_t att_arr[MODEL_SEQUENCE_LEN] = {std::numeric_limits<float>::lowest()};
-  float_t fatt_arr[MODEL_SEQUENCE_LEN] = {0.0f};
-  #pragma HLS ARRAY_PARTITION variable=att_arr cyclic factor=4
-  #pragma HLS ARRAY_PARTITION variable=fatt_arr cyclic factor=4
-  float_t max_val = std::numeric_limits<float>::lowest();
-
-  int elements = 0;
-  int in_off = 0;
-  float_t tmp_arr[32];
-  #pragma HLS ARRAY_PARTITION variable=tmp_arr complete
-  multi_read:
-  while (nPOS > 0) {
-  #pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN/32 min=1
-    if (nPOS > 32) {
-      elements = 32;
-    } else {
-      elements = nPOS;
-    }
-    nPOS = nPOS - elements;
-    
-    read_n_comp:
-    for (int i = 0; i < 32; i++) {
-    #pragma HLS LOOP_TRIPCOUNT max=32 min=1
-      #pragma HLS PIPELINE II=1
-
-      if (i < elements) {
-				float_t ntmp = att_in.read();
-        tmp_arr[i] = ntmp;
-        att_arr[in_off + i] = ntmp;  
-      }else {
-        tmp_arr[i] = std::numeric_limits<float>::lowest();
-      }
-    }
-    
-    for (int stride = 16; stride > 0; stride >>=1){
-      #pragma HLS UNROLL
-      for (int j = 0; j < stride; j++) {
-        #pragma HLS UNROLL
-      	tmp_arr[j] = (tmp_arr[j] < tmp_arr[j + stride]) ? tmp_arr[j + stride] : tmp_arr[j];
-      }
-    }
-
-    max_val = (max_val < tmp_arr[0]) ? tmp_arr[0] : max_val;    
-    in_off +=32;
-  }
-  my_float_t final_soft_sum = 0.0f;
-  
+	
+  float_t part_soft_sum[8]{};// = 0.0f;
+	#pragma hls ARRAY_PARTITION variable=part_soft_sum dim=1 type=complete
+  float_t max_val = s_max.read();
   softmax_exp_loop:
-  for (int i = 0; i < tPOS; i++) {
-  #pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
-    #pragma HLS PIPELINE
-    #pragma HLS UNROLL factor=4
-    my_float_t calc = hls::expf((att_arr[i] - max_val));
-    final_soft_sum += calc;
-    fatt_arr[i] = calc;
-  }
-  my_float_t inv_soft_sum = 1.0f/final_soft_sum;
-
-  softmax_normalize_loop:
   for (int i = 0; i < POS; i++) {
-    // #pragma HLS LOOP_TRIPCOUNT max=(SEQ_LEN + 1) min=1
-    #pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN
-    #pragma HLS PIPELINE
-    my_float_t tempa = fatt_arr[i] * inv_soft_sum;
-    att_out.write(tempa) ;
+  #pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
+    #pragma HLS PIPELINE II=1
+    // #pragma HLS UNROLL factor=4
+    my_float_t calc = hls::expf((att_in.read() - max_val));
+		int32_t bar = i % 8;
+		
+    part_soft_sum[bar] += calc;
+    // att_arr[i] = calc;
+		att_out.write(calc);
   }
+	float_t final_soft_sum = 0.0f;
+	for (int i = 0; i < 8; i++) {
+		#pragma HLS UNROLL
+		final_soft_sum += part_soft_sum[i];
+	}
+  my_float_t inv_soft_sum = 1.0f/final_soft_sum;
+	iss.write(inv_soft_sum);
 }
 
-void wide_mha_weighted_sum(s_fdata_v_t &xb, hls::stream<my_float_t>  &att_in, s_mfdata_v_t &value_cache, const int POS){
+void mha_iterate(hls::stream<float_t> &out, hls::stream<float_t> &s_max, s_mfdata_v_t &query, s_mfdata_v_t &key_cache, const int POS){
+  
+  const size_t array_size = MODEL_HEAD_SIZE / MAX_FL_ELEM;
+  const float_t score_scalar = 1.0f / sqrtf((float_t) MODEL_HEAD_SIZE);
+  
+	for (int i = 0; i < MODEL_NUM_HEADS; i++) {
+		std::array<mfdata_v_t, (array_size)> query_arr;
+		float_t att = 0.0f;
+		float_t max = std::numeric_limits<float_t>::lowest();
+		float_t patt[array_size]{};
+		#pragma HLS ARRAY_PARTITION variable=patt dim=1 type=complete
+		#pragma HLS ARRAY_PARTITION variable=query_arr dim=1 type=complete
+	
+		//get 64 elements of query
+		query_loop:
+		for (size_t j = 0; j < array_size; j++){
+			#pragma HLS PIPELINE II=1
+			query_arr[j] = query.read();
+		}
+		
+		pos_loop:
+		for (size_t k = 0; k < POS; k++){
+		#pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
+			//att_array adder tree
+			#pragma HLS PIPELINE
+			
+			att_loop:// no name b/c we unroll 
+			for (size_t j = 0; j < array_size; j++){
+				mfdata_v_t tmpa = query_arr[j];
+				mfdata_v_t tmpb = key_cache.read();
+				for (int n = 0; n < MAX_FL_ELEM; n++) {
+					patt[j] += tmpa[n] * tmpb[n];
+				}
+			}
+			for (int j = 0; j < array_size; j++) {
+				#pragma hls UNROLL
+				att += patt[j];
+				patt[j] = 0.0f;
+			}
+			float_t tmp_comp = att * score_scalar;
+			out.write(tmp_comp);
+			max = (max < att) ? att : max;
+			att = 0.0f;
+		}
+		s_max.write(max);
+	}
+}
+
+void mha_softmax(hls::stream<my_float_t> &att_out, hls::stream<float_t> &iss, hls::stream<float_t> &s_max, hls::stream<my_float_t> &att_in, const int POS){
+  
+  int nPOS = POS;
+	for (int ii = 0; ii < MODEL_NUM_HEADS; ii++) {
+		
+		float_t part_soft_sum[8]{};// = 0.0f;
+		#pragma hls ARRAY_PARTITION variable=part_soft_sum dim=1 type=complete
+		float_t max_val = s_max.read();
+		
+		softmax_exp_loop:
+		for (int i = 0; i < POS; i++) {
+		#pragma HLS LOOP_TRIPCOUNT max=MODEL_SEQUENCE_LEN min=1
+			#pragma HLS PIPELINE II=1
+			my_float_t calc = hls::expf((att_in.read() - max_val));
+			int32_t bar = i % 8;
+			
+			part_soft_sum[bar] += calc;
+			att_out.write(calc);
+		}
+		
+		float_t final_soft_sum = 0.0f;
+		for (int i = 0; i < 8; i++) {
+			#pragma HLS UNROLL
+			final_soft_sum += part_soft_sum[i];
+		}
+		my_float_t inv_soft_sum = 1.0f/final_soft_sum;
+		iss.write(inv_soft_sum);
+	}
+}
+void mha_weighted_sum(s_mfdata_v_t &xb, hls::stream<my_float_t>  &att_in, hls::stream<my_float_t>  &inv_soft_sum, s_mfdata_v_t &value_cache, const int POS){
+
+  constexpr int ARR_SIZE = MODEL_HEAD_SIZE / MAX_FL_ELEM;
+
+	for (int i = 0; i < MODEL_NUM_HEADS; i++) {
+		mfdata_v_t xb_arr[ARR_SIZE] = {0.0f};
+		// mfdata_v_t vc_arr[ARR_SIZE];
+		#pragma HLS ARRAY_PARTITION variable=xb_arr complete
+		// #pragma HLS ARRAY_PARTITION variable=vc_arr complete
+		mha_pos:
+		for (size_t t = 0; t < POS; t++){
+			#pragma HLS PIPELINE
+			#pragma HLS LOOP_TRIPCOUNT max=(MODEL_SEQUENCE_LEN + 1) min=1
+			my_float_t val = att_in.read();
+			for (size_t ii = 0; ii < ARR_SIZE; ii++){
+				#pragma HLS UNROLL
+				xb_arr[ii] += /*att_arr[t]*/ val * value_cache.read();// vc_arr[i];
+			}
+		}
+		
+		float_t iss = inv_soft_sum.read();
+		mha_ws_stream_out_xb: // set all values to zero
+		for (int jj = 0 ; jj < ARR_SIZE; jj++) {
+			#pragma HLS PIPELINE II=1
+			xb.write(xb_arr[jj] * iss);
+			// mfdata_v_t tmp = xb_arr[jj] * iss;
+			// for (int k = 0; k < (MAX_FL_ELEM / SM_FL_ELEM); k++) {
+			// #pragma HLS PIPELINE II=1
+			// 	fdata_v_t sm_tmp;
+			// 	for (int l = 0; l < SM_FL_ELEM; l++) {
+			// 		#pragma HLS UNROLL
+			// 		sm_tmp[l] = tmp[SM_FL_ELEM * k + l];
+			// 	}
+			// 	xb.write(sm_tmp);
+			// }
+		}
+	}
+}
+
+
+void wide_mha_weighted_sum(s_mfdata_v_t &xb, hls::stream<my_float_t>  &att_in, hls::stream<my_float_t>  &inv_soft_sum, s_mfdata_v_t &value_cache, const int POS){
 
   constexpr int ARR_SIZE = MODEL_HEAD_SIZE / MAX_FL_ELEM;
   mfdata_v_t xb_arr[ARR_SIZE] = {0.0f};
-  mfdata_v_t vc_arr[ARR_SIZE];
   #pragma HLS ARRAY_PARTITION variable=xb_arr complete
-  #pragma HLS ARRAY_PARTITION variable=vc_arr complete
 
   mha_pos:
   for (size_t t = 0; t < POS; t++){
-    #pragma HLS PIPELINE
     #pragma HLS LOOP_TRIPCOUNT max=(MODEL_SEQUENCE_LEN + 1) min=1
+		#pragma HLS PIPELINE
     my_float_t val = att_in.read();
     for (size_t ii = 0; ii < ARR_SIZE; ii++){
       #pragma HLS UNROLL
-      xb_arr[ii] += /*att_arr[t]*/ val * value_cache.read();// vc_arr[i];
+      xb_arr[ii] +=  val * value_cache.read();
     }
   }
-  mha_ws_stream_out_xb: // set all values to zero
-  for (int jj = 0 ; jj < ARR_SIZE; jj++) {
-    mfdata_v_t tmp = xb_arr[jj];
-    for (int k = 0; k < (MAX_FL_ELEM / SM_FL_ELEM); k++) {
-    #pragma HLS PIPELINE II=1
-      fdata_v_t sm_tmp;
-      for (int l = 0; l < SM_FL_ELEM; l++) {
-        #pragma HLS UNROLL
-        sm_tmp[l] = tmp[SM_FL_ELEM * k + l];
-      }
-      xb.write(sm_tmp);
-    }
-  }
+	
+	float_t iss = inv_soft_sum.read();
+	
+	for (int jj = 0; jj < ARR_SIZE; jj++) {
+		#pragma HLS PIPELINE II=1
+		xb.write(iss * xb_arr[jj]);
+	}
 }
 
 void mha_kernel(s_fdata_v_t &output,
@@ -299,42 +366,110 @@ void mha_kernel(s_fdata_v_t &output,
   const size_t VAL_START = (INTERNAL_DATA_SIZE / 2) / MODEL_HEAD_SIZE + MODEL_NUM_HEADS / 2;
   const size_t KEY_START = MODEL_NUM_HEADS;
 
-  mha_num_head:
-  for (size_t i = 0; i < MODEL_NUM_HEADS; i++) {
-    s_fdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
+	
+    s_mfdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
     s_fdata_v_t max_tok_out;
-    hls::stream<my_float_t> q_max_val;
-    #pragma HLS STREAM variable=q_max_val        depth=4
+    hls::stream<my_float_t> s_max_val;
+    hls::stream<my_float_t> s_iss_val;
+    #pragma HLS STREAM variable=s_max_val        depth=4
+    #pragma HLS STREAM variable=s_iss_val        depth=4
     #pragma HLS STREAM variable=max_tok_out      depth=32
     s_mfdata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
     s_mfdata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
     s_mfdata_v_t s_key_cache_in, s_query, s_value_cache_in, s_query_r, s_key_cache_in_r;
+		s_mfdata_v_t s_xb_output;
 
     #pragma HLS STABLE variable=POS
     #pragma HLS STABLE variable=CURR_LAYER
 
-    #pragma HLS STREAM variable=s_key_cache_in depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
+    #pragma HLS STREAM variable=s_key_cache_in depth=64//MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
     #pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
     #pragma HLS STREAM variable=output depth=MODEL_ELEMENTS / SM_FL_ELEM
-    #pragma HLS STREAM variable=s_value_cache_in depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
-    #pragma HLS STREAM variable=s_query depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
+    #pragma HLS STREAM variable=s_value_cache_in depth=64//MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
+    #pragma HLS STREAM variable=s_query depth=64//MODEL_HEAD_SIZE / MAX_FL_ELEM //good
     #pragma HLS STREAM variable=s_query_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
-    #pragma HLS STREAM variable=xb_ws_q depth=8 //good
-    #pragma HLS STREAM variable=s_key_cache_to_kernel depth=32 //good
+    #pragma HLS STREAM variable=xb_ws_q depth=32 //good
+    #pragma HLS STREAM variable=s_key_cache_to_kernel depth=1024 //good
     #pragma HLS STREAM variable=s_value_cache_to_kernel depth=1024 //good
 
     #pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo impl=bram
     #pragma HLS BIND_STORAGE variable=s_query type=fifo impl=bram
     #pragma HLS BIND_STORAGE variable=s_query_r type=fifo impl=bram
-    #pragma HLS BIND_STORAGE variable=s_key_cache_to_kernel type=fifo impl=bram
-    #pragma HLS BIND_STORAGE variable=s_value_cache_to_kernel type=fifo impl=bram
+    #pragma HLS BIND_STORAGE variable=s_key_cache_to_kernel type=fifo impl=uram
+    #pragma HLS BIND_STORAGE variable=s_value_cache_to_kernel type=fifo impl=uram
 
-    #pragma HLS DATAFLOW
     
     hls::stream<my_float_t> mha_it_sm, att_sm_ws;
-    #pragma HLS STREAM variable=mha_it_sm depth=192
+    #pragma HLS STREAM variable=mha_it_sm depth=1536
     #pragma HLS BIND_STORAGE variable=mha_it_sm type=fifo impl=bram
-    #pragma HLS STREAM variable=att_sm_ws depth=192
+    #pragma HLS STREAM variable=att_sm_ws depth=1536
+    #pragma HLS BIND_STORAGE variable=att_sm_ws type=fifo impl=bram
+
+		#pragma HLS DATAFLOW
+
+		mm2s_vec_up(s_query_r, tokens, 0, (MODEL_ELEMENTS / MAX_FL_ELEM));
+		mm2s_vec_up(s_key_cache_in_r, tokens, (MODEL_ELEMENTS / SM_FL_ELEM), (INTERNAL_DATA_SIZE/(SM_FL_ELEM * 2)), (MODEL_ELEMENTS / MAX_FL_ELEM));
+		mm2s_vec_up(s_value_cache_in, tokens, ((INTERNAL_DATA_SIZE / 2 + MODEL_ELEMENTS / 2) / SM_FL_ELEM), (MODEL_ELEMENTS / MAX_FL_ELEM) );
+		rope_kernel(s_query, s_query_r, POS);
+		rope_kernel(s_key_cache_in, s_key_cache_in_r, POS);
+		mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS);
+		mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, CURR_LAYER, POS);
+    mha_iterate(mha_it_sm, s_max_val, s_query, s_key_cache_to_kernel, POS + 1);
+    mha_softmax(att_sm_ws, s_iss_val, s_max_val, mha_it_sm, POS + 1);
+    mha_weighted_sum(xb_ws_q, att_sm_ws, s_iss_val, s_value_cache_to_kernel, POS + 1);
+		vec_down_converter(output, xb_ws_q, (MODEL_ELEMENTS / SM_FL_ELEM));
+  return;
+}
+
+
+void wide_mha_kernel(s_fdata_v_t &output,
+                fdata_v_t *tokens, //6 mha_kernel
+                mfdata_v_t *key_cache, 
+                mfdata_v_t *value_cache, 
+                const int POS, const int CURR_LAYER){
+
+  const size_t VAL_START = (INTERNAL_DATA_SIZE / 2) / MODEL_HEAD_SIZE + MODEL_NUM_HEADS / 2;
+  const size_t KEY_START = MODEL_NUM_HEADS;
+
+  mha_num_head:
+  for (size_t i = 0; i < MODEL_NUM_HEADS; i++) {
+    #pragma HLS DATAFLOW
+    s_mfdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
+    s_fdata_v_t max_tok_out;
+    hls::stream<my_float_t> s_max_val;
+    hls::stream<my_float_t> s_iss_val;
+    #pragma HLS STREAM variable=s_max_val        depth=4
+    #pragma HLS STREAM variable=s_iss_val        depth=4
+    #pragma HLS STREAM variable=max_tok_out      depth=32
+    s_mfdata_v_t s_key_cache_to_kernel("From DDR to kernel key cache");
+    s_mfdata_v_t s_value_cache_to_kernel("From DDR to kernel value cache");
+    s_mfdata_v_t s_key_cache_in, s_query, s_value_cache_in, s_query_r, s_key_cache_in_r;
+		s_mfdata_v_t s_xb_output;
+
+    #pragma HLS STABLE variable=POS
+    #pragma HLS STABLE variable=CURR_LAYER
+
+    #pragma HLS STREAM variable=s_key_cache_in depth=MODEL_HEAD_SIZE  //good
+    #pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
+    #pragma HLS STREAM variable=output depth=MODEL_ELEMENTS / SM_FL_ELEM
+    #pragma HLS STREAM variable=s_value_cache_in depth=MODEL_HEAD_SIZE  //good
+    #pragma HLS STREAM variable=s_query depth=MODEL_HEAD_SIZE //good
+    #pragma HLS STREAM variable=s_query_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
+    #pragma HLS STREAM variable=xb_ws_q depth=64 //good
+    #pragma HLS STREAM variable=s_key_cache_to_kernel depth=1024 //good
+    #pragma HLS STREAM variable=s_value_cache_to_kernel depth=1024 //good
+
+		#pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo impl=srl 
+    #pragma HLS BIND_STORAGE variable=s_query type=fifo impl=bram
+		#pragma HLS BIND_STORAGE variable=s_query_r type=fifo impl=srl
+    #pragma HLS BIND_STORAGE variable=s_key_cache_to_kernel type=fifo impl=uram
+    #pragma HLS BIND_STORAGE variable=s_value_cache_to_kernel type=fifo impl=uram
+
+    
+    hls::stream<my_float_t> mha_it_sm, att_sm_ws;
+    #pragma HLS STREAM variable=mha_it_sm depth=1536
+    #pragma HLS BIND_STORAGE variable=mha_it_sm type=fifo impl=bram
+    #pragma HLS STREAM variable=att_sm_ws depth=1536
     #pragma HLS BIND_STORAGE variable=att_sm_ws type=fifo impl=bram
 
     mha_input_data(s_query_r, tokens, i * MODEL_HEAD_SIZE, 0); //read query first
@@ -344,9 +479,10 @@ void mha_kernel(s_fdata_v_t &output,
     rope_kernel<my_float_t, MAX_FL_ELEM, MODEL_HEAD_SIZE>(s_key_cache_in, s_key_cache_in_r, POS);
     mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS, i);
     mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, CURR_LAYER, POS, i);
-    wide_mha_iterate(mha_it_sm, s_query, s_key_cache_to_kernel, POS + 1);
-    wide_mha_softmax(att_sm_ws, mha_it_sm, POS + 1);
-    wide_mha_weighted_sum(output, att_sm_ws, s_value_cache_to_kernel, POS + 1);
+    wide_mha_iterate(mha_it_sm, s_max_val, s_query, s_key_cache_to_kernel, POS + 1);
+    wide_mha_softmax(att_sm_ws, s_iss_val, s_max_val, mha_it_sm, POS + 1);
+    wide_mha_weighted_sum(xb_ws_q, att_sm_ws, s_iss_val, s_value_cache_to_kernel, POS + 1);
+		vec_down_converter(output, xb_ws_q, (MODEL_HEAD_SIZE / SM_FL_ELEM));
   }
   return;
 }

@@ -66,7 +66,7 @@ void mha_WAR_data_mover_uk(hls::vector<T, M> *cache, hls::stream<hls::vector<T, 
     
   mha_num_head_loop:
   for (int i = 0; i < MODEL_NUM_HEADS; i++) {
-      #pragma HLS LOOP_FLATTEN
+    #pragma HLS LOOP_FLATTEN
     int addr = layer_offset + (i * head_offset);
     fw_mha_pos_loop:
     for (int j = 0; j < vec_to_read; j++) {
@@ -120,39 +120,6 @@ void vec_up_converter(hls::stream<hls::vector<my_float_t, M>> &out, hls::stream<
       }
     }
     out.write(mtmp);
-  }
-}
-
-template<size_t N, size_t M>
-void vec_down_converter(hls::stream<hls::vector<my_float_t, N>> &out, hls::stream<hls::vector<my_float_t, M>> &in, const int N_cnt){
-  
-  static_assert(M % N == 0, "M must be divisible by N");
-  static_assert(N > 0,      "N must be positive");
-  // const int num_heads = vSize / MODEL_HEAD_SIZE;
-  const size_t ratio = M/N;
-  
-  typedef hls::vector<my_float_t, M> M_t;
-  typedef hls::vector<my_float_t, N> N_t;
-
-  M_t shift_reg;
-  
-  mha_WAR_store: 
-  for (int i = 0; i < N_cnt; i++) {
-    #pragma HLS PIPELINE II=1
-    
-    if (i % ratio == 0) { shift_reg = in.read(); }
-    
-    N_t tmp;
-    for (int k = 0; k < N; k++) {
-        #pragma HLS UNROLL
-        tmp[k] = shift_reg[k]; 
-    }
-    out.write(tmp);
-    
-    for (int s = 0; s < M - N; s++) {
-        #pragma HLS UNROLL
-        shift_reg[s] = shift_reg[s + N];
-    }
   }
 }
 
