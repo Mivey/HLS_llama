@@ -799,43 +799,96 @@ void newgen(Transformer *transformer, Tokenizer *tokenizer, Sampler* sampler, ch
     // start the main loop
     long start = 0;  // used to time our code, only initialized after first iteration
     int next;        // will store the next token in the sequence
-		int n_val;		//value from PL
+		// int n_val;		//value from PL
     int token = prompt_tokens[0]; // kick off with the first token in the prompt
     int pos = 0;     // position in the sequence
 		float flipped = random_f32(&sampler->rng_state);
 		start = time_in_ms();
 		
-		f.startForward(token, pos, flipped);
+		f.enable_prefill(); // skips the unnecessary logits calculations for the prompt. 
+		f.set_rms_flag(true); // loads the rms weights into memeory the first time
 		
-    while (pos < steps) {
+		next = token;
+		for (int ii = 0; ii < (num_prompt_tokens - 1); ii++) {
+			f.startForward(next, pos, flipped);
 			pos++;
+			if (ii != 0) {
+				char* piece = decode(tokenizer, token, next);
+				safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
+				fflush(stdout);
+			}
+			token = next;
 			flipped = random_f32(&sampler->rng_state);
 			next = f.endForward();
-			// advance the state state machine
-			if (pos < num_prompt_tokens) {
-				// if we are still processing the input prompt, force the next prompt token
-				next = prompt_tokens[pos];
-			} 
-			// data-dependent terminating condition: the BOS (=1) token delimits sequences
-			if (next == 1) { break; }
+		}
+
+		// unroll one loop with the rms flag enabled just incase the prompt is blank and to avoid unnecessary branching
+		f.enable_decode();
+		f.set_rms_flag(true);
+		f.startForward(next, pos, flipped);
+		pos++;
+		char* piece = decode(tokenizer, token, next);
+		safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
+		fflush(stdout);
+		token = next;
+		flipped = random_f32(&sampler->rng_state);
+		next = f.endForward();
+		f.set_rms_flag(false);
+
+		do {
+			
 			f.startForward(next, pos, flipped);
-
-
-			// print the token as string, decode it with the Tokenizer object
+			pos++;
 			char* piece = decode(tokenizer, token, next);
 			safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
 			fflush(stdout);
 			token = next;
-    }
+			flipped = random_f32(&sampler->rng_state);
+			next = f.endForward();
+			
+		}while (pos < steps);
     printf("\n");
 
-    // report achieved tok/s (pos-1 because the timer starts after first iteration)
+    // report achieved tok/s 
     if (pos > 1) {
         long end = time_in_ms();
-        fprintf(stderr, "achieved tok/s: %f\n", (pos-1) / (double)(end-start)*1000);
+        fprintf(stderr, "achieved tok/s: %f\n", (pos) / (double)(end-start)*1000);
     }
 
     free(prompt_tokens);
+
+		
+		// set rms init high, prefill on
+		// check if num_prompt_tokens - 1 
+		// set prefill off, get coin value
+		//next while loop
+			// startForward
+			// calculate coin value
+			// say previous token
+			// wait for end
+			//
+		// f.startForward(next, pos, flipped);
+		
+    // while (pos < steps) {
+		// 	pos++;
+		// 	flipped = random_f32(&sampler->rng_state);
+		// 	next = f.endForward();
+		// 	// advance the state state machine
+		// 	if (pos < num_prompt_tokens) {
+		// 		// if we are still processing the input prompt, force the next prompt token
+		// 		next = prompt_tokens[pos];
+		// 	} 
+		// 	// data-dependent terminating condition: the BOS (=1) token delimits sequences
+		// 	if (next == 1) { break; }
+		// 	f.startForward(next, pos, flipped);
+
+
+		// 	// print the token as string, decode it with the Tokenizer object
+		// 	char* piece = decode(tokenizer, token, next);
+		// 	safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
+		// 	fflush(stdout);
+		// 	token = next;
+    // }
 }
 
 // void generate(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler, char *prompt, int steps, ForwardBlock &f) {
