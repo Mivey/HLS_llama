@@ -142,3 +142,8 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
     quant_out(tok_sf_out, tok_out, tokens_out, max_val);
   }
 }
+
+
+void dequantize_kernel(hls::stream<my_float_t> &tokens, idata_v_t* tokq, mfdata_v_t* toksf){
+	
+}

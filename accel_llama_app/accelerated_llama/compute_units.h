@@ -49,57 +49,57 @@ typedef struct {
     int seq_len; // max sequence length
 } Config;
 
-typedef struct {
-    int8_t* q;    // quantized values
-    float* s; // scaling factors
-} QuantizedTensor;
+// typedef struct {
+//     int8_t* q;    // quantized values
+//     float* s; // scaling factors
+// } QuantizedTensor;
 
-typedef struct {
-    // token embedding table
-    QuantizedTensor *q_tokens; // (vocab_size, dim)
-    float* token_embedding_table; // same, but dequantized
+// typedef struct {
+//     // token embedding table
+//     QuantizedTensor *q_tokens; // (vocab_size, dim)
+//     float* token_embedding_table; // same, but dequantized
 
-    // weights for rmsnorms
-    float* rms_att_weight; // (layer, dim) rmsnorm weights
-    float* rms_ffn_weight; // (layer, dim)
-    // weights for matmuls. note dim == n_heads * head_size
-    QuantizedTensor *wq; // (layer, dim, n_heads * head_size)
-    QuantizedTensor *wk; // (layer, dim, n_kv_heads * head_size)
-    QuantizedTensor *wv; // (layer, dim, n_kv_heads * head_size)
-    QuantizedTensor *wo; // (layer, n_heads * head_size, dim)
-    // weights for ffn
-    QuantizedTensor *w1; // (layer, hidden_dim, dim)
-    QuantizedTensor *w2; // (layer, dim, hidden_dim)
-    QuantizedTensor *w3; // (layer, hidden_dim, dim)
-    // final rmsnorm
-    float* rms_final_weight; // (dim,)
-    // (optional) classifier weights for the logits, on the last layer
-    QuantizedTensor *wcls;
-} TransformerWeights;
+//     // weights for rmsnorms
+//     float* rms_att_weight; // (layer, dim) rmsnorm weights
+//     float* rms_ffn_weight; // (layer, dim)
+//     // weights for matmuls. note dim == n_heads * head_size
+//     QuantizedTensor *wq; // (layer, dim, n_heads * head_size)
+//     QuantizedTensor *wk; // (layer, dim, n_kv_heads * head_size)
+//     QuantizedTensor *wv; // (layer, dim, n_kv_heads * head_size)
+//     QuantizedTensor *wo; // (layer, n_heads * head_size, dim)
+//     // weights for ffn
+//     QuantizedTensor *w1; // (layer, hidden_dim, dim)
+//     QuantizedTensor *w2; // (layer, dim, hidden_dim)
+//     QuantizedTensor *w3; // (layer, hidden_dim, dim)
+//     // final rmsnorm
+//     float* rms_final_weight; // (dim,)
+//     // (optional) classifier weights for the logits, on the last layer
+//     QuantizedTensor *wcls;
+// } TransformerWeights;
 
-typedef struct {
-    // current wave of activations
-    float *x; // activation at current time stamp (dim,)
-    float *xb; // same, but inside a residual branch (dim,)
-    float *xb2; // an additional buffer just for convenience (dim,)
-    float *hb; // buffer for hidden dimension in the ffn (hidden_dim,)
-    float *hb2; // buffer for hidden dimension in the ffn (hidden_dim,)
-    QuantizedTensor xq; // quantized x (dim,)
-    QuantizedTensor hq; // quantized hb (hidden_dim,)
-    float *q; // query (dim,)
-    float *k; // key (dim,)
-    float *v; // value (dim,)
-    float *att; // buffer for scores/attention values (n_heads, seq_len)
-    float *logits; // output logits
-    // kv cache
-    float* key_cache;   // (layer, seq_len, dim)
-    float* value_cache; // (layer, seq_len, dim)
-} RunState;
+// typedef struct {
+//     // current wave of activations
+//     float *x; // activation at current time stamp (dim,)
+//     float *xb; // same, but inside a residual branch (dim,)
+//     float *xb2; // an additional buffer just for convenience (dim,)
+//     float *hb; // buffer for hidden dimension in the ffn (hidden_dim,)
+//     float *hb2; // buffer for hidden dimension in the ffn (hidden_dim,)
+//     QuantizedTensor xq; // quantized x (dim,)
+//     QuantizedTensor hq; // quantized hb (hidden_dim,)
+//     float *q; // query (dim,)
+//     float *k; // key (dim,)
+//     float *v; // value (dim,)
+//     float *att; // buffer for scores/attention values (n_heads, seq_len)
+//     float *logits; // output logits
+//     // kv cache
+//     float* key_cache;   // (layer, seq_len, dim)
+//     float* value_cache; // (layer, seq_len, dim)
+// } RunState;
 
 typedef struct {
     Config config; // the hyperparameters of the architecture (the blueprint)
-    TransformerWeights weights; // the weights of the model
-    RunState state; // buffers for the "wave" of activations in the forward pass
+    // TransformerWeights weights; // the weights of the model
+    // RunState state; // buffers for the "wave" of activations in the forward pass
     // some more state needed to properly clean up the memory mapping (sigh)
     int fd; // file descriptor for memory mapping
     float* data; // memory mapped data pointer
@@ -111,7 +111,7 @@ typedef struct {
 class ForwardBlock{
 	public:
 		ForwardBlock(
-			int device_id, std::string& binaryFile, const std::string &checkpoint, Transformer *t){
+			int device_id, std::string& binaryFile, const std::string &checkpoint){//, Transformer *t){
 				
 			try {
 				device = xrt::device(device_id);
@@ -129,9 +129,9 @@ class ForwardBlock{
 			weights_init(checkpoint);
 			run_init();
 			
-			p = &t->config;
-			w = &t->weights;
-			s = &t->state;
+			// p = &t->config;
+			// w = &t->weights;
+			// s = &t->state;
 			std::cout<<"did I test it here?\n";
 
 		}
@@ -227,8 +227,8 @@ RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORW
 		axi_reg tt;
 		
 		Config* p;
-		TransformerWeights* w;
-		RunState* s;
+		// TransformerWeights* w;
+		// RunState* s;
 
 		//private method to store the KV cache objects.
 		void allocate_cache_init(){

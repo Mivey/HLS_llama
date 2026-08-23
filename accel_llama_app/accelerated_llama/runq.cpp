@@ -109,52 +109,52 @@ void quantize(QuantizedTensor *qx, float* x, int n) {
 }
 
 /* initialize `n` x quantized tensor (with `size_each` elements), starting from memory pointed at *ptr */
-QuantizedTensor *init_quantized_tensors(void **ptr, int n, int size_each) {
-    void *p = *ptr;
-    QuantizedTensor *res = (QuantizedTensor*) malloc(n * sizeof(QuantizedTensor));
-    for(int i=0; i<n; i++) {
-        /* map quantized int8 values*/
-        res[i].q = (int8_t*)p;
-        p = (int8_t*)p + size_each;
-        /* map scale factors */
-        res[i].s = (float*)p;
-        p = (float*)p + size_each / GS;
-    }
-    *ptr = p; // advance ptr to current position
-    return res;
-}
+// QuantizedTensor *init_quantized_tensors(void **ptr, int n, int size_each) {
+//     void *p = *ptr;
+//     QuantizedTensor *res = (QuantizedTensor*) malloc(n * sizeof(QuantizedTensor));
+//     for(int i=0; i<n; i++) {
+//         /* map quantized int8 values*/
+//         res[i].q = (int8_t*)p;
+//         p = (int8_t*)p + size_each;
+//         /* map scale factors */
+//         res[i].s = (float*)p;
+//         p = (float*)p + size_each / GS;
+//     }
+//     *ptr = p; // advance ptr to current position
+//     return res;
+// }
 
-void memory_map_weights(TransformerWeights *w, Config* p, void* ptr, uint8_t shared_classifier) {
-    int head_size = p->dim / p->n_heads;
-    // first are the parameters that are kept in fp32 (the rmsnorm (1D) weights)
-    float* fptr = (float*) ptr; // cast our pointer to float*
-    w->rms_att_weight = fptr;
-    fptr += p->n_layers * p->dim;
-    w->rms_ffn_weight = fptr;
-    fptr += p->n_layers * p->dim;
-    w->rms_final_weight = fptr;
-    fptr += p->dim;
+// void memory_map_weights(TransformerWeights *w, Config* p, void* ptr, uint8_t shared_classifier) {
+//     int head_size = p->dim / p->n_heads;
+//     // first are the parameters that are kept in fp32 (the rmsnorm (1D) weights)
+//     float* fptr = (float*) ptr; // cast our pointer to float*
+//     w->rms_att_weight = fptr;
+//     fptr += p->n_layers * p->dim;
+//     w->rms_ffn_weight = fptr;
+//     fptr += p->n_layers * p->dim;
+//     w->rms_final_weight = fptr;
+//     fptr += p->dim;
 
-    // now read all the quantized weights
-    ptr = (void*)fptr; // now cast the pointer back to void*
-    w->q_tokens = init_quantized_tensors(&ptr, 1, p->vocab_size * p->dim);
-    // dequantize token embedding table
-    w->token_embedding_table = (float*) malloc(p->vocab_size * p->dim * sizeof(float));
-    dequantize(w->q_tokens, w->token_embedding_table, p->vocab_size * p->dim);
+//     // now read all the quantized weights
+//     ptr = (void*)fptr; // now cast the pointer back to void*
+//     w->q_tokens = init_quantized_tensors(&ptr, 1, p->vocab_size * p->dim);
+//     // dequantize token embedding table
+//     w->token_embedding_table = (float*) malloc(p->vocab_size * p->dim * sizeof(float));
+//     dequantize(w->q_tokens, w->token_embedding_table, p->vocab_size * p->dim);
 
-    w->wq = init_quantized_tensors(&ptr, p->n_layers, p->dim * (p->n_heads * head_size));
-    w->wk = init_quantized_tensors(&ptr, p->n_layers, p->dim * (p->n_kv_heads * head_size));
-    w->wv = init_quantized_tensors(&ptr, p->n_layers, p->dim * (p->n_kv_heads * head_size));
-    w->wo = init_quantized_tensors(&ptr, p->n_layers, (p->n_heads * head_size) * p->dim);
+//     w->wq = init_quantized_tensors(&ptr, p->n_layers, p->dim * (p->n_heads * head_size));
+//     w->wk = init_quantized_tensors(&ptr, p->n_layers, p->dim * (p->n_kv_heads * head_size));
+//     w->wv = init_quantized_tensors(&ptr, p->n_layers, p->dim * (p->n_kv_heads * head_size));
+//     w->wo = init_quantized_tensors(&ptr, p->n_layers, (p->n_heads * head_size) * p->dim);
 
-    w->w1 = init_quantized_tensors(&ptr, p->n_layers, p->dim * p->hidden_dim);
-    w->w2 = init_quantized_tensors(&ptr, p->n_layers, p->hidden_dim * p->dim);
-    w->w3 = init_quantized_tensors(&ptr, p->n_layers, p->dim * p->hidden_dim);
+//     w->w1 = init_quantized_tensors(&ptr, p->n_layers, p->dim * p->hidden_dim);
+//     w->w2 = init_quantized_tensors(&ptr, p->n_layers, p->hidden_dim * p->dim);
+//     w->w3 = init_quantized_tensors(&ptr, p->n_layers, p->dim * p->hidden_dim);
 
-    w->wcls = shared_classifier ? w->q_tokens : init_quantized_tensors(&ptr, 1, p->dim * p->vocab_size);
-}
+//     w->wcls = shared_classifier ? w->q_tokens : init_quantized_tensors(&ptr, 1, p->dim * p->vocab_size);
+// }
 
-void read_checkpoint(char* checkpoint, Config* config, TransformerWeights* weights,
+void read_checkpoint(char* checkpoint, Config* config, //TransformerWeights* weights,
                      int* fd, float** data, ssize_t* file_size) {
     FILE *file = fopen(checkpoint, "rb");
     if (!file) { fprintf(stderr, "Couldn't open file %s\n", checkpoint); exit(EXIT_FAILURE); }
@@ -180,43 +180,44 @@ void read_checkpoint(char* checkpoint, Config* config, TransformerWeights* weigh
     *file_size = ftell(file); // get the file size, in bytes
     fclose(file);
     // memory map the Transformer weights into the data pointer
-    *fd = open(checkpoint, O_RDONLY); // open in read only mode
-    if (*fd == -1) { fprintf(stderr, "open failed!\n"); exit(EXIT_FAILURE); }
-    *data = (float*) mmap(NULL, *file_size, PROT_READ, MAP_PRIVATE, *fd, 0);
-    if (*data == MAP_FAILED) { fprintf(stderr, "mmap failed!\n"); exit(EXIT_FAILURE); }
-    void* weights_ptr = ((char*)*data) + header_size; // skip header bytes. char is 1 byte
-    memory_map_weights(weights, config, weights_ptr, shared_classifier);
+    // *fd = open(checkpoint, O_RDONLY); // open in read only mode
+    // if (*fd == -1) { fprintf(stderr, "open failed!\n"); exit(EXIT_FAILURE); }
+    // *data = (float*) mmap(NULL, *file_size, PROT_READ, MAP_PRIVATE, *fd, 0);
+    // if (*data == MAP_FAILED) { fprintf(stderr, "mmap failed!\n"); exit(EXIT_FAILURE); }
+    // void* weights_ptr = ((char*)*data) + header_size; // skip header bytes. char is 1 byte
+    // memory_map_weights(weights, config, weights_ptr, shared_classifier);
 }
 
 void build_transformer(Transformer *t, char* checkpoint_path) {
     // read in the Config and the Weights from the checkpoint
-    read_checkpoint(checkpoint_path, &t->config, &t->weights, &t->fd, &t->data, &t->file_size);
+    // read_checkpoint(checkpoint_path, &t->config, &t->weights, &t->fd, &t->data, &t->file_size);
+    read_checkpoint(checkpoint_path, &t->config, &t->fd, &t->data, &t->file_size);
     // allocate the RunState buffers
-    malloc_run_state(&t->state, &t->config);
+    // malloc_run_state(&t->state, &t->config);
 }
 
 void free_transformer(Transformer* t) {
     // free QuantizedTensors
-    free(t->weights.q_tokens);
-    free(t->weights.token_embedding_table);
-    free(t->weights.wq);
-    free(t->weights.wk);
-    free(t->weights.wv);
-    free(t->weights.wo);
-    free(t->weights.w1);
-    free(t->weights.w2);
-    free(t->weights.w3);
-    if(t->weights.wcls != t->weights.q_tokens) { free(t->weights.wcls); }
+    // free(t->weights.q_tokens);
+    // free(t->weights.token_embedding_table);
+    // free(t->weights.wq);
+    // free(t->weights.wk);
+    // free(t->weights.wv);
+    // free(t->weights.wo);
+    // free(t->weights.w1);
+    // free(t->weights.w2);
+    // free(t->weights.w3);
+    // if(t->weights.wcls != t->weights.q_tokens) { free(t->weights.wcls); }
     // close the memory mapping
-    if (t->data != MAP_FAILED) { munmap(t->data, t->file_size); }
+    // if (t->data != MAP_FAILED) { munmap(t->data, t->file_size); }
     if (t->fd != -1) { close(t->fd); }
     // free the RunState buffers
-    free_run_state(&t->state);
+    // free_run_state(&t->state);
 }
 
 // ----------------------------------------------------------------------------
 // neural net blocks; the dynamics of the Transformer
-
+/*
 void rmsnorm(float* o, float* x, float* weight, int size) {
     // calculate sum of squares
     float ss = 0.0f;
@@ -417,7 +418,7 @@ float* forward(Transformer* transformer, int token, int pos) {
     matmul(s->logits, &s->xq, w->wcls, dim, p->vocab_size);
     return s->logits;
 }
-
+*/
 // ----------------------------------------------------------------------------
 // The Byte Pair Encoding (BPE) Tokenizer that translates strings <-> tokens
 
@@ -644,82 +645,82 @@ typedef struct {
     unsigned long long rng_state;
 } Sampler;
 
-int sample_argmax(float* probabilities, int n) {
-    // return the index that has the highest probability
-    int max_i = 0;
-    float max_p = probabilities[0];
-    for (int i = 1; i < n; i++) {
-        if (probabilities[i] > max_p) {
-            max_i = i;
-            max_p = probabilities[i];
-        }
-    }
-    return max_i;
-}
+// int sample_argmax(float* probabilities, int n) {
+//     // return the index that has the highest probability
+//     int max_i = 0;
+//     float max_p = probabilities[0];
+//     for (int i = 1; i < n; i++) {
+//         if (probabilities[i] > max_p) {
+//             max_i = i;
+//             max_p = probabilities[i];
+//         }
+//     }
+//     return max_i;
+// }
 
-int sample_mult(float* probabilities, int n, float coin) {
-    // sample index from probabilities (they must sum to 1!)
-    // coin is a random number in [0, 1), usually from random_f32()
-    float cdf = 0.0f;
-    for (int i = 0; i < n; i++) {
-        cdf += probabilities[i];
-        if (coin < cdf) {
-            return i;
-        }
-    }
-    return n - 1; // in case of rounding errors
-}
+// int sample_mult(float* probabilities, int n, float coin) {
+//     // sample index from probabilities (they must sum to 1!)
+//     // coin is a random number in [0, 1), usually from random_f32()
+//     float cdf = 0.0f;
+//     for (int i = 0; i < n; i++) {
+//         cdf += probabilities[i];
+//         if (coin < cdf) {
+//             return i;
+//         }
+//     }
+//     return n - 1; // in case of rounding errors
+// }
 
-int compare(const void* a, const void* b) {
-    ProbIndex* a_ = (ProbIndex*) a;
-    ProbIndex* b_ = (ProbIndex*) b;
-    if (a_->prob > b_->prob) return -1;
-    if (a_->prob < b_->prob) return 1;
-    return 0;
-}
+// int compare(const void* a, const void* b) {
+//     ProbIndex* a_ = (ProbIndex*) a;
+//     ProbIndex* b_ = (ProbIndex*) b;
+//     if (a_->prob > b_->prob) return -1;
+//     if (a_->prob < b_->prob) return 1;
+//     return 0;
+// }
 
-int sample_topp(float* probabilities, int n, float topp, ProbIndex* probindex, float coin) {
-    // top-p sampling (or "nucleus sampling") samples from the smallest set of
-    // tokens that exceed probability topp. This way we never sample tokens that
-    // have very low probabilities and are less likely to go "off the rails".
-    // coin is a random number in [0, 1), usually from random_f32()
+// int sample_topp(float* probabilities, int n, float topp, ProbIndex* probindex, float coin) {
+//     // top-p sampling (or "nucleus sampling") samples from the smallest set of
+//     // tokens that exceed probability topp. This way we never sample tokens that
+//     // have very low probabilities and are less likely to go "off the rails".
+//     // coin is a random number in [0, 1), usually from random_f32()
 
-    int n0 = 0;
-    // quicksort indices in descending order of probabilities
-    // values smaller than (1 - topp) / (n - 1) cannot be part of the result
-    // so for efficiency we crop these out as candidates before sorting
-    const float cutoff = (1.0f - topp) / (n - 1);
-    for (int i = 0; i < n; i++) {
-        if (probabilities[i] >= cutoff) {
-            probindex[n0].index = i;
-            probindex[n0].prob = probabilities[i];
-            n0++;
-        }
-    }
-    qsort(probindex, n0, sizeof(ProbIndex), compare);
+//     int n0 = 0;
+//     // quicksort indices in descending order of probabilities
+//     // values smaller than (1 - topp) / (n - 1) cannot be part of the result
+//     // so for efficiency we crop these out as candidates before sorting
+//     const float cutoff = (1.0f - topp) / (n - 1);
+//     for (int i = 0; i < n; i++) {
+//         if (probabilities[i] >= cutoff) {
+//             probindex[n0].index = i;
+//             probindex[n0].prob = probabilities[i];
+//             n0++;
+//         }
+//     }
+//     qsort(probindex, n0, sizeof(ProbIndex), compare);
 
-    // truncate the list where cumulative probability exceeds topp
-    float cumulative_prob = 0.0f;
-    int last_idx = n0 - 1; // in case of rounding errors consider all elements
-    for (int i = 0; i < n0; i++) {
-        cumulative_prob += probindex[i].prob;
-        if (cumulative_prob > topp) {
-            last_idx = i;
-            break; // we've exceeded topp by including last_idx
-        }
-    }
+//     // truncate the list where cumulative probability exceeds topp
+//     float cumulative_prob = 0.0f;
+//     int last_idx = n0 - 1; // in case of rounding errors consider all elements
+//     for (int i = 0; i < n0; i++) {
+//         cumulative_prob += probindex[i].prob;
+//         if (cumulative_prob > topp) {
+//             last_idx = i;
+//             break; // we've exceeded topp by including last_idx
+//         }
+//     }
 
-    // sample from the truncated list
-    float r = coin * cumulative_prob;
-    float cdf = 0.0f;
-    for (int i = 0; i <= last_idx; i++) {
-        cdf += probindex[i].prob;
-        if (r < cdf) {
-            return probindex[i].index;
-        }
-    }
-    return probindex[last_idx].index; // in case of rounding errors
-}
+//     // sample from the truncated list
+//     float r = coin * cumulative_prob;
+//     float cdf = 0.0f;
+//     for (int i = 0; i <= last_idx; i++) {
+//         cdf += probindex[i].prob;
+//         if (r < cdf) {
+//             return probindex[i].index;
+//         }
+//     }
+//     return probindex[last_idx].index; // in case of rounding errors
+// }
 
 void build_sampler(Sampler* sampler, int vocab_size, float temperature, float topp, unsigned long long rng_seed) {
     sampler->vocab_size = vocab_size;
@@ -745,30 +746,30 @@ float random_f32(unsigned long long *state) { // random float32 in [0,1)
     return (random_u32(state) >> 8) / 16777216.0f;
 }
 
-int sample(Sampler* sampler, float* logits) {
-    // sample the token given the logits and some hyperparameters
-    int next;
-    if (sampler->temperature == 0.0f) {
-        // greedy argmax sampling: take the token with the highest probability
-        next = sample_argmax(logits, sampler->vocab_size);
-    } else {
-        // apply the temperature to the logits
-        for (int q=0; q<sampler->vocab_size; q++) { logits[q] /= sampler->temperature; }
-        // apply softmax to the logits to get the probabilities for next token
-        softmax(logits, sampler->vocab_size);
-        // flip a (float) coin (this is our source of entropy for sampling)
-        float coin = random_f32(&sampler->rng_state);
-        // we sample from this distribution to get the next token
-        if (sampler->topp <= 0 || sampler->topp >= 1) {
-            // simply sample from the predicted probability distribution
-            next = sample_mult(logits, sampler->vocab_size, coin);
-        } else {
-            // top-p (nucleus) sampling, clamping the least likely tokens to zero
-            next = sample_topp(logits, sampler->vocab_size, sampler->topp, sampler->probindex, coin);
-        }
-    }
-    return next;
-}
+// int sample(Sampler* sampler, float* logits) {
+//     // sample the token given the logits and some hyperparameters
+//     int next;
+//     if (sampler->temperature == 0.0f) {
+//         // greedy argmax sampling: take the token with the highest probability
+//         next = sample_argmax(logits, sampler->vocab_size);
+//     } else {
+//         // apply the temperature to the logits
+//         for (int q=0; q<sampler->vocab_size; q++) { logits[q] /= sampler->temperature; }
+//         // apply softmax to the logits to get the probabilities for next token
+//         softmax(logits, sampler->vocab_size);
+//         // flip a (float) coin (this is our source of entropy for sampling)
+//         float coin = random_f32(&sampler->rng_state);
+//         // we sample from this distribution to get the next token
+//         if (sampler->topp <= 0 || sampler->topp >= 1) {
+//             // simply sample from the predicted probability distribution
+//             next = sample_mult(logits, sampler->vocab_size, coin);
+//         } else {
+//             // top-p (nucleus) sampling, clamping the least likely tokens to zero
+//             next = sample_topp(logits, sampler->vocab_size, sampler->topp, sampler->probindex, coin);
+//         }
+//     }
+//     return next;
+// }
 
 // ----------------------------------------------------------------------------
 // utilities: time
@@ -947,16 +948,16 @@ void newgen(Transformer *transformer, Tokenizer *tokenizer, Sampler* sampler, ch
 //     free(prompt_tokens);
 // }
 
-void read_stdin(const char* guide, char* buffer, size_t bufsize) {
-    // read a line from stdin, up to but not including \n
-    printf("%s", guide);
-    if (fgets(buffer, bufsize, stdin) != NULL) {
-        size_t len = strlen(buffer);
-        if (len > 0 && buffer[len - 1] == '\n') {
-            buffer[len - 1] = '\0'; // strip newline
-        }
-    }
-}
+// void read_stdin(const char* guide, char* buffer, size_t bufsize) {
+//     // read a line from stdin, up to but not including \n
+//     printf("%s", guide);
+//     if (fgets(buffer, bufsize, stdin) != NULL) {
+//         size_t len = strlen(buffer);
+//         if (len > 0 && buffer[len - 1] == '\n') {
+//             buffer[len - 1] = '\0'; // strip newline
+//         }
+//     }
+// }
 
 // ----------------------------------------------------------------------------
 // chat loop
@@ -964,89 +965,89 @@ void read_stdin(const char* guide, char* buffer, size_t bufsize) {
 // python reference and that seemed ok, but this was not thoroughly tested and
 // is not safely implemented, it's more a proof of concept atm.
 
-void chat(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler,
-          char *cli_user_prompt, char *cli_system_prompt, int steps) {
+// void chat(Transformer *transformer, Tokenizer *tokenizer, Sampler *sampler,
+//           char *cli_user_prompt, char *cli_system_prompt, int steps) {
 
-    // buffers for reading the system prompt and user prompt from stdin
-    // you'll notice they are soomewhat haphazardly and unsafely set atm
-    char system_prompt[512];
-    char user_prompt[512];
-    char rendered_prompt[1152];
-    int num_prompt_tokens = 0;
-    int* prompt_tokens = (int*)malloc(1152 * sizeof(int));
-    int user_idx;
+//     // buffers for reading the system prompt and user prompt from stdin
+//     // you'll notice they are soomewhat haphazardly and unsafely set atm
+//     char system_prompt[512];
+//     char user_prompt[512];
+//     char rendered_prompt[1152];
+//     int num_prompt_tokens = 0;
+//     int* prompt_tokens = (int*)malloc(1152 * sizeof(int));
+//     int user_idx;
 
-    // start the main loop
-    int8_t user_turn = 1; // user starts
-    int next;        // will store the next token in the sequence
-    int token;       // stores the current token to feed into the transformer
-    int prev_token;
-    int pos = 0;     // position in the sequence
-    while (pos < steps) {
+//     // start the main loop
+//     int8_t user_turn = 1; // user starts
+//     int next;        // will store the next token in the sequence
+//     int token;       // stores the current token to feed into the transformer
+//     int prev_token;
+//     int pos = 0;     // position in the sequence
+//     while (pos < steps) {
 
-        // when it is the user's turn to contribute tokens to the dialog...
-        if (user_turn) {
-            // get the (optional) system prompt at position 0
-            if (pos == 0) {
-                // at position 0, the user can also contribute a system prompt
-                if (cli_system_prompt == NULL) {
-                    // system prompt was not passed in, attempt to get it from stdin
-                    read_stdin("Enter system prompt (optional): ", system_prompt, sizeof(system_prompt));
-                } else {
-                    // system prompt was passed in, use it
-                    strcpy(system_prompt, cli_system_prompt);
-                }
-            }
-            // get the user prompt
-            if (pos == 0 && cli_user_prompt != NULL) {
-                // user prompt for position 0 was passed in, use it
-                strcpy(user_prompt, cli_user_prompt);
-            } else {
-                // otherwise get user prompt from stdin
-                read_stdin("User: ", user_prompt, sizeof(user_prompt));
-            }
-            // render user/system prompts into the Llama 2 Chat schema
-            if (pos == 0 && system_prompt[0] != '\0') {
-                char system_template[] = "[INST] <<SYS>>\n%s\n<</SYS>>\n\n%s [/INST]";
-                sprintf(rendered_prompt, system_template, system_prompt, user_prompt);
-            } else {
-                char user_template[] = "[INST] %s [/INST]";
-                sprintf(rendered_prompt, user_template, user_prompt);
-            }
-            // encode the rendered prompt into tokens
-            encode(tokenizer, rendered_prompt, 1, 0, prompt_tokens, &num_prompt_tokens);
-            user_idx = 0; // reset the user index
-            user_turn = 0;
-            printf("Assistant: ");
-        }
+//         // when it is the user's turn to contribute tokens to the dialog...
+//         if (user_turn) {
+//             // get the (optional) system prompt at position 0
+//             if (pos == 0) {
+//                 // at position 0, the user can also contribute a system prompt
+//                 if (cli_system_prompt == NULL) {
+//                     // system prompt was not passed in, attempt to get it from stdin
+//                     read_stdin("Enter system prompt (optional): ", system_prompt, sizeof(system_prompt));
+//                 } else {
+//                     // system prompt was passed in, use it
+//                     strcpy(system_prompt, cli_system_prompt);
+//                 }
+//             }
+//             // get the user prompt
+//             if (pos == 0 && cli_user_prompt != NULL) {
+//                 // user prompt for position 0 was passed in, use it
+//                 strcpy(user_prompt, cli_user_prompt);
+//             } else {
+//                 // otherwise get user prompt from stdin
+//                 read_stdin("User: ", user_prompt, sizeof(user_prompt));
+//             }
+//             // render user/system prompts into the Llama 2 Chat schema
+//             if (pos == 0 && system_prompt[0] != '\0') {
+//                 char system_template[] = "[INST] <<SYS>>\n%s\n<</SYS>>\n\n%s [/INST]";
+//                 sprintf(rendered_prompt, system_template, system_prompt, user_prompt);
+//             } else {
+//                 char user_template[] = "[INST] %s [/INST]";
+//                 sprintf(rendered_prompt, user_template, user_prompt);
+//             }
+//             // encode the rendered prompt into tokens
+//             encode(tokenizer, rendered_prompt, 1, 0, prompt_tokens, &num_prompt_tokens);
+//             user_idx = 0; // reset the user index
+//             user_turn = 0;
+//             printf("Assistant: ");
+//         }
 
-        // determine the token to pass into the transformer next
-        if (user_idx < num_prompt_tokens) {
-            // if we are still processing the input prompt, force the next prompt token
-            token = prompt_tokens[user_idx++];
-        } else {
-            // otherwise use the next token sampled from previous turn
-            token = next;
-        }
-        // EOS (=2) token ends the Assistant turn
-        if (token == 2) { user_turn = 1; }
+//         // determine the token to pass into the transformer next
+//         if (user_idx < num_prompt_tokens) {
+//             // if we are still processing the input prompt, force the next prompt token
+//             token = prompt_tokens[user_idx++];
+//         } else {
+//             // otherwise use the next token sampled from previous turn
+//             token = next;
+//         }
+//         // EOS (=2) token ends the Assistant turn
+//         if (token == 2) { user_turn = 1; }
 
-        // forward the transformer to get logits for the next token
-        float* logits = forward(transformer, token, pos);
-        next = sample(sampler, logits);
-        pos++;
+//         // forward the transformer to get logits for the next token
+//         float* logits = forward(transformer, token, pos);
+//         next = sample(sampler, logits);
+//         pos++;
 
-        if (user_idx >= num_prompt_tokens && next != 2) {
-            // the Assistant is responding, so print its output
-            char* piece = decode(tokenizer, token, next);
-            safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
-            fflush(stdout);
-        }
-        if (next == 2) { printf("\n"); }
-    }
-    printf("\n");
-    free(prompt_tokens);
-}
+//         if (user_idx >= num_prompt_tokens && next != 2) {
+//             // the Assistant is responding, so print its output
+//             char* piece = decode(tokenizer, token, next);
+//             safe_printf(piece); // same as printf("%s", piece), but skips "unsafe" bytes
+//             fflush(stdout);
+//         }
+//         if (next == 2) { printf("\n"); }
+//     }
+//     printf("\n");
+//     free(prompt_tokens);
+// }
 
 
 // ----------------------------------------------------------------------------
@@ -1122,13 +1123,13 @@ int main(int argc, char *argv[]) {
     build_sampler(&sampler, transformer.config.vocab_size, temperature, topp, rng_seed);
 
 		std::cout<<"Init Forward class\n";
-		ForwardBlock f = ForwardBlock(std::stoi(device_id), xclbin_file, checkpoint_path, &transformer);
+		ForwardBlock f = ForwardBlock(std::stoi(device_id), xclbin_file, checkpoint_path);
 
     // run!
     if (strcmp(mode, "generate") == 0) {
         newgen(&transformer, &tokenizer, &sampler, prompt, steps, f);
-    } else if (strcmp(mode, "chat") == 0) {
-        chat(&transformer, &tokenizer, &sampler, prompt, system_prompt, steps);
+    // } else if (strcmp(mode, "chat") == 0) {
+    //     chat(&transformer, &tokenizer, &sampler, prompt, system_prompt, steps);
     } else {
         fprintf(stderr, "unknown mode: %s\n", mode);
         error_usage();
