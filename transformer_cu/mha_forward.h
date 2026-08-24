@@ -4,7 +4,7 @@
 
 #include <cmath>
 #define __DEBUG__
-#define __ULTRADEBUG__
+// #define __ULTRADEBUG__
 
 #include <cstddef>
 #include <cstdint>

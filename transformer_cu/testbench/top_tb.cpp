@@ -523,7 +523,7 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 				axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
 				axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 
 				#ifdef __DEBUG__
-				49, 0, 0, data_out_arr.data(),
+				4, 0, 0, data_out_arr.data(),
 				#endif
 				#ifdef __ULTRADEBUG__
 					GeMV_data_out_arr.data(),
