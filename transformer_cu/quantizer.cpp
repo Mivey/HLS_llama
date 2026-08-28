@@ -83,7 +83,6 @@ void quant_out( hls::stream<my_float_t> &tok_sf_out, s_idata_v_t &tok_out, s_fda
   my_float_t dscale = max_val.read(); 
   my_float_t scale = hls::recipf(dscale);//Q_MAX / max_val;
   idata_v_t quant_tmp; // not an array anymore
-  // fdata_v_t tok_arr[TOK_COUNT];
   
   create_q_val:
   for (size_t j = 0; j < TOK_COUNT; j++) {
@@ -144,6 +143,49 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
 }
 
 
-void dequantize_kernel(hls::stream<my_float_t> &tokens, idata_v_t* tokq, mfdata_v_t* toksf){
+void dequantize_kernel(fdata_v_t* internal_token, idata_v_t* tokq, fdata_v_t* toksf, const int curr_token, const int wcls_offset_q, const int wcls_sf){
 	
+  const int ct_ratio = MODEL_NUM_HEADS / SM_FL_ELEM;
+  const int OFFSET = wcls_sf / sizeof(fdata_v_t) + curr_token * ct_ratio;
+  // const int mod_off = curr_token % 4;
+  const int QUANT_OFF = curr_token * MODEL_ELEMENTS / MAX_QUANT_ELEM + (wcls_offset_q / sizeof(idata_v_t));
+  
+  fdata_v_t tmp_sf[ct_ratio]; // JUSTIFY WITH RIGHT NUMBERS LATER
+  
+  
+  for (int i = 0 ; i < (ct_ratio); i++) {
+    #pragma HLS PIPELINE II=1
+    tmp_sf[i] = toksf[OFFSET + i];
+  }
+  
+  // int internal_offset = 0;
+  // int internal_cnt = 0;
+  fdata_v_t tmpc;
+  for (int i = 0; i < MODEL_NUM_HEADS; i++) {
+    int jj = i % SM_FL_ELEM;
+    if (jj == 0) { tmpc = tmp_sf[i/SM_FL_ELEM]; }
+    
+    int internal_offset = (i < 6 ) ? 0 : INTERNAL_DATA_SIZE / (SM_FL_ELEM * 2) - 6 * MAX_QUANT_ELEM / SM_FL_ELEM;
+    
+    my_float_t ftmp = tmpc[jj];
+    idata_v_t itmp = tokq[i + QUANT_OFF];
+    int baseaddr = i * (MAX_QUANT_ELEM/SM_FL_ELEM) + internal_offset;
+    
+    for (int k = 0; k < MAX_QUANT_ELEM / SM_FL_ELEM; k++) {
+      #pragma HLS PIPELINE II=1
+      fdata_v_t tmpo;
+      
+      for (int ii = 0; ii < SM_FL_ELEM; ii++) {
+        #pragma hls UNROLL
+        tmpo[ii] = itmp[ii] * ftmp;
+      }
+      
+      for (int ii = 0; ii < (MAX_QUANT_ELEM - SM_FL_ELEM); ii++) {
+        #pragma HLS UNROLL
+        itmp[ii] = itmp[ii + SM_FL_ELEM];
+      }
+      
+      internal_token[baseaddr + k] = tmpo;
+    }
+  }
 }
