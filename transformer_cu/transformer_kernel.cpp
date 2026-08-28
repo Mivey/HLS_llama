@@ -246,7 +246,7 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
       #ifdef __ULTRADEBUG__
         fdata_v_t *GeMV_data_out,
       #endif 
-      const float_t temperature, const float_t coin, const bool rms_flag){
+      const float_t temperature, const float_t curr_token, const float_t coin, const bool rms_flag){
   
   const int RMS_SIZE = MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1);
   fdata_v_t internal_token[INTERNAL_DATA_SIZE/SM_FL_ELEM];
@@ -269,8 +269,10 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
     mm2mm_store(internal_rms_weights, weights, (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)));
   }
   
-  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, INTERNAL_DATA_SIZE);
-  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, INTERNAL_DATA_SIZE);
+  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, INTERNAL_DATA_SIZE, curr_token * (int32_t) (MODEL_ELEMENTS / SM_FL_ELEM));
+  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, INTERNAL_DATA_SIZE, curr_token * (int32_t) (MODEL_ELEMENTS / SM_FL_ELEM));
+
+  // dequantize_kernel(internal_token, w_0, tokens, curr_token, tt.Embed_W, tt.Embed_sf_W);
 
   for(int ii = 0; ii < CTRL_CNT; ii++) {
     s_fdata_v_t s_cu_sel_out;
@@ -304,14 +306,14 @@ void transformer_cu(
         const int FF_w1w3_W, const int FF_w1w3_sf_W,
         const int FF_w2_W, const int FF_w2_sf_W, 
         const int Embed_W, const int Embed_sf_W, 
-        const int rms_att_W, const int rms_ffn_W, const int rms_final_W, //const int curr_token,
+        const int rms_att_W, const int rms_ffn_W, const int rms_final_W, const int curr_token,
       #ifdef __DEBUG__
         const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
       #endif
       #ifdef __ULTRADEBUG__
         fdata_v_t *GeMV_data_out,
       #endif
-        const float temperature, const float coin,
+        const float temperature, const float coin, //const int32_t curr_token,
         const bool init_rms_flag, const bool pf_dc_flag
       ){
   
@@ -364,6 +366,7 @@ void transformer_cu(
   #pragma HLS INTERFACE mode=s_axilite port=coin        bundle=control
   #pragma HLS INTERFACE mode=s_axilite port=init_rms_flag    bundle=control
   #pragma HLS INTERFACE mode=s_axilite port=pf_dc_flag    bundle=control
+  #pragma HLS INTERFACE mode=s_axilite port=curr_token    bundle=control
   #pragma HLS INTERFACE mode=s_axilite port=return        bundle=control
   
   #ifdef __DEBUG__
@@ -428,7 +431,7 @@ void transformer_cu(
       #ifdef __ULTRADEBUG__
         GeMV_data_out,
       #endif 
-    temperature, coin, init_rms_flag);
+    temperature, curr_token, coin, init_rms_flag);
 
   return;
 }
