@@ -51,7 +51,7 @@ void alt_mat_mult_main(hls::stream<my_float_t> &out, s_idata_v_t &w, s_fdata_v_t
       amm_k_calc:
       for (size_t k = 0; k < SM_FL_ELEM; k++) {
         //do our calculations
-        #pragma HLS PIPELINE II=1
+        #pragma HLS PIPELINE II=1 rewind
         
         float_t cur_tok_sf = vec_tok_sf[k] * vec_w_sf[k];
         // my_float_t cur_w_sf = vec_w_sf[k];
