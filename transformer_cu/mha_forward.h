@@ -432,15 +432,16 @@ void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int c
 }
 
 template<typename T, size_t N>
-void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int count, const int ts, const int cur_spl, const int offset){
+void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int count, const int ts, const int cur_spl, const int OUT_OFF, const int IN_OFF){
   
   const int vCount = count/ (N * ts);
-  const int wos = offset * cur_spl / (N * ts);
+  const int wos = OUT_OFF * cur_spl / (N * ts);
+  const int ros = IN_OFF + cur_spl * vCount;
   
   mm2mm_writer:
   for (int i = 0; i < vCount; i++) {
     #pragma HLS PIPELINE II=1
-    mm_out[i + wos] = mm_in[i + cur_spl * vCount];
+    mm_out[i + wos] = mm_in[i + ros];
   }
 }
 
@@ -711,7 +712,7 @@ void transformer_cu(
     const int FF_w1w3_W, const int FF_w1w3_sf_W,
     const int FF_w2_W, const int FF_w2_sf_W, 
     const int Embed_W, const int Embed_sf_W, 
-    const int rms_att_W, const int rms_ffn_W, const int rms_final_W, //const int curr_token,
+    const int rms_att_W, const int rms_ffn_W, const int rms_final_W, const int curr_token,
   #ifdef __DEBUG__
       const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
   #endif
