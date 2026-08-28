@@ -68,6 +68,7 @@ int top_tb(){
 	std::ifstream file(checkpoint, std::ios::binary | std::ios::ate);
 	std::ifstream coin_data("newgolden/150_coin.bin", std::ios::binary);
 	std::ifstream token_data("newgolden/150_tokens.bin", std::ios::binary);
+	std::ifstream emb_token_data("weights/token_embedding.bin", std::ios::binary);
 	std::ifstream data_output("newgolden/150_pre_quantized.bin", std::ios::binary);
 	std::ifstream gemv_data_output("newgolden/150_post_matmul.bin", std::ios::binary);
 	std::ifstream out_key_dat("newgolden/150_key_cache.bin", std::ios::binary);
@@ -100,6 +101,11 @@ int top_tb(){
 	
 	if (!gemv_data_output.is_open() ) {
 	std::cout<<"No gemv_data_output. Already off to a bad start."<<std::endl;
+	exit(EXIT_FAILURE);
+	}
+	
+	if (!emb_token_data.is_open() ) {
+	std::cout<<"No emb_token_data. Already off to a bad start."<<std::endl;
 	exit(EXIT_FAILURE);
 	}
 	
@@ -166,9 +172,11 @@ int top_tb(){
 	size_t q_size = (MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3 ) * MODEL_NUM_LAYERS + MODEL_TOKENS)) * sizeof(int8_t);
 	size_t rms_size = (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)) * sizeof(my_float_t);
 	size_t sf_size = (q_size * sizeof(my_float_t) / (sizeof(int8_t) * MODEL_SCALING_FACTOR));
+	size_t dequant_size = MODEL_ELEMENTS * MODEL_TOKENS * sizeof(float_t);
 	
 	std::vector<idata_v_t> quant_w_arr(q_size / sizeof(idata_v_t));
 	std::vector<mfdata_v_t> sf_w_arr(sf_size / sizeof(mfdata_v_t));
+	std::vector<fdata_v_t> sf_w0_arr(dequant_size / sizeof(fdata_v_t));
 	std::vector<fdata_v_t> rms_w_arr(rms_size / sizeof(fdata_v_t));
 	std::vector<fdata_v_t> data_out_arr(data_out_size / sizeof(fdata_v_t));
 	std::vector<fdata_v_t> GeMV_data_out_arr(gemv_data_out_size / sizeof(fdata_v_t));
@@ -177,6 +185,7 @@ int top_tb(){
 	
 	char * q_ptr = reinterpret_cast<char*>(quant_w_arr.data());
 	char *sf_ptr = reinterpret_cast<char*>(sf_w_arr.data());
+	char *sf0_ptr = reinterpret_cast<char*>(sf_w0_arr.data());
 	char *rms_ptr = reinterpret_cast<char*>(rms_w_arr.data());
 
 	size_t file_ptr = 256;
@@ -205,6 +214,21 @@ int top_tb(){
 	axi_reg.Embed_sf_W = 0;
 	file.read(sf_ptr + sf_idx, embed_sf_size);
 	sf_idx += embed_sf_size;
+
+	for (int i = 0; i < (MODEL_ELEMENTS * MODEL_TOKENS); i++) {
+		int group = i / 64;               // which group of 64 shares a scale factor
+		int q_sub = i % 64;               // position within the quant group
+		int sf_group = group / 16;        // which mfdata_v_t (16 scales packed together)
+		int sf_sub = group % 16;          // position within that scale vector
+
+		float dq = static_cast<float>(quant_w_arr[group][q_sub]) *
+				sf_w_arr[sf_group][sf_sub];
+
+		sf_w0_arr[i / 4][i % 4] = dq;      // fdata_v_t is 4-wide
+	}
+
+	// emb_token_data.read(sf0_ptr, dequant_size);
+	
 	
 	// read QKV
 	axi_reg.QKV_sf_W = sf_idx;
@@ -261,6 +285,8 @@ int top_tb(){
 		file.read(sf_ptr + sf_idx, nm_sf_size);
 		sf_idx += nm_sf_size;
 	}
+	
+	std::memcpy(sf0_ptr, sf_ptr, sf_size);
 
 	/* ============================== constants related to tb ===================================== */
 	int pos = 150;
@@ -513,7 +539,7 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	float temperature = 0.9;
 	int pick;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
-transformer_cu(	output_arr.data(), //output_arr.data(), 
+transformer_cu(	sf_w0_arr.data(), //output_arr.data(), 
 				sf_w_arr.data(), quant_w_arr.data(), 
 				sf_w_arr.data(), quant_w_arr.data(), 
 				rms_w_arr.data(), key_arr[0].data(), value_arr[0].data(), 
@@ -521,9 +547,9 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 				axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
 				axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
 				axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-				axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 
+				axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 2462,
 				#ifdef __DEBUG__
-				4, 0, 0, data_out_arr.data(),
+				49, 0, 0, data_out_arr.data(),
 				#endif
 				#ifdef __ULTRADEBUG__
 					GeMV_data_out_arr.data(),
@@ -533,7 +559,7 @@ transformer_cu(	output_arr.data(), //output_arr.data(),
 
 	// fdata_v_t token_tmp = output_arr[0];
 	int32_t gold_token;
-std::memcpy(&gold_token, output_arr.data(), sizeof(int32_t));
+std::memcpy(&gold_token, sf_w0_arr.data(), sizeof(int32_t));
 	// std::cout<< "Golden token: \t" <<next_token<<"\t Actual token: \t"<<token_tmp[0]<<std::endl;
 	// int zz = output_arr.size();
 	// std::fill(output_arr.begin() + 96,output_arr.begin() + zz / 2 - 1, 0);
