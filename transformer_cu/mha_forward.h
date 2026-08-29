@@ -712,7 +712,7 @@ void transformer_cu(
     const int FF_w1w3_W, const int FF_w1w3_sf_W,
     const int FF_w2_W, const int FF_w2_sf_W, 
     const int Embed_W, const int Embed_sf_W, 
-    const int rms_att_W, const int rms_ffn_W, const int rms_final_W, const int curr_token,
+    const int rms_att_W, const int rms_ffn_W, const int rms_final_W, int *curr_token,
   #ifdef __DEBUG__
       const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
   #endif

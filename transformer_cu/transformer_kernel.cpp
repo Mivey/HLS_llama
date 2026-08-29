@@ -24,10 +24,10 @@ struct keys {
   int w;
   #ifdef __DEBUG__
   bool INIT;
-  int SAVE_ADDR;
+  int SAVE_ADDR = 0;
   #endif
   #ifdef __ULTRADEBUG__
-  int mmSAVE_ADDR;
+  int mmSAVE_ADDR = 0;
   #endif
   
   int sfCount() const {
@@ -180,7 +180,7 @@ void weights_loop(s_mfdata_v_t &s_wsf_0, s_mfdata_v_t &s_wsf_1,
   
   WL_data_out:
   for (int i = 0; i < CTRL_CNT; i++) {
-    // #pragma HLS DATAFLOW
+    #pragma HLS DATAFLOW
     mm2s_input_data(s_wsf_0, wsf_0, r[i].gemv_config.sfCount(), r[i].gemv_config.CURR_LAYER * mm_thr + 0, r[i].gemv_config.w_sf);
     mm2s_input_data(s_wsf_1, wsf_1, r[i].gemv_config.sfCount(), r[i].gemv_config.CURR_LAYER * mm_thr + 1, r[i].gemv_config.w_sf);
     // mm2s_input_data(s_w_0, w_0, r[i].wCount(), r[i].CURR_LAYER * mm_thr + 0, r[i].w);
@@ -246,7 +246,7 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
       #ifdef __ULTRADEBUG__
         fdata_v_t *GeMV_data_out,
       #endif 
-      const float_t temperature, const float_t curr_token, const float_t coin, const bool rms_flag){
+      const float_t temperature, int32_t &curr_token, const float_t coin, const bool rms_flag){
   
   const int RMS_SIZE = MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1);
   fdata_v_t internal_token[INTERNAL_DATA_SIZE/SM_FL_ELEM];
@@ -268,9 +268,10 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
     // load weights into memory
     mm2mm_store(internal_rms_weights, weights, (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)));
   }
+	int ct = curr_token;
   
-  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, INTERNAL_DATA_SIZE, curr_token * (int32_t) (MODEL_ELEMENTS / SM_FL_ELEM));
-  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, INTERNAL_DATA_SIZE, curr_token * (int32_t) (MODEL_ELEMENTS / SM_FL_ELEM));
+  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, INTERNAL_DATA_SIZE, ct * (int32_t) (MODEL_ELEMENTS / SM_FL_ELEM));
+  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, INTERNAL_DATA_SIZE, ct * (int32_t) (MODEL_ELEMENTS / SM_FL_ELEM));
 
   // dequantize_kernel(internal_token, w_0, tokens, curr_token, tt.Embed_W, tt.Embed_sf_W);
 
@@ -291,8 +292,13 @@ void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfda
       #endif
     );
   }
-    ss_final(ss_reg, tokens, temperature, 0.9, coin);
+    // ss_final(ss_reg, tokens, temperature, 0.9, coin);
+		ss_final(ss_reg, ct, temperature, 0.9, coin);
+		curr_token = ct;
+		
 }
+
+// void init(const axi_reg tt, )
 //=============================================================
 
 void transformer_cu(
@@ -306,14 +312,14 @@ void transformer_cu(
         const int FF_w1w3_W, const int FF_w1w3_sf_W,
         const int FF_w2_W, const int FF_w2_sf_W, 
         const int Embed_W, const int Embed_sf_W, 
-        const int rms_att_W, const int rms_ffn_W, const int rms_final_W, const int curr_token,
+        const int rms_att_W, const int rms_ffn_W, const int rms_final_W, int *curr_token,
       #ifdef __DEBUG__
         const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
       #endif
       #ifdef __ULTRADEBUG__
         fdata_v_t *GeMV_data_out,
       #endif
-        const float temperature, const float coin, //const int32_t curr_token,
+        const float temperature, const float coin,
         const bool init_rms_flag, const bool pf_dc_flag
       ){
   
@@ -328,10 +334,11 @@ void transformer_cu(
   constexpr int HD_QUANT_DEPTH = q_size / MAX_QUANT_ELEM;
   constexpr int HD_SF_DEPTH = sf_size / MAX_FL_ELEM; 
   constexpr int TOK_OUT_DEPTH = INTERNAL_DATA_SIZE / SM_FL_ELEM;
+  constexpr int nTOK_OUT_DEPTH = MODEL_TOKENS * MODEL_ELEMENTS /SM_FL_ELEM;
   constexpr int MHA_DEPTH = MODEL_ELEMENTS / MID_FL_ELEM * 3;
   constexpr int RECORD_DEPTH = ((MODEL_ELEMENTS * 3  + MODEL_HIDDEN_DIM) * 12 + MODEL_ELEMENTS) / SM_FL_ELEM;
 
-  #pragma HLS INTERFACE mode=m_axi port=tokens         bundle=w_n_t_gemm     depth=TOK_OUT_DEPTH   offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
+  #pragma HLS INTERFACE mode=m_axi port=tokens         bundle=w_n_t_gemm     depth=nTOK_OUT_DEPTH   offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
   #pragma HLS INTERFACE mode=m_axi port=w_sf_0         bundle=D_TOK_W_SF_0     depth=HD_SF_DEPTH     offset=slave max_read_burst_length=(1024/MAX_DW * 8)    num_read_outstanding=4
   #pragma HLS INTERFACE mode=m_axi port=w_0           bundle=D_W_GEMM_0     depth=HD_QUANT_DEPTH   offset=slave max_read_burst_length=(4096/MAX_DW * 8)     num_read_outstanding=64 
   #pragma HLS INTERFACE mode=m_axi port=w_sf_1         bundle=D_TOK_W_SF_1       depth=HD_SF_DEPTH     offset=slave max_read_burst_length=(1024/MAX_DW * 8)    num_read_outstanding=4
@@ -405,6 +412,7 @@ void transformer_cu(
     #pragma HLS PIPELINE 
     curr_state[i] = weight_fsm(tt, fd);
   }
+	int ct = *curr_token;
 
 
   #ifndef __DEBUG__
@@ -431,7 +439,9 @@ void transformer_cu(
       #ifdef __ULTRADEBUG__
         GeMV_data_out,
       #endif 
-    temperature, curr_token, coin, init_rms_flag);
+    temperature, ct, coin, init_rms_flag);
+
+		*curr_token = ct;
 
   return;
 }

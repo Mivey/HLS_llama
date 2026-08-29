@@ -95,6 +95,8 @@ struct ProbIndex{
   my_float_t prob;
 };
 
+
+
 // template<typename T, size_t N>
 void systolic_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_DIM){
   // #pragma HLS INLINE
@@ -176,7 +178,7 @@ void insertion_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_
   // finished sort. reg now should have largest REG_SIZE (64) values, with max_val @ reg[REG_SIZE-1]
 /* ================================================= separate function ===============================*/
 void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const float topp, const float coin){
-  
+  //old, may delete
   const my_float_t INV_TEMP = (temperature == 0) ? 1.0f : 1/temperature; 
   fdata_v_t tpick;
   int32_t padd_pick = (int32_t) reg[0].index;
@@ -220,6 +222,52 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
   // tpick[0] = (my_float_t) sel_val;
   tpick[0] = reinterpret_cast<float_t&>(sel_val);
   pick[0] = tpick;
+  return;
+}
+void ss_final(ProbIndex *reg, int32_t &pick, const float temperature, const float topp, const float coin){
+  
+  const my_float_t INV_TEMP = (temperature == 0) ? 1.0f : 1/temperature; 
+  if (temperature <= 0.0f) {
+    // if greedy selection or w/e, bypass it all and just return the biggest value.
+    // int32_t padd_pick = (int32_t) reg[REG_SIZE - 1].index;
+    // tpick[0] = reinterpret_cast<float_t&>(padd_pick);
+    pick = (int32_t) reg[0].index;;
+    return;
+  }
+  
+  my_float_t max_val = reg[0].prob;
+  my_float_t final_soft_sum = 0.0f;
+  my_float_t sm_reg[REG_SIZE];
+	int delme[REG_SIZE];
+  #pragma HLS ARRAY_PARTITION variable=sm_reg dim=1 type=complete
+
+  softmax_exp_loop:
+  for (int i = 0; i < REG_SIZE; i++) {
+    #pragma HLS PIPELINE
+    my_float_t curr_val = reg[i].prob;
+		delme[i] = (int) reg[i].index;
+    my_float_t calc = hls::expf((curr_val - max_val) * INV_TEMP);
+    final_soft_sum += calc;
+    sm_reg[i] = calc;
+  }
+  my_float_t inv_soft_sum = 1.0f/final_soft_sum;
+  int sel_val = reg[REG_SIZE -1].index;
+  my_float_t accum_top{};
+  const my_float_t target_val = (topp < coin) ? topp : coin;
+  // if temperature is zero, then it's gready. If not, then temp 
+
+  softmax_normalize_loop:
+  for (int i = 0; i < REG_SIZE; i++) {
+  // for (int i = (REG_SIZE - 1); i >= 0; i--) {
+    #pragma HLS PIPELINE
+    accum_top += sm_reg[i] * inv_soft_sum;
+    // reg[i].prob *= inv_soft_sum;
+    if (accum_top > target_val) {
+      sel_val = reg[i].index;
+      break;
+    }
+  }  
+	pick = sel_val;
   return;
 }
 

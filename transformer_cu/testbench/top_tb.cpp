@@ -505,18 +505,20 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	/* ================================== read data into array =================================== */
 
 	
-	int curr_pos = 150;
+	int curr_pos = 64;
 	std::cout<<"Loaded the files into memory"<<std::endl;
 	float coin;
 	int32_t next_token;
+	int32_t curr_token; 
 	
 	coin_data.seekg((curr_pos - 4) * 4);
-	token_data.seekg((curr_pos) * 4);
+	token_data.seekg((curr_pos - 1) * 4);
 	
 	char * coin_ptr = reinterpret_cast<char *>(&coin);
 	char * token_ptr = reinterpret_cast<char *>(&next_token);
 
 	coin_data.read(coin_ptr, 4);
+	token_data.read(reinterpret_cast<char*>(&curr_token), 4);
 	token_data.read(token_ptr, 4);
 	
 	file.close();
@@ -537,7 +539,7 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 
 	// float random_u32 = 0.999;
 	float temperature = 0.9;
-	int pick;
+	// int pick = 599;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
 transformer_cu(	sf_w0_arr.data(), //output_arr.data(), 
 				sf_w_arr.data(), quant_w_arr.data(), 
@@ -547,9 +549,9 @@ transformer_cu(	sf_w0_arr.data(), //output_arr.data(),
 				axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
 				axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
 				axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-				axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, 2462,
+				axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, &curr_token,
 				#ifdef __DEBUG__
-				49, 0, 0, data_out_arr.data(),
+				4, 0, 0, data_out_arr.data(),
 				#endif
 				#ifdef __ULTRADEBUG__
 					GeMV_data_out_arr.data(),
@@ -559,7 +561,7 @@ transformer_cu(	sf_w0_arr.data(), //output_arr.data(),
 
 	// fdata_v_t token_tmp = output_arr[0];
 	int32_t gold_token;
-std::memcpy(&gold_token, sf_w0_arr.data(), sizeof(int32_t));
+// std::memcpy(&gold_token, sf_w0_arr.data(), sizeof(int32_t));
 	// std::cout<< "Golden token: \t" <<next_token<<"\t Actual token: \t"<<token_tmp[0]<<std::endl;
 	// int zz = output_arr.size();
 	// std::fill(output_arr.begin() + 96,output_arr.begin() + zz / 2 - 1, 0);
@@ -582,7 +584,7 @@ std::memcpy(&gold_token, sf_w0_arr.data(), sizeof(int32_t));
 	// std::cout<< "========================= Key cache array data ========================"<<std::endl;
 	// parse_cache_results<mfdata_v_t, float>(key_arr[0], key_arr_a);
 
-	std::cout<< "Golden token: \t" <<next_token<<"\t Actual token: \t"<<gold_token<<std::endl;
+	std::cout<< "Golden token: \t" <<next_token<<"\t Actual token: \t"<<curr_token<<std::endl;
 	return 0;
 
 }
