@@ -23,6 +23,7 @@
 #define MODEL_TOKENS 32000
 #define MODEL_SEQUENCE_LEN 1024
 #define MODEL_SCALING_FACTOR 64
+// const int MODEL_RMS_SIZE =;
 #define bytes_in(n) sizeof(n)
 #define runs(n) SCALING_FACTOR/sizeof(n)
 constexpr float Q_FACTOR = ((QUANT%4)==0) ? \
@@ -72,6 +73,7 @@ constexpr int TOK_CHUNKSIZE = 256;
 constexpr int MM_CHUNKSIZE = 256;
 constexpr int MHA_CHUNKSIZE = 64;
 constexpr int INTERNAL_DATA_SIZE = MODEL_HIDDEN_DIM * 2;
+constexpr int RMS_SIZE = (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1));
 
 const int SQUARE_TOK = MODEL_ELEMENTS * MODEL_ELEMENTS;
 const int SQUARE_SF = SQUARE_TOK / MODEL_SCALING_FACTOR;
