@@ -113,8 +113,8 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
   #pragma HLS STREAM variable=d_w depth = 128// MODEL_HIDDEN_DIM/MAX_FL_ELEM
   #pragma HLS STREAM variable=d_tok_sf depth=4
   #pragma HLS STREAM variable=d_tok depth=8
-#pragma HLS BIND_STORAGE variable=d_w type=fifo impl=bram
-#pragma HLS BIND_STORAGE variable=d_wsf type=fifo impl=bram
+  #pragma HLS BIND_STORAGE variable=d_w type=fifo impl=bram
+  #pragma HLS BIND_STORAGE variable=d_wsf type=fifo impl=bram
   
 
   inf_split_tee(d_tok_sf, tok_sf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)));
@@ -135,7 +135,7 @@ void GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t 
 }
 
 void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, 
-    s_mfdata_v_t &s_wsf, idata_v_t* w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg){
+    s_mfdata_v_t &s_wsf, s_idata_v_t &s_w, const int N_DIM, const int M_DIM, const int CURR_LAYER, const int W_Off, const int sf_reg, const int w_reg){
 
   constexpr int mm_thr = 2;
   // const int num = N_DIM * M_DIM ;
@@ -148,9 +148,9 @@ void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_
   
   #pragma HLS DATAFLOW
   
-	s_idata_v_t s_w("s_w");
-  #pragma HLS BIND_STORAGE variable=s_w type=fifo impl=uram
-	#pragma HLS STREAM variable=s_w type=fifo depth=4096
+	// s_idata_v_t s_w("s_w");
+  // #pragma HLS BIND_STORAGE variable=s_w type=fifo impl=uram
+	// #pragma HLS STREAM variable=s_w type=fifo depth=4096
   s_fdata_v_t s_vd_wsf("s_vd_wsf");
   #pragma HLS BIND_STORAGE variable=s_vd_wsf type=fifo impl=uram
   #pragma HLS STREAM variable=s_vd_wsf type=fifo depth=4096
@@ -176,7 +176,7 @@ void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_
   
   vec_down_converter(s_vd_wsf, s_wsf, sm_sf_count);
 
-	mm2s_input_data(s_w, w, w_count, CURR_LAYER, w_reg);
+	// mm2s_input_data(s_w, w, w_count, CURR_LAYER, w_reg);
 
   inf_round_robin(d_wsf, s_vd_wsf, (N_DIM / (MODEL_SCALING_FACTOR * SM_FL_ELEM)), M_DIM);
   inf_round_robin(d_w, s_w, (N_DIM / MAX_QUANT_ELEM), M_DIM);

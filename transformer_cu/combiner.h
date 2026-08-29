@@ -1,5 +1,6 @@
 #include "mha_forward.h"
 #include <cstdint>
+#include <ios>
 
 const int BURST_LEN = 8;
 template<typename T, size_t N, int M, int P> // M = burst, P = # of gemv outputs
@@ -273,11 +274,11 @@ void ss_final(ProbIndex *reg, int32_t &pick, const float temperature, const floa
 
 template<typename T, size_t N, int P>
 void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], 
-                const int M_DIM, const bool BOOP
+                const int M_DIM, const bool BOOP, hls::stream<bool> &done
                 #ifdef __ULTRADEBUG__
                   , fdata_v_t *data_out, const int SAVE_ADDR
                 #endif
-){
+                ){
   
   const int offset = INTERNAL_DATA_SIZE / (N * P);
   typedef hls::vector<T, N> gdata_v_t;
@@ -315,7 +316,7 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::s
       // out[idx] = data;
     }
   }
-
+  bool next = done.read(); // lets cu_selecter start the next calculation. 
   ProbIndex ss_val = {32420, std::numeric_limits<my_float_t>::lowest()};
   
   flush:

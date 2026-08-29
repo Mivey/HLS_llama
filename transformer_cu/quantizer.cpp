@@ -12,7 +12,7 @@ void debug_abs_intake(s_fdata_v_t &tokens_out, s_fdata_v_t &abs_tokens, s_fdata_
   
   group_scaling:
   for (size_t j = 0; j < TOK_COUNT; j++) {
-    #pragma HLS PIPELINE II=1
+#pragma HLS PIPELINE II=1
     
     fdata_v_t val = tokens_in.read();
     tokens_out.write(val);

@@ -41,29 +41,7 @@ int top_tb(){
 	
 	axi_reg axi_reg;
 	std::cout<<"Opened all the files sucessfully"<<std::endl;
-
-
-	// std::string checkpoint = "weights/stories110M_q8.bin";
-	// std::ifstream file(checkpoint, std::ios::binary | std::ios::ate);
-	// std::ifstream out_value_dat("seed_199/199_02_value_cache.bin", std::ios::binary);
-	// std::ifstream out_key_dat("seed_199/199_02_key_cache.bin", std::ios::binary);
-	// std::ifstream out_value_dat("seed_42069_conv/150_output_value_cache_head_maj.bin", std::ios::binary);
-	// std::ifstream out_key_dat("seed_42069_conv/150_output_key_cache_head_maj.bin", std::ios::binary);
-	// std::ifstream tokens_dat("seed_42069_conv/150_output_key_cache_head_maj.bin", std::ios::binary);
-
-	// std::ifstream key_output("seed_42069/150_output_k_tokens.bin", std::ios::binary);
-	// std::ifstream value_output("seed_42069/150_output_v_tokens.bin", std::ios::binary);
-	// std::ifstream query_output("seed_42069/150_output_q_tokens.bin", std::ios::binary);
-	// std::ifstream input_tokens("seed_199/199_01_rms_att_in.bin", std::ios::binary);
-	// std::ifstream w2_output("seed_42069/TOP_25_xb2_mm_output_A1.bin", std::ios::binary);
-	// std::ifstream w2_output("seed_42069/150_output_w2_tokens.bin", std::ios::binary); 
-	// std::ifstream w2_output("seed_199/199_15a_ffn2_out.bin", std::ios::binary);
-	// std::ifstream w2_output("seed_199/199_15_ffn2_out.bin", std::ios::binary);
-	// std::ifstream w2_output("seed_199/199_logits_out.bin", std::ios::binary);
-	// std::ifstream w1_output("seed_42069/150_output_w1_tokens.bin", std::ios::binary);
-	// std::ifstream w3_output("seed_42069/150_output_w3_tokens.bin", std::ios::binary);
-
-	// std::ifstream w2_output("newgolden/150_15a_ffn2_out.bin", std::ios::binary);
+/* ====== INPUT DATA AND CHECKS ============ INPUT DATA AND CHECKS ============ INPUT DATA AND CHECKS ====== */
 	std::string checkpoint = "weights/stories110M_q8.bin";
 	std::ifstream file(checkpoint, std::ios::binary | std::ios::ate);
 	std::ifstream coin_data("newgolden/150_coin.bin", std::ios::binary);
@@ -119,27 +97,7 @@ int top_tb(){
 	exit(EXIT_FAILURE);
 	}
 
-	// if (!w2_output.is_open() ) {
-	// std::cout<<"No w2. Already off to a bad start."<<std::endl;
-	// exit(EXIT_FAILURE);
-	// }
-
-	// if (!key_output.is_open() ) {
-	// std::cout<<"No k. Already off to a bad start."<<std::endl;
-	// exit(EXIT_FAILURE);
-	// }
-
-	// if (!value_output.is_open() ) {
-	// std::cout<<"No v. Already off to a bad start."<<std::endl;
-	// exit(EXIT_FAILURE);
-	// }
-
-	// if (!query_output.is_open() ) {
-	// std::cout<<"No q. Already off to a bad start."<<std::endl;
-	// exit(EXIT_FAILURE);
-	// }
-//todo: chedk if file is open
-
+/* ===== MEMORY AVECTOR ARRAY CONSTRUCTOR ========= MEMORY AVECTOR ARRAY CONSTRUCTOR ========= MEMORY AVECTOR ARRAY CONSTRUCTOR ====*/
 
 	size_t rms_att_size = (MODEL_ELEMENTS * 12 * sizeof(my_float_t));
 	size_t rms_ffn_size = rms_att_size;
@@ -187,7 +145,7 @@ int top_tb(){
 	char *sf_ptr = reinterpret_cast<char*>(sf_w_arr.data());
 	char *sf0_ptr = reinterpret_cast<char*>(sf_w0_arr.data());
 	char *rms_ptr = reinterpret_cast<char*>(rms_w_arr.data());
-
+/* ==== RMS NORM DATA ======== RMS NORM DATA ======== RMS NORM DATA ======== RMS NORM DATA ======== RMS NORM DATA ====*/
 	size_t file_ptr = 256;
 	size_t rms_idx = 0;
 	file.seekg(file_ptr, std::ios::beg);
@@ -204,6 +162,7 @@ int top_tb(){
 	file.read(rms_ptr + rms_idx, rms_final_size);
 	file_ptr = file.tellg();
 	
+	/* ==== QUANT AND SF DATA ======== QUANT AND SF DATA ======== QUANT AND SF DATA ======== QUANT AND SF DATA ====*/
 	size_t q_idx = 0;
 	size_t sf_idx = 0;
 	
@@ -348,25 +307,10 @@ int top_tb(){
 	// std::vector<fdata_v_t> input_arr(logits_cnt);
 	std::vector<fdata_v_t> golden_output_arr(data_goa_cnt);
 	std::vector<fdata_v_t> golden_gemv_output_arr(data_gemv_goa_cnt);
-	// std::vector<mfdata_v_t> val_in_rope_arr(tokens_cnt);
-	// std::vector<mfdata_v_t> key_in_rope_arr(tokens_cnt);
-	
-	// query_output.seekg(0, std::ios::end);
-	// file_size = query_output.tellg();
-	// query_output.seekg(0, std::ios::beg);
 	std::cout<<"GOA"<<std::endl;
 	char *goa = reinterpret_cast<char*>(golden_output_arr.data());
 	size_t goa_idx = 0;
 	std::fill(golden_output_arr.begin(), golden_output_arr.end(), 0);
-	// query_output.read(goa, file_size);
-	// goa_idx += file_size;
-	
-	// key_output.seekg(0, std::ios::beg);
-	// key_output.read(goa + goa_idx, file_size);
-	// goa_idx += file_size;
-	
-	// value_output.seekg(0, std::ios::beg);
-	// value_output.read(goa + goa_idx, file_size);
 
 	data_output.seekg(0, std::ios::end);
 	size_t goa_file_size = data_output.tellg();
@@ -384,23 +328,7 @@ int top_tb(){
 	std::cout<<"Opened all the files sucessfully"<<std::endl;
 
 	gemv_data_output.read(ggoa, ggoa_file_size);
-	// data_output.read(goa + logits_size/2, file_size/2);
 
-
-	// w1_output.seekg(0, std::ios::end);
-	// file_size = w1_output.tellg();
-	// w1_output.seekg(0, std::ios::beg);
-	
-	// w1_output.read(goa, file_size);
-	// w3_output.read(goa + file_size, file_size);
-
-
-
-
-
-	// read 64 floats
-	// jump 768 values
-	// read 64
 
 	std::vector<std::vector<mfdata_v_t>> key_arr(2, std::vector<mfdata_v_t>(cache_cnt));
 	std::vector<std::vector<mfdata_v_t>> value_arr(2, std::vector<mfdata_v_t>(cache_cnt));
@@ -463,8 +391,6 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 }
 
 
-
-
 	std::cout<<"OA"<<std::endl;
 	char *oa = reinterpret_cast<char*>(output_arr.data());
 	input_tokens.seekg(0, std::ios::end);
@@ -473,16 +399,6 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	input_tokens.read(oa, file_size);
 
 
-	// w1_output.seekg(0, std::ios::end);
-	// file_size = w1_output.tellg();
-	// w1_output.seekg(0, std::ios::beg);
-	
-	// w1_output.read(oa, file_size);
-	// w3_output.read(oa + file_size, file_size);
-	
-
-
-	// std::vector<std::vector<fdata_v_t>> query_arr(2, std::vector<fdata_v_t>(out_data_cnt));
 	std::vector<std::vector<mfdata_v_t>> tok_out_arr(2, std::vector<mfdata_v_t>(tokens_cnt));
 	std::vector<std::vector<mfdata_v_t>> tok_w1_out_arr(2, std::vector<mfdata_v_t>(tok_w1_cnt));
 	std::vector<std::vector<mfdata_v_t>> log_out_arr(2, std::vector<mfdata_v_t>(logits_cnt));
@@ -494,18 +410,9 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	std::vector<mfdata_v_t> key_arr_a(cache_cnt);
 	std::vector<mfdata_v_t> value_arr_a(cache_cnt);
 
-
-	// w2_output.read(reinterpret_cast<char *>(golden_output_arr.data()), tokens_size);
-
-	// memcpy(key_arr[0].data(), key_arr_a.data(), cache_size);
-	// memcpy(value_arr[0].data(), value_arr_a.data(), cache_size);
-	// memcpy(key_arr_a.data(), key_arr[0].data(), cache_size);
-	// memcpy(value_arr_a.data(), value_arr[0].data(), cache_size);
-
 	/* ================================== read data into array =================================== */
 
-	
-	int curr_pos = 64;
+	int curr_pos = 150;
 	std::cout<<"Loaded the files into memory"<<std::endl;
 	float coin;
 	int32_t next_token;
@@ -530,16 +437,13 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	out_value_dat.close();
 	input_tokens.close();
 
-
 /* ===================================== Declare the streams ========================================= */
 /* remember - if it's suppsoed to be m_axi, no need to create a stream. just use the created vector, ie: foo_arr.data() */
 
 	/* ============================ write inputs to the streams ====================== */
 		
 
-	// float random_u32 = 0.999;
 	float temperature = 0.9;
-	// int pick = 599;
 	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
 transformer_cu(	sf_w0_arr.data(), //output_arr.data(), 
 				sf_w_arr.data(), quant_w_arr.data(), 
@@ -551,7 +455,7 @@ transformer_cu(	sf_w0_arr.data(), //output_arr.data(),
 				axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
 				axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, &curr_token,
 				#ifdef __DEBUG__
-				4, 0, 0, data_out_arr.data(),
+				49, 0, 0, data_out_arr.data(),
 				#endif
 				#ifdef __ULTRADEBUG__
 					GeMV_data_out_arr.data(),
@@ -559,13 +463,7 @@ transformer_cu(	sf_w0_arr.data(), //output_arr.data(),
 				temperature, coin, true, false
 				);
 
-	// fdata_v_t token_tmp = output_arr[0];
 	int32_t gold_token;
-// std::memcpy(&gold_token, sf_w0_arr.data(), sizeof(int32_t));
-	// std::cout<< "Golden token: \t" <<next_token<<"\t Actual token: \t"<<token_tmp[0]<<std::endl;
-	// int zz = output_arr.size();
-	// std::fill(output_arr.begin() + 96,output_arr.begin() + zz / 2 - 1, 0);
-	// std::fill(output_arr.begin() + zz / 2 + 96,output_arr.end(), 0);
 	#ifdef __DEBUG__
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	parse_results<fdata_v_t, float>(golden_output_arr, data_out_arr);
@@ -575,34 +473,8 @@ transformer_cu(	sf_w0_arr.data(), //output_arr.data(),
 	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
 	parse_results<fdata_v_t, float>(golden_gemv_output_arr, GeMV_data_out_arr);
 	#endif
-	// std::cout<< "========================= Tokens output array data ========================"<<std::endl;
-	// parse_results<mfdata_v_t, float>(tok_w1_out_arr[0], tok_w1_out_arr[1]);
-
-	// std::cout<< "========================= Value cache array data ========================"<<std::endl;
-	// parse_cache_results<mfdata_v_t, float>(value_arr[0], value_arr_a);
-
-	// std::cout<< "========================= Key cache array data ========================"<<std::endl;
-	// parse_cache_results<mfdata_v_t, float>(key_arr[0], key_arr_a);
 
 	std::cout<< "Golden token: \t" <<next_token<<"\t Actual token: \t"<<curr_token<<std::endl;
 	return 0;
 
 }
-
-
-// void transformer_cu(
-// 				fdata_v_t *tokens,
-// 				mfdata_v_t *w_sf_0, idata_v_t *w_0, 
-// 				mfdata_v_t *w_sf_1, idata_v_t *w_1, 
-// 				fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
-// 				const int POS,
-// 				const int QKV_W, const int QKV_sf_W,
-// 				const int Out_W, const int Out_sf_W,
-// 				const int FF_w1w3_W, const int FF_w1w3_sf_W,
-// 				const int FF_w2_W, const int FF_w2_sf_W, 
-// 				const int Embed_W, const int Embed_sf_W, 
-// 				const int rms_att_W, const int rms_ffn_W, const int rms_final_W,
-// 			#ifdef __DEBUG__
-// 				const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
-// 			#endif
-// 				const float temperature, const float coin//, int* pick
