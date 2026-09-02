@@ -46,7 +46,7 @@ int top_tb(){
 	std::ifstream file(checkpoint, std::ios::binary | std::ios::ate);
 	std::ifstream coin_data("newgolden/150_coin.bin", std::ios::binary);
 	std::ifstream token_data("newgolden/150_tokens.bin", std::ios::binary);
-	std::ifstream emb_token_data("weights/token_embedding.bin", std::ios::binary);
+	// std::ifstream emb_token_data("weights/token_embedding.bin", std::ios::binary);
 	std::ifstream data_output("newgolden/150_pre_quantized.bin", std::ios::binary);
 	std::ifstream gemv_data_output("newgolden/150_post_matmul.bin", std::ios::binary);
 	std::ifstream out_key_dat("newgolden/150_key_cache.bin", std::ios::binary);
@@ -82,10 +82,10 @@ int top_tb(){
 	exit(EXIT_FAILURE);
 	}
 	
-	if (!emb_token_data.is_open() ) {
-	std::cout<<"No emb_token_data. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
+	// if (!emb_token_data.is_open() ) {
+	// std::cout<<"No emb_token_data. Already off to a bad start."<<std::endl;
+	// exit(EXIT_FAILURE);
+	// }
 	
 	if (!coin_data.is_open() ) {
 	std::cout<<"No coin_data. Already off to a bad start."<<std::endl;
@@ -245,7 +245,7 @@ int top_tb(){
 		sf_idx += nm_sf_size;
 	}
 	
-	std::memcpy(sf0_ptr, sf_ptr, sf_size);
+	// std::memcpy(sf0_ptr, sf_ptr, sf_size);
 
 	/* ============================== constants related to tb ===================================== */
 	int pos = 150;
@@ -412,7 +412,7 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 
 	/* ================================== read data into array =================================== */
 
-	int curr_pos = 150;
+	int curr_pos = 32;
 	std::cout<<"Loaded the files into memory"<<std::endl;
 	float coin;
 	// int32_t curr_token; 

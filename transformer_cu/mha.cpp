@@ -137,7 +137,7 @@ void wide_mha_iterate(hls::stream<float_t> &out, hls::stream<float_t> &s_max, s_
 		}
 		float_t tmp_comp = att * score_scalar;
     out.write(tmp_comp);
-		max = (max < att) ? att : max;
+		max = (max < tmp_comp) ? tmp_comp : max;
     att = 0.0f;
   }
 	s_max.write(max);
@@ -256,7 +256,7 @@ void mha_iterate(hls::stream<float_t> &out, hls::stream<float_t> &s_max, s_mfdat
 			}
 			float_t tmp_comp = att * score_scalar;
 			out.write(tmp_comp);
-			max = (max < att) ? att : max;
+			max = (max < tmp_comp) ? tmp_comp : max;
 			att = 0.0f;
 		}
 		s_max.write(max);
@@ -384,7 +384,7 @@ void mha_kernel(s_fdata_v_t &output,//
 
     #pragma HLS STREAM variable=s_key_cache_in depth=64//MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
     #pragma HLS STREAM variable=s_key_cache_in_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
-    #pragma HLS STREAM variable=output depth=MODEL_ELEMENTS / SM_FL_ELEM
+    // #pragma HLS STREAM variable=output depth=MODEL_ELEMENTS / SM_FL_ELEM
     #pragma HLS STREAM variable=s_value_cache_in depth=64//MODEL_HEAD_SIZE / MAX_FL_ELEM  //good
     #pragma HLS STREAM variable=s_query depth=64//MODEL_HEAD_SIZE / MAX_FL_ELEM //good
     #pragma HLS STREAM variable=s_query_r depth=MODEL_HEAD_SIZE / MAX_FL_ELEM //good
