@@ -357,7 +357,7 @@ void wide_mha_weighted_sum(s_mfdata_v_t &xb, hls::stream<my_float_t>  &att_in, h
 	}
 }
 
-void mha_kernel(s_fdata_v_t &output,
+void mha_kernel(s_fdata_v_t &output,//
                 fdata_v_t *tokens, //6 mha_kernel
                 mfdata_v_t *key_cache, 
                 mfdata_v_t *value_cache, 
@@ -392,9 +392,9 @@ void mha_kernel(s_fdata_v_t &output,
     #pragma HLS STREAM variable=s_key_cache_to_kernel depth=1024 //good
     #pragma HLS STREAM variable=s_value_cache_to_kernel depth=1024 //good
 
-    #pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo impl=bram
-    #pragma HLS BIND_STORAGE variable=s_query type=fifo impl=bram
-    #pragma HLS BIND_STORAGE variable=s_query_r type=fifo impl=bram
+		#pragma HLS BIND_STORAGE variable=s_key_cache_in_r type=fifo
+    #pragma HLS BIND_STORAGE variable=s_query type=fifo
+    #pragma HLS BIND_STORAGE variable=s_query_r type=fifo
     #pragma HLS BIND_STORAGE variable=s_key_cache_to_kernel type=fifo impl=uram
     #pragma HLS BIND_STORAGE variable=s_value_cache_to_kernel type=fifo impl=uram
 

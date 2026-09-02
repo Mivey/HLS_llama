@@ -415,18 +415,28 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	int curr_pos = 150;
 	std::cout<<"Loaded the files into memory"<<std::endl;
 	float coin;
-	int32_t next_token;
-	int32_t curr_token; 
+	// int32_t curr_token; 
+	
+	std::vector<int> ct(1024);
+	std::fill(ct.begin(), ct.end(), 0);
+	token_data.seekg(0, std::ios::end);
+	int zz = token_data.tellg();
+	token_data.seekg(0, std::ios::beg);
+	token_data.read((reinterpret_cast<char*>(ct.data()) + 4), zz);
+	
+	token_data.seekg(0, std::ios::end);
 	
 	coin_data.seekg((curr_pos - 4) * 4);
 	token_data.seekg((curr_pos - 1) * 4);
 	
+	int32_t next_token = ct.at(curr_pos + 1);
+	ct.at(curr_pos + 1) = -1;
 	char * coin_ptr = reinterpret_cast<char *>(&coin);
-	char * token_ptr = reinterpret_cast<char *>(&next_token);
+	// char * token_ptr = reinterpret_cast<char *>(&next_token);
 
 	coin_data.read(coin_ptr, 4);
-	token_data.read(reinterpret_cast<char*>(&curr_token), 4);
-	token_data.read(token_ptr, 4);
+	// token_data.read(reinterpret_cast<char*>(&curr_token), 4);
+	// token_data.read(token_ptr, 4);
 	
 	file.close();
 	coin_data.close();
@@ -453,9 +463,9 @@ transformer_cu(	sf_w0_arr.data(), //output_arr.data(),
 				axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
 				axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
 				axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-				axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, &curr_token,
+				axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, ct.data(),
 				#ifdef __DEBUG__
-				49, 0, 0, data_out_arr.data(),
+				4, 0, 0, data_out_arr.data(),
 				#endif
 				#ifdef __ULTRADEBUG__
 					GeMV_data_out_arr.data(),
@@ -474,7 +484,7 @@ transformer_cu(	sf_w0_arr.data(), //output_arr.data(),
 	parse_results<fdata_v_t, float>(golden_gemv_output_arr, GeMV_data_out_arr);
 	#endif
 
-	std::cout<< "Golden token: \t" <<next_token<<"\t Actual token: \t"<<curr_token<<std::endl;
+	std::cout<< "Golden token: \t" <<next_token<<"\t Actual token: \t"<<ct.at(curr_pos + 1)<<std::endl;
 	return 0;
 
 }

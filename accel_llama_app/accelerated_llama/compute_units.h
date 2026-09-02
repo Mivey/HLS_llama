@@ -1,6 +1,5 @@
 // XRT includes
 #include "xrt/xrt_device.h"
-#include "xrt/xrt_kernel.h"
 #include "xrt/xrt_bo.h"
 #include "experimental/xrt_ip.h"
 #include <atomic>
@@ -14,7 +13,7 @@
 #include <cstring>
 #include "../transformer_cu/transformer_cu/hls/impl/misc/drivers/transformer_cu_v1_0/src/xtransformer_cu_hw.h"
 
-
+// ... [Keep your axi_reg, Config, and Transformer structs here] ...
 
 typedef struct {
 	int POS;
@@ -49,52 +48,6 @@ typedef struct {
     int seq_len; // max sequence length
 } Config;
 
-// typedef struct {
-//     int8_t* q;    // quantized values
-//     float* s; // scaling factors
-// } QuantizedTensor;
-
-// typedef struct {
-//     // token embedding table
-//     QuantizedTensor *q_tokens; // (vocab_size, dim)
-//     float* token_embedding_table; // same, but dequantized
-
-//     // weights for rmsnorms
-//     float* rms_att_weight; // (layer, dim) rmsnorm weights
-//     float* rms_ffn_weight; // (layer, dim)
-//     // weights for matmuls. note dim == n_heads * head_size
-//     QuantizedTensor *wq; // (layer, dim, n_heads * head_size)
-//     QuantizedTensor *wk; // (layer, dim, n_kv_heads * head_size)
-//     QuantizedTensor *wv; // (layer, dim, n_kv_heads * head_size)
-//     QuantizedTensor *wo; // (layer, n_heads * head_size, dim)
-//     // weights for ffn
-//     QuantizedTensor *w1; // (layer, hidden_dim, dim)
-//     QuantizedTensor *w2; // (layer, dim, hidden_dim)
-//     QuantizedTensor *w3; // (layer, hidden_dim, dim)
-//     // final rmsnorm
-//     float* rms_final_weight; // (dim,)
-//     // (optional) classifier weights for the logits, on the last layer
-//     QuantizedTensor *wcls;
-// } TransformerWeights;
-
-// typedef struct {
-//     // current wave of activations
-//     float *x; // activation at current time stamp (dim,)
-//     float *xb; // same, but inside a residual branch (dim,)
-//     float *xb2; // an additional buffer just for convenience (dim,)
-//     float *hb; // buffer for hidden dimension in the ffn (hidden_dim,)
-//     float *hb2; // buffer for hidden dimension in the ffn (hidden_dim,)
-//     QuantizedTensor xq; // quantized x (dim,)
-//     QuantizedTensor hq; // quantized hb (hidden_dim,)
-//     float *q; // query (dim,)
-//     float *k; // key (dim,)
-//     float *v; // value (dim,)
-//     float *att; // buffer for scores/attention values (n_heads, seq_len)
-//     float *logits; // output logits
-//     // kv cache
-//     float* key_cache;   // (layer, seq_len, dim)
-//     float* value_cache; // (layer, seq_len, dim)
-// } RunState;
 
 typedef struct {
     Config config; // the hyperparameters of the architecture (the blueprint)
@@ -107,144 +60,118 @@ typedef struct {
 } Transformer;
 
 
+class FastForward {
+public:
+    FastForward(int device_id, std::string& binaryFile, const std::string& checkpoint) {
+        try {
+            device = xrt::device(device_id);
+            std::cout << "device name:     " << device.get_info<xrt::info::device::name>() << "\n";
+            std::cout << "device bdf:      " << device.get_info<xrt::info::device::bdf>() << "\n";
+            std::cout << "Compiled on " << __DATE__ << " at " << __TIME__ << std::endl;
+            
+            uuid = device.load_xclbin(binaryFile);
+            
+            // Switch to xrt::ip for bare-metal AXI-Lite register access
+            transformer_ip = xrt::ip(device, uuid, "transformer_cu");
+            
+        } catch (const std::exception& e) {
+            throw std::runtime_error(std::string(e.what()));
+        }
 
-class ForwardBlock{
-	public:
-		ForwardBlock(
-			int device_id, std::string& binaryFile, const std::string &checkpoint){//, Transformer *t){
-				
-			try {
-				device = xrt::device(device_id);
-				std::cout << "device name:     " << device.get_info<xrt::info::device::name>() << "\n";
-     		std::cout << "device bdf:      " << device.get_info<xrt::info::device::bdf>() << "\n";
-				std::cout << "Compiled on "<< __DATE__ << " at "<<__TIME__ <<std::endl;
-				uuid = device.load_xclbin(binaryFile);
-				kernel = xrt::kernel(device, uuid, "transformer_cu");
-				
-			} catch (const std::exception& e) {
-				throw std::runtime_error(std::string(e.what()));
-			}
+        allocate_cache_init();
+        weights_init(checkpoint);
+        run_init();
+        
+        std::cout << "FastForward XRT::IP interface initialized successfully.\n";
+    }
 
-			allocate_cache_init();
-			weights_init(checkpoint);
-			run_init();
-			
-			// p = &t->config;
-			// w = &t->weights;
-			// s = &t->state;
-			std::cout<<"did I test it here?\n";
+/*====================================================================================
+RUN FORWARD
+=====================================================================================*/
 
-		}
+    void startForward(const int token, const int pos, const float coin) {
+        // Write the token and pos integers directly to the IP
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_CURR_TOKEN_I_DATA, token);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_POS_R_DATA, pos);
 
-		
-/*===============================================================================================================
-RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD 
-=====================================================================================================*/
+        // Convert coin float to uint32_t for AXI-Lite transport
+        std::memcpy(&tmp_bits, &coin, sizeof(float));  
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_COIN_DATA, tmp_bits);
+        
+        // Assert AP_START (bit 0) to kick off the kernel
+        uint32_t ctrl = transformer_ip.read_register(XTRANSFORMER_CU_CONTROL_ADDR_AP_CTRL);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_AP_CTRL, ctrl | 0x01);
+    }
 
+    int endForward() {
+        // Poll AP_DONE (bit 1) to synchronize 
+        while ((transformer_ip.read_register(XTRANSFORMER_CU_CONTROL_ADDR_AP_CTRL) & 0x02) == 0) {
+            // Optional: std::this_thread::yield() if CPU spinning becomes a bottleneck
+        }
+        
+        // The HLS core will clear AP_DONE automatically upon the next AP_START assertion.
+        return transformer_ip.read_register(XTRANSFORMER_CU_CONTROL_ADDR_CURR_TOKEN_O_DATA);
+    }
 
+    void set_rms_flag(const bool x) {
+        tt.init_rms_flag = x;
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_INIT_RMS_FLAG_DATA, x ? 1 : 0);
+    }
+    
+    void enable_decode() {
+        tt.pf_dc_flag = true;
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_PF_DC_FLAG_DATA, 1);
+    }
 
-		void startForward(const int token, const int pos, const float coin){
-			// float *cr = w->token_embedding_table + token * p->dim;
-			std::memcpy(token_map_c, w->token_embedding_table + token * p->dim, p->dim * sizeof(float));
+    void enable_prefill() {
+        tt.pf_dc_flag = false;
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_PF_DC_FLAG_DATA, 0);
+    }
 
-			float tmm_val = coin;
-			uint32_t tmp_bits;
-			std::memcpy(&tmp_bits, &tmm_val, sizeof(float));
-			
-			token_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-			transformer_run.set_arg(8, pos);
-			transformer_run.set_arg(23, tmm_val);
-			transformer_run.start();
-		}
+private:
+    xrt::device device;
+    xrt::uuid uuid;
+    xrt::ip transformer_ip;
 
-		int endForward(){
-			transformer_run.wait();
-			token_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
-			
-			return token_map_i[0];
-			
-		}
-		void set_rms_flag(const bool x){
-			tt.init_rms_flag = x;
-			transformer_run.set_arg(24,tt.init_rms_flag);
-		}
-		
-		void enable_decode(){
-			tt.pf_dc_flag = true;
-			transformer_run.set_arg(25, tt.pf_dc_flag);
-		}
+    xrt::bo parent_rms_bo;
+    xrt::bo parent_w_bo;
+    xrt::bo parent_sf_bo;
+    xrt::bo key_cache_bo;
+    xrt::bo value_cache_bo;
+    xrt::bo token_bo;
+    
+    int MODEL_ELEMENTS = 768;
+    int MODEL_HIDDEN_DIM = 2048;
+    int MODEL_SCALING_FACTOR = 64;
+    int MODEL_SEQUENCE_LEN = 1024;
+    int MODEL_NUM_LAYERS = 12;
+    int MODEL_TOKENS = 32000;
+		uint32_t tmp_bits;
 
-		void enable_prefill(){
-			tt.pf_dc_flag = false;
-			transformer_run.set_arg(25, tt.pf_dc_flag);
-		}
+    axi_reg tt;
+    Config* p;
 
+    // Helper to map 64-bit physical device addresses to consecutive 32-bit AXI-Lite registers
+    void write_bo_address(uint32_t offset, xrt::bo& bo) {
+        uint64_t addr = bo.address();
+        transformer_ip.write_register(offset, static_cast<uint32_t>(addr & 0xFFFFFFFF));
+        transformer_ip.write_register(offset + 4, static_cast<uint32_t>(addr >> 32));
+    }
 
-		/* 
-		=========================================================================================
-		PRIVATE PRIVATE PRIVATE PRIVATE PRIVATE PRIVATE PRIVATE PRIVATE PRIVATE PRIVATE PRIVATE PRIVATE 
-		==============================================================================================
-		*/
-	private:
-		xrt::device device;
-		xrt::uuid uuid;
-		xrt::kernel kernel;
-		xrt::run transformer_run; // is this legal?
-		// xrt::ip transformer_ip;
-
-		// uint32_t status = 0;
-		
-		xrt::bo parent_rms_bo;
-		xrt::bo parent_w_bo;
-		xrt::bo parent_sf_bo;
-		xrt::bo key_cache_bo;
-		xrt::bo value_cache_bo;
-		
-		xrt::bo qkv_w_bo;
-		xrt::bo qkv_sf_bo;
-		xrt::bo out_w_bo;
-		xrt::bo out_sf_bo;
-		xrt::bo gate_up_w_bo;
-		xrt::bo gate_up_sf_bo;
-		xrt::bo down_w_bo;
-		xrt::bo down_sf_bo;
-		xrt::bo embedding_w_bo;
-		xrt::bo embedding_sf_bo;
-		xrt::bo rms_att_w_bo, rms_ffn_w_bo, rms_final_w_bo;
-		xrt::bo token_bo;
-		float* token_map_f;
-		int* token_map_i;
-		char* token_map_c;
-		
-
-		int MODEL_ELEMENTS = 768;
-		int MODEL_HIDDEN_DIM = 2048;
-		int MODEL_SCALING_FACTOR = 64;
-		int MODEL_SEQUENCE_LEN = 1024;
-		int MODEL_NUM_LAYERS = 12;
-		int MODEL_TOKENS = 32000;
-
-		axi_reg tt;
-		
-		Config* p;
-		// TransformerWeights* w;
-		// RunState* s;
-
-		//private method to store the KV cache objects.
-		void allocate_cache_init(){
-				//create the containers for the weights
-			size_t c_size = (size_t)MODEL_ELEMENTS * MODEL_SEQUENCE_LEN * MODEL_NUM_LAYERS * sizeof(float);
-			key_cache_bo = xrt::bo(device, c_size, 0);
-			value_cache_bo = xrt::bo(device, c_size, 0);
-		}
+    void allocate_cache_init() {
+        size_t c_size = (size_t)MODEL_ELEMENTS * MODEL_SEQUENCE_LEN * MODEL_NUM_LAYERS * sizeof(float);
+        key_cache_bo = xrt::bo(device, c_size, 0);
+        value_cache_bo = xrt::bo(device, c_size, 0);
+    }
 
 		void weights_init(const std::string &checkpoint){
 			
 			//init token_bo
-			token_bo = xrt::bo(device, MODEL_TOKENS * sizeof(float), 0);
-			token_map_f = token_bo.map<float*>();
-			token_map_i = token_bo.map<int*>();
-			token_map_c = token_bo.map<char*>();
+			size_t embed_float_size = MODEL_ELEMENTS * MODEL_TOKENS * sizeof(float);
+			token_bo = xrt::bo(device, embed_float_size, 0);
+			float* token_map_f = token_bo.map<float*>();
+			// token_map_i = token_bo.map<int*>();
+			// token_map_c = token_bo.map<char*>();
 			std::ifstream file(checkpoint, std::ios::binary);
 			// size_t file_size = file.tellg();
 			// file.seekg(0, std::ios::beg);
@@ -291,13 +218,16 @@ RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORW
 			file.read(rms_ptr + rms_idx, rms_final_size);
 			file_ptr = file.tellg();
 			
+			size_t emb_tok_ptr = file.tellg();
 			size_t q_idx = 0;
 			size_t sf_idx = 0;
+			
 			
 			tt.Embed_W = 0;
 			file.read(q_ptr + q_idx, embed_size);
 			q_idx += embed_size;
 			
+			size_t emb_tok_sf_ptr = file.tellg();
 			tt.Embed_sf_W = 0;
 			file.read(sf_ptr + sf_idx, embed_sf_size);
 			sf_idx += embed_sf_size;
@@ -361,39 +291,64 @@ RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORWARD RUN FORW
 			tt.N_DIM = MODEL_ELEMENTS;
 			tt.M_DIM = MODEL_ELEMENTS;
 
+			size_t total_embed_elements = MODEL_ELEMENTS * MODEL_TOKENS;
+			size_t total_sf_elements = total_embed_elements / MODEL_SCALING_FACTOR;
+			
+			std::vector<int8_t> tmp_q_embed(total_embed_elements);
+			std::vector<float> tmp_sf_embed(total_sf_elements);
+
+			// 3. Perform exactly TWO bulk file reads (Fixing the I/O bottleneck)
+			file.seekg(emb_tok_ptr, std::ios::beg);
+			file.read(reinterpret_cast<char*>(tmp_q_embed.data()), tmp_q_embed.size());
+
+			file.seekg(emb_tok_sf_ptr, std::ios::beg);
+			file.read(reinterpret_cast<char*>(tmp_sf_embed.data()), tmp_sf_embed.size() * sizeof(float));
+
+			// 4. Dequantize purely in memory, directly into the XRT buffer (Fixing the math)
+			for (int i = 0; i < total_embed_elements; i++) {
+					int group = i / MODEL_SCALING_FACTOR;
+					token_map_f[i] = static_cast<float>(tmp_q_embed[i]) * tmp_sf_embed[group];
+			}
+
 			parent_rms_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 			parent_sf_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 			parent_w_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+			token_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
 			file.close();
 		}
 
-		void run_init(){			
-			transformer_run = xrt::run(kernel);
-			transformer_run.set_arg(0, token_bo);
-			transformer_run.set_arg(1, parent_sf_bo);
-			transformer_run.set_arg(2, parent_w_bo);
-			transformer_run.set_arg(3, parent_sf_bo);
-			transformer_run.set_arg(4, parent_w_bo);
-			transformer_run.set_arg(5, parent_rms_bo);
-			transformer_run.set_arg(6, key_cache_bo);
-			transformer_run.set_arg(7, value_cache_bo);
-			// transformer_run.set_arg(8, );
-			transformer_run.set_arg(9,tt.QKV_W);
-			transformer_run.set_arg(10,tt.QKV_sf_W);
-			transformer_run.set_arg(11,tt.Out_W);
-			transformer_run.set_arg(12,tt.Out_sf_W);
-			transformer_run.set_arg(13,tt.FF_w1w3_W);
-			transformer_run.set_arg(14,tt.FF_w1w3_sf_W);
-			transformer_run.set_arg(15,tt.FF_w2_W);
-			transformer_run.set_arg(16,tt.FF_w2_sf_W);
-			transformer_run.set_arg(17,tt.Embed_W);
-			transformer_run.set_arg(18,tt.Embed_sf_W);
-			transformer_run.set_arg(19,tt.rms_att_W);
-			transformer_run.set_arg(20,tt.rms_ffn_W);
-			transformer_run.set_arg(21,tt.rms_final_W);
-			transformer_run.set_arg(22,tt.temperature);
-			// transformer_run.set_arg(23,tt.coin);
-			transformer_run.set_arg(24,tt.init_rms_flag);
-			transformer_run.set_arg(25,tt.pf_dc_flag);
-		}
+    void run_init() {
+        // Map 64-bit Memory Pointers
+        write_bo_address(XTRANSFORMER_CU_CONTROL_ADDR_TOKENS_DATA, token_bo);
+        write_bo_address(XTRANSFORMER_CU_CONTROL_ADDR_W_SF_0_DATA, parent_sf_bo);
+        write_bo_address(XTRANSFORMER_CU_CONTROL_ADDR_W_0_DATA, parent_w_bo);
+        write_bo_address(XTRANSFORMER_CU_CONTROL_ADDR_W_SF_1_DATA, parent_sf_bo);
+        write_bo_address(XTRANSFORMER_CU_CONTROL_ADDR_W_1_DATA, parent_w_bo);
+        write_bo_address(XTRANSFORMER_CU_CONTROL_ADDR_WEIGHTS_DATA, parent_rms_bo);
+        write_bo_address(XTRANSFORMER_CU_CONTROL_ADDR_KEY_CACHE_DATA, key_cache_bo);
+        write_bo_address(XTRANSFORMER_CU_CONTROL_ADDR_VALUE_CACHE_DATA, value_cache_bo);
+
+        // Map 32-bit Offsets & Dimensions
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_QKV_W_DATA, tt.QKV_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_QKV_SF_W_DATA, tt.QKV_sf_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_OUT_W_DATA, tt.Out_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_OUT_SF_W_DATA, tt.Out_sf_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_FF_W1W3_W_DATA, tt.FF_w1w3_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_FF_W1W3_SF_W_DATA, tt.FF_w1w3_sf_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_FF_W2_W_DATA, tt.FF_w2_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_FF_W2_SF_W_DATA, tt.FF_w2_sf_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_EMBED_W_DATA, tt.Embed_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_EMBED_SF_W_DATA, tt.Embed_sf_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_RMS_ATT_W_DATA, tt.rms_att_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_RMS_FFN_W_DATA, tt.rms_ffn_W);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_RMS_FINAL_W_DATA, tt.rms_final_W);
+        
+        // Base Hyperparameters
+        uint32_t tmp_temp;
+        std::memcpy(&tmp_temp, &tt.temperature, sizeof(float));
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_TEMPERATURE_DATA, tmp_temp);
+
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_INIT_RMS_FLAG_DATA, tt.init_rms_flag ? 1 : 0);
+        transformer_ip.write_register(XTRANSFORMER_CU_CONTROL_ADDR_PF_DC_FLAG_DATA, tt.pf_dc_flag ? 1 : 0);
+    }
 };

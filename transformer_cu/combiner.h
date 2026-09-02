@@ -137,7 +137,7 @@ void systolic_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_D
   }
 }
   
-void insertion_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_DIM){
+void insertion_sort(hls::stream<ProbIndex> &ss_val, ProbIndex *reg, const int M_DIM){//
   // #pragma HLS INLINE
   // ProbIndex init = {0, std::numeric_limits<float>::lowest()};
   ProbIndex st[REG_SIZE]; // systolic temp array
@@ -225,7 +225,7 @@ void ss_final(ProbIndex *reg, fdata_v_t *pick, const float temperature, const fl
   pick[0] = tpick;
   return;
 }
-void ss_final(ProbIndex *reg, int32_t &pick, const float temperature, const float topp, const float coin){
+void ss_final(ProbIndex *reg, int32_t &pick, const float temperature, const float topp, const float coin){//
   
   const my_float_t INV_TEMP = (temperature == 0) ? 1.0f : 1/temperature; 
   if (temperature <= 0.0f) {
@@ -239,14 +239,14 @@ void ss_final(ProbIndex *reg, int32_t &pick, const float temperature, const floa
   my_float_t max_val = reg[0].prob;
   my_float_t final_soft_sum = 0.0f;
   my_float_t sm_reg[REG_SIZE];
-	int delme[REG_SIZE];
+	// int delme[REG_SIZE];
   #pragma HLS ARRAY_PARTITION variable=sm_reg dim=1 type=complete
 
   softmax_exp_loop:
   for (int i = 0; i < REG_SIZE; i++) {
     #pragma HLS PIPELINE
     my_float_t curr_val = reg[i].prob;
-		delme[i] = (int) reg[i].index;
+		// delme[i] = (int) reg[i].index;
     my_float_t calc = hls::expf((curr_val - max_val) * INV_TEMP);
     final_soft_sum += calc;
     sm_reg[i] = calc;
@@ -272,9 +272,9 @@ void ss_final(ProbIndex *reg, int32_t &pick, const float temperature, const floa
   return;
 }
 
-template<typename T, size_t N, int P>
+template<typename T, size_t N, int P>//
 void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], 
-                const int M_DIM, const bool BOOP, hls::stream<bool> &done
+                const int M_DIM, const bool BOOP//, hls::stream<bool> &done
                 #ifdef __ULTRADEBUG__
                   , fdata_v_t *data_out, const int SAVE_ADDR
                 #endif
@@ -316,7 +316,7 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::s
       // out[idx] = data;
     }
   }
-  bool next = done.read(); // lets cu_selecter start the next calculation. 
+  // bool next = done.read(); // lets cu_selecter start the next calculation. 
   ProbIndex ss_val = {32420, std::numeric_limits<my_float_t>::lowest()};
   
   flush:

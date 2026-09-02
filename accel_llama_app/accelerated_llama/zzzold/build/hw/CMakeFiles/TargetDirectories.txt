@@ -1,0 +1,4 @@
+/home/lolwut/project/2026/HLS/llama_kernels/accelerated_llama/build/hw/CMakeFiles/accellerated_llama.dir
+/home/lolwut/project/2026/HLS/llama_kernels/accelerated_llama/build/hw/CMakeFiles/GenerateEmulationConfig.dir
+/home/lolwut/project/2026/HLS/llama_kernels/accelerated_llama/build/hw/CMakeFiles/edit_cache.dir
+/home/lolwut/project/2026/HLS/llama_kernels/accelerated_llama/build/hw/CMakeFiles/rebuild_cache.dir

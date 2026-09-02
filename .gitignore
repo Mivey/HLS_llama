@@ -89,11 +89,11 @@ sampler_cu/sampler_cu/*
 # !transformer_cu/combo_cu/hls/syn/report/transformer_cu_csynth.rpt
 # Match the folder, but look inside it
 !transformer_cu/combo_cu/
-!transformer_cu/testbench/weights/
+transformer_cu/testbench/weights/*
 
 # Ignore everything inside that folder
 transformer_cu/combo_cu/**
-transformer_cu/testbench/weights/**
+# transformer_cu/testbench/weights/**
 
 # Allow Git to look into the report folder path
 !transformer_cu/combo_cu/hls/
@@ -104,4 +104,4 @@ transformer_cu/testbench/weights/**
 # Un-ignore your specific file
 !transformer_cu/combo_cu/hls/syn/report/transformer_cu_csynth.rpt
 !transformer_cu/combo_cu/hls/syn/report/csynth.rpt
-!transformer_cu/testbench/weights/token_embedding.bin
+# !transformer_cu/testbench/weights/token_embedding.bin
