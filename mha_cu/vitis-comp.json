@@ -1,0 +1,14 @@
+{
+  "name": "mha_cu",
+  "type": "HLS",
+  "configuration": {
+    "componentType": "HLS",
+    "configFiles": [
+      "mha_config.cfg"
+    ],
+    "work_dir": "mha_cu"
+  },
+  "useSysrootToolchain": false,
+  "template": "empty_hls_component",
+  "templateFlow": "VITIS"
+}

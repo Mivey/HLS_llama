@@ -1,0 +1,52 @@
+[
+  {
+    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/GeMV",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=GeMV_kernel",
+      "-c",
+      "/home/lolwut/project/2026/HLS/HLS_llama/forward.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/forward.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/GeMV",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=GeMV_kernel",
+      "-c",
+      "/home/lolwut/project/2026/HLS/HLS_llama/GeMV/matmult.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/GeMV/matmult.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/GeMV",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls-tb",
+      "-hls-sim-headers-dir=/tools/Xilinx/2025.2/Vitis/include",
+      "-c",
+      "/home/lolwut/project/2026/HLS/HLS_llama/GeMV/testbenches/tb_main.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/GeMV/testbenches/tb_main.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/GeMV",
+    "arguments": [
+      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls-tb",
+      "-hls-sim-headers-dir=/tools/Xilinx/2025.2/Vitis/include",
+      "-c",
+      "/home/lolwut/project/2026/HLS/HLS_llama/GeMV/testbenches/top_tb.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/GeMV/testbenches/top_tb.cpp"
+  }
+]

@@ -1,0 +1,14 @@
+{
+  "name": "swiglu_cu",
+  "type": "HLS",
+  "configuration": {
+    "componentType": "HLS",
+    "configFiles": [
+      "swiglu_hls_config.cfg"
+    ],
+    "work_dir": "swiglu_cu"
+  },
+  "useSysrootToolchain": false,
+  "template": "empty_hls_component",
+  "templateFlow": "VITIS"
+}

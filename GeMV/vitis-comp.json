@@ -1,0 +1,13 @@
+{
+  "name": "GeMV",
+  "type": "HLS",
+  "configuration": {
+    "componentType": "HLS",
+    "configFiles": [
+      "mm_hls_config.cfg"
+    ],
+    "work_dir": "GeMV"
+  },
+  "useSysrootToolchain": false,
+  "templateFlow": "VITIS"
+}
