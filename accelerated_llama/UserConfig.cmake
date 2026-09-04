@@ -36,7 +36,7 @@ set(USER_INCLUDE_DIRECTORIES
 # Example 3: Adding ${CMAKE_SOURCE_DIR}/data/helloworld.c to add data/helloworld.c from this project.
 
 set(USER_COMPILE_SOURCES
-"run.cpp"
+"fastforward.cpp"
 )
 
 # -----------------------------------------
@@ -73,15 +73,15 @@ set(USER_COMPILE_WARNINGS_INHIBIT_ALL )
 # -----------------------------------------
 
 # Optimization level   "-O0" [None] , "-O1" [Optimize] , "-O2" [Optimize More], "-O3" [Optimize Most] or "-Os" [Optimize Size]
-set(USER_COMPILE_OPTIMIZATION_LEVEL "-O3")
+set(USER_COMPILE_OPTIMIZATION_LEVEL "-O0")
 
 # Other flags related to optimization
-set(USER_COMPILE_OPTIMIZATION_OTHER_FLAGS "-ffast-math" "-funroll-loops")
+set(USER_COMPILE_OPTIMIZATION_OTHER_FLAGS "")
 
 # -----------------------------------------
 
 # Debug level "" [None], "-g1" [Minimum], "g2" [Default], "g3" [Maximim]
-set(USER_COMPILE_DEBUG_LEVEL "")
+set(USER_COMPILE_DEBUG_LEVEL "-g3")
 
 # Other flags releated to debugging
 set(USER_COMPILE_DEBUG_OTHER_FLAGS )
@@ -128,7 +128,7 @@ set(USER_LINK_OMIT_ALL_SYMBOL_INFO )
 # Add any libraries to be linked below, they will be added as extra libraries.
 # User need to update USER_LINK_DIRECTORIES below with these library paths.
 set(USER_LINK_LIBRARIES
-"m"
+"m" "uuid"
 )
 
 # Add any directories to look for the libraries to be linked.
