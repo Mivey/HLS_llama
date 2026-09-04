@@ -1,18 +1,6 @@
 #include "mha_forward.h"
-#include "matmult.h"
 #include "rmsnorm.h"
-#include "swiglu.h"
-#include "mha.h"
-#include "quantizer.h"
 #include "combiner.h"
-#include <algorithm>
-#include <cmath>
-#include <cstddef>
-#include <cstdint>
-#include <exception>
-#include <hls_fence.h>
-#include <iterator>
-#include <sys/types.h>
 
 constexpr int mm_thr = 2;
 struct keys {

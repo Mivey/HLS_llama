@@ -15,10 +15,8 @@
 #include <ap_int.h>
 #include <utils/x_hls_defines.h>
 
-// #define DATAWIDTH 32
 #define MODEL_ELEMENTS 768
 #define MODEL_HIDDEN_DIM 2048
-// #define QUANT 8 // bits in the word... either 4 or 8
 #define MODEL_NUM_HEADS 12
 #define MODEL_NUM_LAYERS 12
 #define MODEL_TOKENS 32000
@@ -27,9 +25,6 @@
 // const int MODEL_RMS_SIZE =;
 #define bytes_in(n) sizeof(n)
 #define runs(n) SCALING_FACTOR/sizeof(n)
-// constexpr float Q_FACTOR = ((QUANT%4)==0) ? \
-//                  static_cast<float>((1<<(QUANT - 1)) - 1) : 127;
-// #define mm_thr 2
 
 /* ************************************* */
 struct fast_bf16{
@@ -127,7 +122,6 @@ void inf_split_tee(hls::stream<hls::vector<T, M>> (&out)[N], hls::stream<T> &in,
   }
 }
 
-
 template<typename T, int N>
 void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vElem, const int vCount){
   
@@ -150,29 +144,6 @@ void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vEl
     }
   }
 }
-
-
-// template<typename T, typename S, int N>
-// void rr_merge(hls::stream<S> &out, hls::stream<T> (&in)[N], const int vCount){
-//   S data;
-//   const int ratio = sizeof(S) / (sizeof(T) * N);
-//   tot_num_data_loop:
-//   for (int i = 0; i < vCount; i++) {
-//     #pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS / MAX_FL_ELEM
-//     #pragma HLS PIPELINE
-//     ratio_loop:
-//     for (int j = 0; j < ratio; j++) {
-      
-//       elem_merge_loop:
-//       for (int k = 0; k < N; k++) {
-//         int offset = j * N + k;
-//         data[offset] = in[k].read();
-//       }
-//     }
-//     out.write(data);
-//   }
-// }
-
 
 template<typename T, int N>
 void rr_merge(hls::stream<T> &out, hls::stream<T> (&in)[N], const int M_DIM){
@@ -393,6 +364,7 @@ void mha_kernel(s_fdata_v_t &output, fdata_v_t *tokens, adata_v_t *key_cache,  a
 
 
 /* *************************** SWIGLU FUNCTION *************************************/
+
 template<size_t M = 4, typename T, size_t N>//
 void swiglu(hls::stream<hls::vector<T, N>> &hb_out, hls::stream<hls::vector<T, N>> &hb_in, hls::stream<hls::vector<T, N>> &hb2_in){
   // int elem = sizeof(T)/ sizeof(my_float_t);
@@ -416,17 +388,18 @@ void swiglu(hls::stream<hls::vector<T, N>> &hb_out, hls::stream<hls::vector<T, N
   }
 }
 
+void swiglu_kernel(s_fdata_v_t &output, fdata_v_t *w1w3);
+
+/* *************************** TOP FUNCTION *************************************/
+/* *************************** TRANSFORMER KERNEL *************************************/
+
 void transformer_cu(  
     fdata_v_t *tokens, 
-    mfdata_v_t *w_sf_0, idata_v_t *w_0, 
-    mfdata_v_t *w_sf_1, idata_v_t *w_1, 
+    mfdata_v_t *w_sf_0, idata_v_t *w_0, mfdata_v_t *w_sf_1, idata_v_t *w_1, 
     fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
-    const int POS, 
-    const int QKV_W, const int QKV_sf_W,
-    const int Out_W, const int Out_sf_W,
-    const int FF_w1w3_W, const int FF_w1w3_sf_W,
-    const int FF_w2_W, const int FF_w2_sf_W, 
-    const int Embed_W, const int Embed_sf_W, 
+    const int POS, int QKV_W, const int QKV_sf_W,
+    const int Out_W, const int Out_sf_W, const int FF_w1w3_W, const int FF_w1w3_sf_W,
+    const int FF_w2_W, const int FF_w2_sf_W, const int Embed_W, const int Embed_sf_W, 
     const int rms_att_W, const int rms_ffn_W, const int rms_final_W, int *curr_token,
   #ifdef __DEBUG__
       const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
@@ -434,9 +407,7 @@ void transformer_cu(
   #ifdef __ULTRADEBUG__
     fdata_v_t *GeMV_data_out,
   #endif
-    const float temperature, const float coin,
-    const bool init_rms_flag, const bool prefill_flag
-        );
+    const float temperature, const float coin, const bool init_rms_flag, const bool prefill_flag );
         
 #endif
 
