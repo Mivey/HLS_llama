@@ -12,6 +12,7 @@
 .rpt
 .vhd
 .v
+.ini
 
 
 #Ignore lock files
@@ -24,30 +25,16 @@
 _ide/logs
 _ide/.wsdata
 
-mha_cu/mha_cu/
-mha_cu/.gitignore
-# mha_cu/*.json
-mha_cu/.Xil/
-swiglu_cu/swiglu_cu/
-swiglu_cu/.gitignore
-# swiglu_cu/*.json
-swiglu_cu/.Xil/
-rms_cu/rms_cu/
-rms_cu/.gitignore
-# rms_cu/*.json
-rms_cu/.Xil/
+mha_cu/
+swiglu_cu/
+rms_cu/
+accel_llama_app/
 accelerated_llama/accelerated_llama/
 accelerated_llama/.gitignore
 # accelerated_llama/*.json
 accelerated_llama/.Xil/
-llama2_software/llama2_software/
-llama2_software/.gitignore
-# llama2_software/*.json
-llama2_software/.Xil/
-matmult_cu/matmult_cu/
-matmult_cu/.gitignore
-matmult_cu/.Xil/
-# matmult_cu/*.json
+llama2_software/
+matmult_cu/
 mha_cu/.*
 swiglu_cu/.*
 rms_cu/.*
@@ -56,24 +43,16 @@ llama2_software/.*
 matmult_cu/.*
 matmult_cu/testbenches/weights/
 matmult_cu/testbenches/seed_42069/
-
-mha_cu/_ide
-mha_cu/mha
-mha_cu/testbench/seed_42069/
-mha_cu/testbench/seed_42069_conv/
-mha_cu/testbench/weights/
-swiglu_cu/_ide
-rms_cu/_ide
-accelerated_llama/_ide
-llama2_software/_ide
-GeMV/GeMV/
-GeMV/.cache/
-GeMV/.Xil/
-GeMV/.gitignore
+mha/
+mha_cu/
+swiglu_cu/
+rms_cu/
+accelerated_llama/
+llama2_software/
+GeMV/
 # GeMV/*.json
 _ide/
-GeMV/testbenches/weights/
-GeMV/testbenches/seed_42069/
+GeMV/
 mha/*
 transformer_cu/.cache/
 transformer_cu/.cache/
@@ -82,8 +61,7 @@ transformer_cu/testbench/seed_42069/*
 transformer_cu/testbench/seed_42069_conv/*
 # transformer_cu/testbench/weights/*
 transformer_cu/testbench/seed_199/*
-sampler_cu/.cache
-sampler_cu/sampler_cu/*
+sampler_cu/
 # !transformer_cu/combo_cu/
 # !transformer_cu/combo_cu/hls/syn/report/csynth.rpt
 # !transformer_cu/combo_cu/hls/syn/report/transformer_cu_csynth.rpt
@@ -106,3 +84,4 @@ transformer_cu/combo_cu/**
 !transformer_cu/combo_cu/hls/syn/report/csynth.rpt
 # !transformer_cu/testbench/weights/token_embedding.bin
 man_tcu.cpp
+workspace*
