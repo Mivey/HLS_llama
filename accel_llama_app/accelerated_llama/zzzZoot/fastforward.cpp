@@ -1,6 +1,5 @@
 #include <cstdint>
 #include <iostream>
-#include <stdexcept>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -19,47 +18,39 @@
 #include "compute_units.h"
 
 // Globals
-int GS = 0;
+int GS = 0; 
 
 // ----------------------------------------------------------------------------
 // File IO
-//
-// Only the 256-byte header is parsed here, for the tokenizer's vocab_size and
-// the step clamp. The engine re-reads and validates the header itself against
-// the geometry the kernel was synthesized for, and owns the weight repack.
 
-void read_checkpoint(const char* checkpoint, Config* config,
+void read_checkpoint(char* checkpoint, Config* config, 
                      int* fd, float** data, ssize_t* file_size) {
-    *fd = -1;
-    *data = NULL;
-    *file_size = 0;
-
     FILE *file = fopen(checkpoint, "rb");
     if (!file) { fprintf(stderr, "Couldn't open file %s\n", checkpoint); exit(EXIT_FAILURE); }
-
+    
     uint32_t magic_number;
     if (fread(&magic_number, sizeof(uint32_t), 1, file) != 1) { exit(EXIT_FAILURE); }
     if (magic_number != 0x616b3432) { fprintf(stderr, "Bad magic number\n"); exit(EXIT_FAILURE); }
-
+    
     int version;
     if (fread(&version, sizeof(int), 1, file) != 1) { exit(EXIT_FAILURE); }
     if (version != 2) { fprintf(stderr, "Bad version %d, need version 2\n", version); exit(EXIT_FAILURE); }
-
+    
     if (fread(config, sizeof(Config), 1, file) != 1) { exit(EXIT_FAILURE); }
-
-    uint8_t shared_classifier;
+    
+    uint8_t shared_classifier; 
     if (fread(&shared_classifier, sizeof(uint8_t), 1, file) != 1) { exit(EXIT_FAILURE); }
-
-    int group_size;
+    
+    int group_size; 
     if (fread(&group_size, sizeof(int), 1, file) != 1) { exit(EXIT_FAILURE); }
-    GS = group_size;
-
-    fseek(file, 0, SEEK_END);
-    *file_size = ftell(file);
+    GS = group_size; 
+    
+    fseek(file, 0, SEEK_END); 
+    *file_size = ftell(file); 
     fclose(file);
 }
 
-void build_transformer(Transformer *t, const char* checkpoint_path) {
+void build_transformer(Transformer *t, char* checkpoint_path) {
     read_checkpoint(checkpoint_path, &t->config, &t->fd, &t->data, &t->file_size);
 }
 
@@ -88,27 +79,27 @@ int compare_tokens(const void *a, const void *b) {
     return strcmp(((TokenIndex*)a)->str, ((TokenIndex*)b)->str);
 }
 
-void build_tokenizer(Tokenizer* t, const char* tokenizer_path, int vocab_size) {
+void build_tokenizer(Tokenizer* t, char* tokenizer_path, int vocab_size) {
     t->vocab_size = vocab_size;
     t->vocab = (char**)malloc(vocab_size * sizeof(char*));
     t->vocab_scores = (float*)malloc(vocab_size * sizeof(float));
-    t->sorted_vocab = NULL;
+    t->sorted_vocab = NULL; 
     for (int i = 0; i < 256; i++) {
         t->byte_pieces[i * 2] = (unsigned char)i;
         t->byte_pieces[i * 2 + 1] = '\0';
     }
-
+    
     FILE *file = fopen(tokenizer_path, "rb");
     if (!file) { fprintf(stderr, "couldn't load %s\n", tokenizer_path); exit(EXIT_FAILURE); }
     if (fread(&t->max_token_length, sizeof(int), 1, file) != 1) { fprintf(stderr, "failed read\n"); exit(EXIT_FAILURE); }
-
+    
     int len;
     for (int i = 0; i < vocab_size; i++) {
         if (fread(t->vocab_scores + i, sizeof(float), 1, file) != 1) { fprintf(stderr, "failed read\n"); exit(EXIT_FAILURE);}
         if (fread(&len, sizeof(int), 1, file) != 1) { fprintf(stderr, "failed read\n"); exit(EXIT_FAILURE); }
         t->vocab[i] = (char *)malloc(len + 1);
         if (fread(t->vocab[i], len, 1, file) != 1) { fprintf(stderr, "failed read\n"); exit(EXIT_FAILURE); }
-        t->vocab[i][len] = '\0';
+        t->vocab[i][len] = '\0'; 
     }
     fclose(file);
 }
@@ -136,16 +127,14 @@ void safe_printf(char *piece) {
     if (piece[1] == '\0') {
         unsigned char byte_val = piece[0];
         if (!(isprint(byte_val) || isspace(byte_val))) {
-            return;
+            return; 
         }
     }
     printf("%s", piece);
 }
 
 int str_lookup(char *str, TokenIndex *sorted_vocab, int vocab_size) {
-    TokenIndex tok;
-    tok.str = str;
-    tok.id  = -1;
+    TokenIndex tok = { .str = str }; 
     TokenIndex *res = (TokenIndex*) bsearch(&tok, sorted_vocab, vocab_size, sizeof(TokenIndex), compare_tokens);
     return res != NULL ? res->id : -1;
 }
@@ -169,13 +158,13 @@ void encode(Tokenizer* t, char *text, int8_t bos, int8_t eos, int *tokens, int *
     if (bos) tokens[(*n_tokens)++] = 1;
 
     if (text[0] != '\0') {
-        int dummy_prefix = str_lookup((char*)" ", t->sorted_vocab, t->vocab_size);
+        int dummy_prefix = str_lookup(" ", t->sorted_vocab, t->vocab_size);
         tokens[(*n_tokens)++] = dummy_prefix;
     }
 
     for (char *c = text; *c != '\0'; c++) {
         if ((*c & 0xC0) != 0x80) { str_len = 0; }
-        str_buffer[str_len++] = *c;
+        str_buffer[str_len++] = *c; 
         str_buffer[str_len] = '\0';
 
         if ((*(c+1) & 0xC0) == 0x80 && str_len < 4) { continue; }
@@ -184,11 +173,11 @@ void encode(Tokenizer* t, char *text, int8_t bos, int8_t eos, int *tokens, int *
         if (id != -1) {
             tokens[(*n_tokens)++] = id;
         } else {
-            for (size_t i=0; i < str_len; i++) {
+            for (int i=0; i < str_len; i++) {
                 tokens[(*n_tokens)++] = (unsigned char)str_buffer[i] + 3;
             }
         }
-        str_len = 0;
+        str_len = 0; 
     }
 
     while (1) {
@@ -212,7 +201,7 @@ void encode(Tokenizer* t, char *text, int8_t bos, int8_t eos, int *tokens, int *
         for (int i = best_idx+1; i < (*n_tokens-1); i++) {
             tokens[i] = tokens[i+1];
         }
-        (*n_tokens)--;
+        (*n_tokens)--; 
     }
 
     if (eos) tokens[(*n_tokens)++] = 2;
@@ -220,19 +209,16 @@ void encode(Tokenizer* t, char *text, int8_t bos, int8_t eos, int *tokens, int *
 }
 
 // ----------------------------------------------------------------------------
-// Sampler
-//
-// Only the RNG lives on the host now. The coin flip is handed to the kernel per
-// step; argmax / top-p selection happens in ss_final() on the device.
+// Sampler (RNG Components Maintained)
 
 typedef struct {
     float prob;
     int index;
-} ProbIndex;
+} ProbIndex; 
 
 typedef struct {
     int vocab_size;
-    ProbIndex* probindex;
+    ProbIndex* probindex; 
     float temperature;
     float topp;
     unsigned long long rng_state;
@@ -256,7 +242,7 @@ unsigned int random_u32(unsigned long long *state) {
     *state ^= *state >> 27;
     return (*state * 0x2545F4914F6CDD1Dull) >> 32;
 }
-float random_f32(unsigned long long *state) {
+float random_f32(unsigned long long *state) { 
     return (random_u32(state) >> 8) / 16777216.0f;
 }
 
@@ -271,13 +257,82 @@ long time_in_ms() {
 
 // ----------------------------------------------------------------------------
 // generation loop
-//
-// newgen() is a template over the engine type, so it drives FastForward
-// (xrt::ip) and RunForward (xrt::kernel) identically. It has to be included
-// after Tokenizer / Sampler / decode / safe_printf / encode / random_f32 /
-// time_in_ms are declared.
 
-#include "generate_loop.h"
+void newgen(Transformer *transformer, Tokenizer *tokenizer, Sampler* sampler, char* prompt, int steps, FastForward &f){
+    char *empty_prompt = "";
+    if (prompt == NULL) { prompt = empty_prompt; }
+
+    int num_prompt_tokens = 0;
+    int* prompt_tokens = (int*)malloc((strlen(prompt)+3) * sizeof(int)); 
+    encode(tokenizer, prompt, 1, 0, prompt_tokens, &num_prompt_tokens);
+    
+    if (num_prompt_tokens < 1) {
+        fprintf(stderr, "something is wrong, expected at least 1 prompt token\n");
+        exit(EXIT_FAILURE);
+    }
+
+    long start = 0;  
+    int next;        
+    int pos = 0;     
+    int token = prompt_tokens[pos]; 
+    float flipped = random_f32(&sampler->rng_state);
+    
+    start = time_in_ms();
+    
+    // 1) & 3) Prefill Modes
+    f.enable_prefill(); 
+    f.set_rms_flag(true); 
+    
+    next = token;
+    for (int ii = 0; ii < (num_prompt_tokens - 1); ii++) {
+        f.startForward(next, pos, flipped);
+        // pos++;
+				next = prompt_tokens[++pos];
+        if (ii != 0) {
+            char* piece = decode(tokenizer, token, next);
+            safe_printf(piece); 
+            fflush(stdout);
+        }
+        token = next;
+        flipped = random_f32(&sampler->rng_state);
+        // next = prompt_tokens[pos];//
+				f.endForward();
+    }
+
+    // 2) Decode unroll entry (preps the transition to 4)
+    f.enable_decode();
+    f.set_rms_flag(true);
+    f.startForward(next, pos, flipped);
+    pos++;
+    
+    char* piece = decode(tokenizer, token, next);
+    safe_printf(piece); 
+    fflush(stdout);
+    token = next;
+    flipped = random_f32(&sampler->rng_state);
+    next = f.endForward();
+    
+    // 4) Continuous Decode
+    f.set_rms_flag(false);
+    do {
+        f.startForward(next, pos, flipped);
+        pos++;
+        char* piece = decode(tokenizer, token, next);
+        safe_printf(piece); 
+        fflush(stdout);
+        token = next;
+        flipped = random_f32(&sampler->rng_state);
+        next = f.endForward();
+    } while (pos < steps);
+    printf("\n");
+
+    if (pos > 1) {
+        long end = time_in_ms();
+        fprintf(stderr, "achieved tok/s: %f\n", (pos) / (double)(end-start)*1000);
+    }
+
+    free(prompt_tokens);
+}
 
 // ----------------------------------------------------------------------------
 // CLI
@@ -285,77 +340,53 @@ long time_in_ms() {
 
 void error_usage() {
     fprintf(stderr, "Usage:   fastforward <checkpoint> <xclbin_file> [options]\n");
-    fprintf(stderr, "Example: fastforward stories110M_q8.bin llama_pen.xclbin -n 256 -i \"Once upon a time\"\n");
-    fprintf(stderr, "Options:\n");
-    fprintf(stderr, "  -t <float>  temperature (default 1.0, 0 = greedy)\n");
-    fprintf(stderr, "  -p <float>  top-p  [IGNORED: ss_final() hardcodes 0.9]\n");
-    fprintf(stderr, "  -s <int>    rng seed\n");
-    fprintf(stderr, "  -n <int>    number of steps (default 256)\n");
-    fprintf(stderr, "  -i <string> input prompt\n");
-    fprintf(stderr, "  -z <string> tokenizer path (default tokenizer.bin)\n");
-    fprintf(stderr, "  -m <string> mode: generate\n");
-    fprintf(stderr, "  -d <int>    XRT device index (default 0)\n");
-    fprintf(stderr, "  -e <string> engine: ip (FastForward, default) | kernel (RunForward)\n");
-    fprintf(stderr, "  -g <int>    memory bank for xrt::ip buffers (default 0, ip engine only)\n");
-    fprintf(stderr, "  -G <int>    second bank for a duplicated weight blob (-1 = share, default)\n");
+    fprintf(stderr, "Example: fastforward model.bin llama_pen.xclbin -n 256 -i \"Once upon a time\"\n");
     exit(EXIT_FAILURE);
 }
 
 int main(int argc, char *argv[]) {
-    const char *checkpoint_path = NULL;
-    const char *tokenizer_path  = "tokenizer.bin";
-    float temperature = 1.0f;
-    float topp        = 0.9f;
-    int   steps       = 256;
-    char *prompt      = NULL;
-    unsigned long long rng_seed = 0;
-    const char *mode   = "generate";
-    const char *engine = "ip";
+    char *checkpoint_path = NULL;  
+    char *tokenizer_path = "tokenizer.bin";
+    float temperature = 1.0f;   
+    float topp = 0.9f;          
+    int steps = 256;            
+    char *prompt = NULL;        
+    unsigned long long rng_seed = 0; 
+    char *mode = "generate";    
+    char *system_prompt = NULL; 
     std::string xclbin_file;
-    int device_index  = 0;
-    int mem_group     = 0;
-    int alt_mem_group = -1;
-
-    if (argc >= 3) {
-        checkpoint_path = argv[1];
-        xclbin_file     = argv[2];
-    } else {
-        error_usage();
+    std::string device_id = "0";
+        
+    if (argc >= 3) { 
+        checkpoint_path = argv[1]; 
+        xclbin_file = argv[2];
+    } else { 
+        error_usage(); 
     }
-
-    for (int i = 3; i < argc; i += 2) {
-        if (i + 1 >= argc)        { error_usage(); }
-        if (argv[i][0] != '-')    { error_usage(); }
-        if (strlen(argv[i]) != 2) { error_usage(); }
-        switch (argv[i][1]) {
-            case 't': temperature   = atof(argv[i + 1]); break;
-            case 'p': topp          = atof(argv[i + 1]); break;
-            case 's': rng_seed      = atoi(argv[i + 1]); break;
-            case 'n': steps         = atoi(argv[i + 1]); break;
-            case 'i': prompt        = argv[i + 1];       break;
-            case 'z': tokenizer_path= argv[i + 1];       break;
-            case 'm': mode          = argv[i + 1];       break;
-            case 'd': device_index  = atoi(argv[i + 1]); break;
-            case 'e': engine        = argv[i + 1];       break;
-            case 'g': mem_group     = atoi(argv[i + 1]); break;
-            case 'G': alt_mem_group = atoi(argv[i + 1]); break;
-            default:  error_usage();
-        }
+    
+    for (int i = 3; i < argc; i+=2) {
+        if (i + 1 >= argc) { error_usage(); } 
+        if (argv[i][0] != '-') { error_usage(); } 
+        if (strlen(argv[i]) != 2) { error_usage(); } 
+        if (argv[i][1] == 't') { temperature = atof(argv[i + 1]); }
+        else if (argv[i][1] == 'p') { topp = atof(argv[i + 1]); }
+        else if (argv[i][1] == 's') { rng_seed = atoi(argv[i + 1]); }
+        else if (argv[i][1] == 'n') { steps = atoi(argv[i + 1]); }
+        else if (argv[i][1] == 'i') { prompt = argv[i + 1]; }
+        else if (argv[i][1] == 'z') { tokenizer_path = argv[i + 1]; }
+        else if (argv[i][1] == 'm') { mode = argv[i + 1]; }
+        else if (argv[i][1] == 'y') { system_prompt = argv[i + 1]; }
+        else { error_usage(); }
     }
 
     if (rng_seed <= 0) rng_seed = (unsigned int)time(NULL);
-    if (temperature < 0.0f) temperature = 0.0f;
-    if (topp < 0.0f || 1.0f < topp) topp = 0.9f;
+    if (temperature < 0.0) temperature = 0.0;
+    if (topp < 0.0 || 1.0 < topp) topp = 0.9;
     if (steps < 0) steps = 0;
-
-    if (topp != llama_hw::KERNEL_TOPP) {
-        fprintf(stderr, "[host] note: -p %.3f ignored; the kernel hardcodes top-p = %.3f\n",
-                topp, llama_hw::KERNEL_TOPP);
-    }
 
     Transformer transformer;
     build_transformer(&transformer, checkpoint_path);
-    if (steps == 0 || steps > transformer.config.seq_len) steps = transformer.config.seq_len;
+    if (steps == 0 || steps > transformer.config.seq_len) steps = transformer.config.seq_len; 
 
     Tokenizer tokenizer;
     build_tokenizer(&tokenizer, tokenizer_path, transformer.config.vocab_size);
@@ -363,42 +394,26 @@ int main(int argc, char *argv[]) {
     Sampler sampler;
     build_sampler(&sampler, transformer.config.vocab_size, temperature, topp, rng_seed);
 
-    std::cout<< " ███████╗ █████╗ ███████╗████████╗    ███████╗ ██████╗ ██████╗ ██╗    ██╗ █████╗ ██████╗ ██████╗ "<<std::endl;
-    std::cout<< " ██╔════╝██╔══██╗██╔════╝╚══██╔══╝    ██╔════╝██╔═══██╗██╔══██╗██║    ██║██╔══██╗██╔══██╗██╔══██╗"<<std::endl;
-    std::cout<< " █████╗  ███████║███████╗   ██║       █████╗  ██║   ██║██████╔╝██║ █╗ ██║███████║██████╔╝██║  ██║"<<std::endl;
-    std::cout<< " ██╔══╝  ██╔══██║╚════██║   ██║       ██╔══╝  ██║   ██║██╔══██╗██║███╗██║██╔══██║██╔══██╗██║  ██║"<<std::endl;
-    std::cout<< " ██║     ██║  ██║███████║   ██║       ██║     ╚██████╔╝██║  ██║╚███╔███╔╝██║  ██║██║  ██║██████╔╝"<<std::endl;
-    std::cout<< " ╚═╝     ╚═╝  ╚═╝╚══════╝   ╚═╝       ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ "<<std::endl;
+		std::cout<< " ███████╗ █████╗ ███████╗████████╗    ███████╗ ██████╗ ██████╗ ██╗    ██╗ █████╗ ██████╗ ██████╗ "<<std::endl;
+		std::cout<< " ██╔════╝██╔══██╗██╔════╝╚══██╔══╝    ██╔════╝██╔═══██╗██╔══██╗██║    ██║██╔══██╗██╔══██╗██╔══██╗"<<std::endl;
+		std::cout<< " █████╗  ███████║███████╗   ██║       █████╗  ██║   ██║██████╔╝██║ █╗ ██║███████║██████╔╝██║  ██║"<<std::endl;
+		std::cout<< " ██╔══╝  ██╔══██║╚════██║   ██║       ██╔══╝  ██║   ██║██╔══██╗██║███╗██║██╔══██║██╔══██╗██║  ██║"<<std::endl;
+		std::cout<< " ██║     ██║  ██║███████║   ██║       ██║     ╚██████╔╝██║  ██║╚███╔███╔╝██║  ██║██║  ██║██████╔╝"<<std::endl;
+		std::cout<< " ╚═╝     ╚═╝  ╚═╝╚══════╝   ╚═╝       ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ "<<std::endl;
 
-    if (strcmp(mode, "generate") != 0) {
+    std::cout << "Init FastForward class\n";
+    FastForward f = FastForward(std::stoi(device_id), xclbin_file, checkpoint_path);
+
+    if (strcmp(mode, "generate") == 0) {
+        newgen(&transformer, &tokenizer, &sampler, prompt, steps, f);
+    } else {
         fprintf(stderr, "unknown mode: %s\n", mode);
         error_usage();
-    }
-
-    int rc = 0;
-    try {
-        if (strcmp(engine, "kernel") == 0) {
-            std::cout << "Init RunForward (xrt::kernel)\n";
-            RunForward f(device_index, xclbin_file, checkpoint_path);
-            f.set_temperature(temperature);
-            newgen(&transformer, &tokenizer, &sampler, prompt, steps, f);
-        } else if (strcmp(engine, "ip") == 0) {
-            std::cout << "Init FastForward (xrt::ip)\n";
-            FastForward f(device_index, xclbin_file, checkpoint_path, mem_group, alt_mem_group);
-            f.set_temperature(temperature);
-            newgen(&transformer, &tokenizer, &sampler, prompt, steps, f);
-        } else {
-            fprintf(stderr, "unknown engine: %s (expected 'ip' or 'kernel')\n", engine);
-            error_usage();
-        }
-    } catch (const std::exception& e) {
-        fprintf(stderr, "\n[host] fatal: %s\n", e.what());
-        rc = 1;
     }
 
     free_sampler(&sampler);
     free_tokenizer(&tokenizer);
     free_transformer(&transformer);
-    return rc;
+    return 0;
 }
 #endif

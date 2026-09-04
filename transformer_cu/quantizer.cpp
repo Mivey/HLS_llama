@@ -1,8 +1,6 @@
 
-#include "quantizer.h"
+// #include "quantizer.h"
 #include "mha_forward.h"
-#include <sys/types.h>
-
 
 void debug_abs_intake(s_fdata_v_t &tokens_out, s_fdata_v_t &abs_tokens, s_fdata_v_t &tokens_in, 
                     fdata_v_t *data_out, const int save_addr, const int SF_COUNT){
@@ -139,53 +137,5 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
     debug_abs_intake(tokens_out, abs_tokens, tokens, data_out, SAVE_ADDR, i);
     max_finder(max_val, abs_tokens);
     quant_out(tok_sf_out, tok_out, tokens_out, max_val);
-  }
-}
-
-
-void dequantize_kernel(fdata_v_t* internal_token, idata_v_t* tokq, fdata_v_t* toksf, const int curr_token, const int wcls_offset_q, const int wcls_sf){
-	
-  const int ct_ratio = MODEL_NUM_HEADS / SM_FL_ELEM;
-  const int OFFSET = wcls_sf / sizeof(fdata_v_t) + curr_token * ct_ratio;
-  // const int mod_off = curr_token % 4;
-  const int QUANT_OFF = curr_token * MODEL_ELEMENTS / MAX_QUANT_ELEM + (wcls_offset_q / sizeof(idata_v_t));
-  
-  fdata_v_t tmp_sf[ct_ratio]; // JUSTIFY WITH RIGHT NUMBERS LATER
-  
-  
-  for (int i = 0 ; i < (ct_ratio); i++) {
-    #pragma HLS PIPELINE II=1
-    tmp_sf[i] = toksf[OFFSET + i];
-  }
-  
-  // int internal_offset = 0;
-  // int internal_cnt = 0;
-  fdata_v_t tmpc;
-  for (int i = 0; i < MODEL_NUM_HEADS; i++) {
-    int jj = i % SM_FL_ELEM;
-    if (jj == 0) { tmpc = tmp_sf[i/SM_FL_ELEM]; }
-    
-    int internal_offset = (i < 6 ) ? 0 : INTERNAL_DATA_SIZE / (SM_FL_ELEM * 2) - 6 * MAX_QUANT_ELEM / SM_FL_ELEM;
-    
-    my_float_t ftmp = tmpc[jj];
-    idata_v_t itmp = tokq[i + QUANT_OFF];
-    int baseaddr = i * (MAX_QUANT_ELEM/SM_FL_ELEM) + internal_offset;
-    
-    for (int k = 0; k < MAX_QUANT_ELEM / SM_FL_ELEM; k++) {
-      #pragma HLS PIPELINE II=1
-      fdata_v_t tmpo;
-      
-      for (int ii = 0; ii < SM_FL_ELEM; ii++) {
-        #pragma hls UNROLL
-        tmpo[ii] = itmp[ii] * ftmp;
-      }
-      
-      for (int ii = 0; ii < (MAX_QUANT_ELEM - SM_FL_ELEM); ii++) {
-        #pragma HLS UNROLL
-        itmp[ii] = itmp[ii + SM_FL_ELEM];
-      }
-      
-      internal_token[baseaddr + k] = tmpo;
-    }
   }
 }

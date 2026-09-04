@@ -13,6 +13,7 @@
 #include <hls_vector.h>
 #include "hls_fence.h"
 #include <ap_int.h>
+#include <utils/x_hls_defines.h>
 
 // #define DATAWIDTH 32
 #define MODEL_ELEMENTS 768
@@ -151,26 +152,26 @@ void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vEl
 }
 
 
-template<typename T, typename S, int N>
-void rr_merge(hls::stream<S> &out, hls::stream<T> (&in)[N], const int vCount){
-  S data;
-  const int ratio = sizeof(S) / (sizeof(T) * N);
-  tot_num_data_loop:
-  for (int i = 0; i < vCount; i++) {
-    #pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS / MAX_FL_ELEM
-    #pragma HLS PIPELINE
-    ratio_loop:
-    for (int j = 0; j < ratio; j++) {
+// template<typename T, typename S, int N>
+// void rr_merge(hls::stream<S> &out, hls::stream<T> (&in)[N], const int vCount){
+//   S data;
+//   const int ratio = sizeof(S) / (sizeof(T) * N);
+//   tot_num_data_loop:
+//   for (int i = 0; i < vCount; i++) {
+//     #pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS / MAX_FL_ELEM
+//     #pragma HLS PIPELINE
+//     ratio_loop:
+//     for (int j = 0; j < ratio; j++) {
       
-      elem_merge_loop:
-      for (int k = 0; k < N; k++) {
-        int offset = j * N + k;
-        data[offset] = in[k].read();
-      }
-    }
-    out.write(data);
-  }
-}
+//       elem_merge_loop:
+//       for (int k = 0; k < N; k++) {
+//         int offset = j * N + k;
+//         data[offset] = in[k].read();
+//       }
+//     }
+//     out.write(data);
+//   }
+// }
 
 
 template<typename T, int N>
@@ -258,28 +259,6 @@ mm2s_vec_up(in, out, OFFSET_1, N_COUNT/2);
 mm2s_vec_up(in, out, OFFSET_2, N_COUNT/2);
 }
 
-template<typename T>
-void mm2s_input_data(hls::stream<T> &out, T *in, const size_t COUNT){
-  
-  AXI4_to_STREAM:
-  for (int i = 0; i < COUNT; i++) {
-    #pragma HLS PIPELINE II=1
-    out.write(in[i]);
-  }
-}
-
-template<typename T>
-void mm2s_input_data(hls::stream<T> &out, const T *in, const size_t COUNT, const size_t CURR_LAYER){
-  
-  const int offset = CURR_LAYER * COUNT;
-  AXI4_to_STREAM:
-  for (int i = 0; i < COUNT; i++) {
-    #pragma HLS PIPELINE II=1
-    T tmp = in[i + offset];
-    out.write(tmp);
-  }
-}
-
 template<typename T>//
 void mm2s_input_data(hls::stream<T> &out, T *in, const int COUNT, const int CURR_LAYER, const int offset){
   
@@ -293,135 +272,6 @@ void mm2s_input_data(hls::stream<T> &out, T *in, const int COUNT, const int CURR
     out.write(base_ptr[i]);
   }
 }
-
-// template<typename T, size_t N, size_t M>
-// void mha_input(hls::stream<hls::vector<T, N>> &out, hls::vector<T, M> *in, const int OFFSET, const int N_COUNT){
-	
-// 	typedef hls::vector<T, N> N_t;
-// 	typedef hls::vector<T, M> M_t;
-// 	typedef hls::stream<N_t> s_N_t;
-	
-	
-
-// 	// in an example, *in is a 4 element vector, *out is a 16 element streaming vector.
-	
-// }
-
-template<typename T, size_t N, size_t M>
-void mha_input_data(hls::stream<hls::vector<T, M>> &out, hls::vector<T, N> *in, const int offset, const bool BOUNDRY){
-  
-  const size_t COUNT = MODEL_ELEMENTS / N;
-  const size_t factor = offset / MODEL_HEAD_SIZE - MODEL_NUM_HEADS;
-  const size_t m_offset = (size_t) ((INTERNAL_DATA_SIZE / (2 * MODEL_HEAD_SIZE)) + factor - (MODEL_NUM_HEADS * 1 / 2)) * MODEL_HEAD_SIZE;
-  int tot_off;
-  if ((BOUNDRY == 1) && (factor >= (MODEL_NUM_HEADS / 2))) {
-    tot_off =(m_offset / N);
-  } else {
-    tot_off = (offset / N);
-  }
-   
-  AXI4_to_STREAM:
-  for (size_t i = 0; i < (MODEL_HEAD_SIZE / M); i++) {
-    size_t idx = (M/N);
-    hls::vector<T, M> temp_m;
-    
-    for (size_t j = 0; j < idx; j++) {
-      #pragma HLS PIPELINE II=1 rewind
-      
-      size_t jdx = idx * i + j;
-      hls::vector<T, N> temp_n = in[jdx + tot_off];
-      
-      for (size_t k = 0; k < N; k++) {
-        // #pragma HLS PIPELINE II=1
-        #pragma HLS UNROLL
-        size_t kdx = N * j + k;
-        temp_m[kdx] = temp_n[k];
-      }
-    }
-    out.write(temp_m);
-  }
-}
-
-// template<typename T>
-// void s2mm_output_data(T *out, hls::stream<T> &in,const size_t COUNT, const size_t W_Off){
-//   //remember to calculate W_Off before passing it here. T could be any size, lterally. 
-//   S2MM_output:
-//   for (int i = 0; i < COUNT; i++) {
-//     #pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
-//     #pragma HLS PIPELINE II=1
-//     out[i + W_Off] = in.read();
-//   }
-// }
-
-
-// template<typename T, int N>
-// void s2mm_output_data(hls::vector<T, N> *out, hls::stream<T> &in ,const size_t COUNT, const size_t W_Off){
-//   //remember to calculate W_Off before passing it here. T could be any size, lterally. 
-
-//   S2MM_output:
-//   for (int i = 0; i < COUNT / N; i++) {
-//     #pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS / N min=MODEL_ELEMENTS / N
-    
-//     hls::vector<T, N> tmp;
-//     for (int j = 0 ; j < N; j++) {
-//       #pragma HLS PIPELINE II=1
-//       tmp[j] = in.read();
-//     }
-    
-//     out[i + W_Off] = tmp;
-//   }
-// }
-
-// template<typename T, int M>
-// void s2mm_output_data(T *out, hls::stream<T> (&in)[M] ,const size_t COUNT, const size_t W_Off){
-//   //remember to calculate W_Off before passing it here. T could be any size, lterally. 
-
-//   // T arr[M-1][COUNT];
-//   for (int j = 0; j < M; j++) {
-  
-//     S2MM_output:
-//     for (int i = 0; i < COUNT; i++) {
-//       #pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
-//       #pragma HLS PIPELINE II=1
-//       out[COUNT * j + i + W_Off] = in[j].read();
-//     }
-//   }
-// }
-
-// template<typename T, int M, size_t N>
-// void s2arr_output_data(hls::vector<T, N> *out, hls::stream<hls::vector<T, N> > (&in)[M] ,const size_t COUNT, const size_t W_Off, const int AXI_SEL){
-//   //remember to calculate W_Off before passing it here. T could be any size, lterally. 
-//   const int tot_cnt = COUNT / (N * M);
-//   if (AXI_SEL == 0) {
-  
-//     S2MM_output:
-//     for (int i = 0; i < tot_cnt; i++) {
-//       #pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
-//       #pragma HLS PIPELINE II=1
-//       for (int j = 0; j < M; j++) {
-//         out[tot_cnt * j + i + W_Off] = in[j].read();
-//       }
-//     }
-//   }
-// }
-
-// template<typename T, size_t N>
-// void s_mm_output_sel(hls::vector<T, N> *mm_out, hls::stream<hls::vector<T, N>> &s_out, hls::stream<hls::vector<T, N>> &s_in, const int COUNT, const size_t W_Off, const int AXI_SEL){
-  
-//   if (AXI_SEL == 1) {
-//     for (int i = 0; i < COUNT; i++) {
-//       #pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
-//       #pragma HLS PIPELINE II=1
-//       mm_out[i + W_Off] = s_in.read();
-//     }
-//   }else {
-//     for (int i = 0; i < COUNT; i++) {
-//       #pragma HLS LOOP_TRIPCOUNT max=MODEL_TOKENS min=MODEL_ELEMENTS
-//       #pragma HLS PIPELINE II=1
-//       s_out.write(s_in.read());
-//     }
-//   }
-// }
 
 template<typename T, size_t N>
 void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int count){
@@ -450,220 +300,6 @@ void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int c
   }
 }
 
-// template<typename T>
-// void store_output(T *out, hls::stream<T> &in , const int vSize){
-
-// int elem = sizeof(T) / sizeof(float);
-// const int NUM = vSize / elem;
-// // int offset = CURR_LAYER * 
-//   store_to_m_axi_loop: 
-//   for (int i = 0; i < NUM; i++) {
-//     #pragma HLS PIPELINE II=1
-//     out[i] = in.read();
-//   }
-// }
-
-// template<typename T>
-// void store_bytes_output(T *out, hls::stream<T> &in , const int vCount){
-// // int offset = CURR_LAYER * 
-//   store_to_m_axi_loop: 
-//   for (int i = 0; i < vCount; i++) {
-//     #pragma HLS PIPELINE II=1
-//     out[i] = in.read();
-//   }
-// }
-
-// template<typename T>
-// void store_output(T *out, hls::stream<my_float_t> &in , const int vSize){
-
-// int elem = sizeof(T) / sizeof(float);
-// const int NUM = vSize / elem;
-// // int offset = CURR_LAYER * 
-//   store_to_m_axi_loop: 
-//   for (int i = 0; i < NUM; i++) {
-//     T tmp;
-//     for (int j = 0; j < elem; j++) {
-//     #pragma HLS PIPELINE II=1
-//       tmp[j] = in.read();
-//     }
-//     out[i] = tmp;
-//   }
-// }
-
-// constexpr int SF_ELEM_CNT = MODEL_ELEMENTS / (MODEL_SCALING_FACTOR);
-
-// constexpr size_t calc_ratio_fn(size_t ml){
-// 	size_t accum = SF_ELEM_CNT;
-// 	while ((accum % ml) != 0) {
-// 		accum += SF_ELEM_CNT;
-// 	}
-// 	return accum / ml;
-// }
-
-
-// template<typename T, typename R, size_t S, size_t N, size_t M>
-// void get_curr_tokens(hls::vector<T, N> *internal_token, hls::vector<T, M> *tokens, hls::vector<R, S> *qtokens, const int curr_token) {
-	
-// 	constexpr int FOO = calc_ratio_fn(M);
-// 	const int offset = (int32_t)(curr_token / FOO) * (FOO * SF_ELEM_CNT / M);
-// 	constexpr int Q_VEC_CNT = MODEL_ELEMENTS / S;
-
-// 	typedef hls::vector<T, M> M_t;
-// 	typedef hls::vector<T, N> N_t;
-
-// 	M_t sf_arr[FOO];
-// 	T sm_sf_arr[SF_ELEM_CNT];
-	
-// 	for (int i = 0; i < FOO; i++) {
-// 		#pragma HLS PIPELINE II=1
-// 		sf_arr[i] = tokens[i + offset];
-// 	}
-
-// 	vec_down_converter(sm_sf_arr, sf_arr, SF_ELEM_CNT);
-
-// 	for (int i = 0; i <Q_VEC_CNT; i++) {
-// 		// for (init-statement; condition; inc-expression) {
-// 		// statements
-// 		// }
-// 	}
-	
-// }
-
-/* *************************** SWIGLU FUNCTION *************************************/
-template<typename T>
-void swiglu(hls::stream<T> &hb_out, hls::stream<T> &hb_in, hls::stream<T> &hb2_in){
-  int elem = sizeof(T)/ sizeof(my_float_t);
-  for (int i = 0 ; i < MODEL_HIDDEN_DIM / elem; i++) {
-  #pragma HLS pipeline II=4
-    T val =hb_in.read();
-    T tmp_hb2 = hb2_in.read();
-    T eval;
-    for (int j = 0; j < elem; j++) {
-      #pragma HLS UNROLL
-      eval[j] = val[j] / ( 1.0f + hls::expf(-1 * val[j])) * tmp_hb2[j];
-    }
-    hb_out.write(eval);
-  }
-}
-
-template<size_t M = 4, typename T, size_t N>//
-void swiglu(hls::stream<hls::vector<T, N>> &hb_out, hls::stream<hls::vector<T, N>> &hb_in, hls::stream<hls::vector<T, N>> &hb2_in){
-  // int elem = sizeof(T)/ sizeof(my_float_t);
-  typedef hls::vector<T, N> tmp_t;
-  const int HD_N_RATIO = MODEL_HIDDEN_DIM / N;
-  for (int i = 0 ; i < HD_N_RATIO; i++) {
-  #pragma HLS pipeline II=4
-    tmp_t val = hb_in.read();
-    tmp_t tmp_hb2 = hb2_in.read();
-    tmp_t eval;
-    for (int j = 0; j < N; j++) {
-      #pragma HLS UNROLL factor = M
-      // #pragma HLS PIPELINE II=2
-      float_t tmpa = 1.0f + hls::expf(- val[j]);
-      float_t tmpb = hls::recipf(tmpa);
-      float_t tmpc = tmp_hb2[j] * val[j];
-      // eval[j] = val[j] / ( 1.0f + hls::expf(-1 * val[j])) * tmp_hb2[j];
-      eval[j] = tmpc * tmpb;
-    }
-    hb_out.write(eval);
-  }
-}
-
-/* =================================== RESIDUAL CONNECTION ===================================== */
-
-template<typename T>
-void resid_conn(hls::stream<T> &tokens_out, hls::stream<T> &tokens_in, hls::stream<T> &xb){
-  int elem = sizeof(T)/ sizeof(my_float_t);
-  for (int i = 0; i < MODEL_ELEMENTS / elem; i++) {
-    #pragma HLS PIPELINE II=1
-    T tmp, tmpa, tmpb;
-    tmpa =tokens_in.read();
-    tmpb = xb.read();
-    tmp = tmpa + tmpb;// tokens_in.read() + xb.read();
-    tokens_out.write(tmp);
-
-  }
-}
-
-template<typename T, size_t N>
-void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>> &output, hls::stream<hls::vector<T, N>> &input, const int CURR_LAYER, const int POS, const int idx){
-  const int vec_per_head = MODEL_HEAD_SIZE / N;
-
-  const int layer_offset = CURR_LAYER * MODEL_NUM_HEADS * MODEL_SEQUENCE_LEN * vec_per_head;
-  const int head_offset = MODEL_SEQUENCE_LEN * vec_per_head;
-  const int pos_offset = POS * vec_per_head;
-  
-	typedef hls::vector<T, N> N_t;
-	
-  const int vec_to_read = vec_per_head * (POS); // remove the + 1 from here.
-	int baseaddr = layer_offset + (idx * head_offset);
-	int baseaddrw = layer_offset + (idx * head_offset) + pos_offset;
-    
-	fw_mha_pos:
-	for (int j = 0; j < vec_to_read; j++) {
-		#pragma HLS PIPELINE II=1
-		#pragma HLS LOOP_TRIPCOUNT max=MODEL_HEAD_SIZE * (MODEL_SEQUENCE_LEN + 1) / MAX_FL_ELEM
-		int addr = baseaddr + j;
-		hls::vector<T, N> tmp = cache[addr];
-		output.write(tmp);
-	} // second for loop that will read 4 elements from array
-	fw_mha_new:
-	for (int j = 0; j < vec_per_head; j++) {
-		#pragma HLS PIPELINE II=1
-		N_t tmpa = input.read();
-		output.write(tmpa);
-		cache[baseaddrw + j] = tmpa;
-	}
-}
-
-
-
-template<typename T, size_t N>
-void amha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>> &output, hls::stream<hls::vector<T, N>> &input, const int CURR_LAYER, const int POS, const int idx){
-  const int vec_per_head = MODEL_HEAD_SIZE / N;
-
-  const int layer_offset = CURR_LAYER * MODEL_NUM_HEADS * MODEL_SEQUENCE_LEN * vec_per_head;
-  const int head_offset = MODEL_SEQUENCE_LEN * vec_per_head;
-  const int pos_offset = POS * vec_per_head;
-  
-  hls::vector<T, N> cache_array[vec_per_head];
-  mha_WAR_store_loop:
-  for (int i = 0;  i < vec_per_head; i++) {
-    #pragma hls PIPELINE II=1
-    cache_array[i] = input.read();
-  }
-  const int vec_to_read = vec_per_head * (POS); // remove the + 1 from here.
-    
-    fw_mha_pos:
-    for (int j = 0; j < vec_to_read; j++) {
-      #pragma HLS PIPELINE II=1
-      #pragma HLS LOOP_TRIPCOUNT max=MODEL_HEAD_SIZE * (MODEL_SEQUENCE_LEN + 1) / MAX_FL_ELEM
-      int addr = layer_offset + (idx * head_offset) + j;
-      hls::vector<T, N> tmp = cache[addr];
-      output.write(tmp);
-    } // second for loop that will read 4 elements from array
-    fw_mha_new:
-    for (int j = 0; j < vec_per_head; j++) {
-      #pragma HLS PIPELINE II=1
-      // int t = j + idx * vec_per_head;
-      // output.write(cache_array[t]);
-      output.write(cache_array[j]);
-    }
-  
-  // hls::fence(output, input);
-  
-  // #pragma HLS STREAM variable=input depth=4
-  // #pragma HLS STREAM variable=output depth=4
-  store_to_m_axi: 
-    for (int j = 0; j < vec_per_head; j++) {
-      #pragma HLS PIPELINE II=1
-      int addr = layer_offset + (idx * head_offset) + pos_offset + j;
-      // cache[addr] = cache_array[j + vec_per_head * idx]; // this happens AFTER we're done reading from RAM
-      cache[addr] = cache_array[j]; // this happens AFTER we're done reading from RAM
-    }
-}
-
-
 template<typename T, size_t N>
 void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>> &output, hls::stream<hls::vector<T, N>> &input, const int CURR_LAYER, const int POS){
   const int vec_per_head = MODEL_HEAD_SIZE / N;
@@ -673,7 +309,6 @@ void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>>
   const int pos_offset = POS * vec_per_head;
 	typedef hls::vector<T, N> N_t;
   
-  // N_t cache_array[vec_per_head];
   const int vec_to_read = vec_per_head * (POS); // remove the + 1 from here.
   for (int idx = 0; idx < MODEL_NUM_HEADS; idx++) {
 		int baseaddr = layer_offset + (idx * head_offset);
@@ -695,15 +330,90 @@ void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>>
 			// cache_array[j] = tmpa;
 			cache[addr] = tmpa;
     }
-		
-		// store_to_m_axi: 
-    // for (int j = 0; j < vec_per_head; j++) {
-    //   #pragma HLS PIPELINE II=1
-    //   int addr = layer_offset + (idx * head_offset) + pos_offset + j;
-    //   // cache[addr] = cache_array[j + vec_per_head * idx]; // this happens AFTER we're done reading from RAM
-    //   cache[addr] = cache_array[j]; // this happens AFTER we're done reading from RAM
-    // }
 	}
+}
+
+/* *************************** GeMV FUNCTION *************************************/
+
+
+void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, s_mfdata_v_t &s_wsf, s_idata_v_t &s_w, const int N_DIM, const int M_DIM);
+
+constexpr size_t TOK_QUANT_MAX =  (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM);
+constexpr size_t TOK_SF_MAX = (MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR);
+
+
+
+/* *************************** QUANTIZER FUNCTION *************************************/
+
+void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM);
+void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM, fdata_v_t *data_out, const int SAVE_ADDR);
+
+/* *************************** RoPE FUNCTION *************************************/
+
+template<int HEAD>
+void init_freq_arr(float arr[HEAD]){
+  for (int i = 0; i < HEAD; i++) {
+  arr[i] = 1.0f / hls::powf(10000.0f, ((i) / (float) MODEL_HEAD_SIZE));
+  }
+}
+
+template<typename T, size_t N, int N_DIM = MODEL_ELEMENTS>
+void rope_kernel (hls::stream<hls::vector<T, N>> &o, hls::stream<hls::vector<T, N>> &in, const int POS){
+  float arr[MODEL_HEAD_SIZE];
+  init_freq_arr<MODEL_HEAD_SIZE>(arr);
+  ROPE_MAIN:
+  for (int i = 0; i < (N_DIM / N); i++) {
+    #pragma HLS loop_flatten 
+ // increment by number of element in fdata_v_t
+  
+  int k = i * N;
+    hls::vector<T, N> tmp = in.read();
+    hls::vector<T, N> tmp_o;
+    head_dim_unroll_loop:
+    for (int j = 0 ; j < (N / 2); j++) {
+      #pragma HLS PIPELINE
+      #pragma HLS UNROLL factor = 2
+      int head_dim = (k + j * 2) % MODEL_HEAD_SIZE;
+      float freq =  arr[head_dim]; /*1.0f / hls::powf(10000.0f, (float)head_dim/HEAD_SIZE);*/ 
+      float val = POS * freq;
+      float fcr;
+      float fci;
+      hls::sincosf(val, &fci, &fcr);
+      float v0 = tmp[j * 2 + 0];
+      float v1 = tmp[j * 2 + 1];
+      tmp_o[j * 2 + 0] = v0 * fcr - v1 * fci;
+      tmp_o[j * 2 + 1] = v0 * fci + v1 * fcr;
+    }
+    o.write(tmp_o);
+  }
+}
+
+/* *************************** MULTIHEAD ATTENTION FUNCTION *************************************/
+void mha_kernel(s_fdata_v_t &output, fdata_v_t *tokens, adata_v_t *key_cache,  adata_v_t *value_cache,  const int POS, const int CURR_LAYER);
+
+
+/* *************************** SWIGLU FUNCTION *************************************/
+template<size_t M = 4, typename T, size_t N>//
+void swiglu(hls::stream<hls::vector<T, N>> &hb_out, hls::stream<hls::vector<T, N>> &hb_in, hls::stream<hls::vector<T, N>> &hb2_in){
+  // int elem = sizeof(T)/ sizeof(my_float_t);
+  typedef hls::vector<T, N> tmp_t;
+  const int HD_N_RATIO = MODEL_HIDDEN_DIM / N;
+  for (int i = 0 ; i < HD_N_RATIO; i++) {
+  #pragma HLS pipeline II=4
+    tmp_t val = hb_in.read();
+    tmp_t tmp_hb2 = hb2_in.read();
+    tmp_t eval;
+    for (int j = 0; j < N; j++) {
+      #pragma HLS UNROLL factor = M
+      // #pragma HLS PIPELINE II=2
+      float_t tmpa = 1.0f + hls::expf(- val[j]);
+      float_t tmpb = hls::recipf(tmpa);
+      float_t tmpc = tmp_hb2[j] * val[j];
+      // eval[j] = val[j] / ( 1.0f + hls::expf(-1 * val[j])) * tmp_hb2[j];
+      eval[j] = tmpc * tmpb;
+    }
+    hb_out.write(eval);
+  }
 }
 
 void transformer_cu(  
@@ -728,6 +438,5 @@ void transformer_cu(
     const bool init_rms_flag, const bool prefill_flag
         );
         
-  void systolic_sort(fdata_v_t *logit, int* pick, const float temperature, const float coin);
 #endif
 
