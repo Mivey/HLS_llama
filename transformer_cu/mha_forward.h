@@ -371,7 +371,7 @@ void swiglu(hls::stream<hls::vector<T, N>> &hb_out, hls::stream<hls::vector<T, N
   typedef hls::vector<T, N> tmp_t;
   const int HD_N_RATIO = MODEL_HIDDEN_DIM / N;
   for (int i = 0 ; i < HD_N_RATIO; i++) {
-  #pragma HLS pipeline II=4
+  #pragma HLS pipeline II=1
     tmp_t val = hb_in.read();
     tmp_t tmp_hb2 = hb2_in.read();
     tmp_t eval;

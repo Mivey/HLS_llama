@@ -412,7 +412,7 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 
 	/* ================================== read data into array =================================== */
 
-	int curr_pos = 32;
+	int curr_pos = 150;
 	std::cout<<"Loaded the files into memory"<<std::endl;
 	float coin;
 	// int32_t curr_token; 
