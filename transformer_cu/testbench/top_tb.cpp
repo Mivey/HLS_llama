@@ -1,6 +1,7 @@
 // #include "../forward.h"
 
 #include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -16,401 +17,377 @@
 #include <bitset>
 #include "tb_main.h"
 
+/* ---- sanity on the packed layout; these must hold or the frames are wrong ---- */
+static_assert(sizeof(my_float_t)  == 4,  "device side assumes 32-bit float");
+static_assert(sizeof(wide_t)      == 64, "wide_t must be one 512-bit AXI beat");
+static_assert(sizeof(idata_v_t)   == 64, "idata_v_t must be one 512-bit AXI beat");
+static_assert(sizeof(mfdata_v_t)  == 64, "mfdata_v_t must be one 512-bit AXI beat");
+static_assert(sizeof(fdata_v_t)   == 16, "fdata_v_t must be 4 floats");
+static_assert(SF_FRAME * sizeof(wide_t) == QUANT_FRAME * sizeof(my_float_t),
+              "SF_FRAME beats must hold exactly QUANT_FRAME scale factors");
 
-struct axi_reg{
+/* bytes moved per interleaved frame */
+static constexpr size_t FRAME_SF_BYTES = QUANT_FRAME * sizeof(my_float_t);          // 768
+static constexpr size_t FRAME_W_BYTES  = QUANT_FRAME * MODEL_SCALING_FACTOR;        // 12288
+static constexpr size_t FRAME_BYTES    = FRAME_SF_BYTES + FRAME_W_BYTES;            // 13056
+
+struct axi_reg_t {
 	int POS;
 	int N_DIM;
-	int M_DIM; 
-	int QKV_W;
-	int QKV_sf_W;
-	int Out_W;
-	int Out_sf_W;
-	int FF_w1w3_W;
-	int FF_w1w3_sf_W;
-	int FF_w2_W;
-	int FF_w2_sf_W; 
-	int Embed_W;
-	int Embed_sf_W; 
+	int M_DIM;
 	int rms_att_W;
-	int rms_ffn_W; 
+	int rms_ffn_W;
 	int rms_final_W;
 };
 
+/* ---------------------------------------------------------------------------
+ * Walk a run of `n` consecutively-stored quantized tensors, recording the file
+ * offset of each tensor's int8 block and of its scale-factor block.
+ *
+ * llama2.c runq.c init_quantized_tensors() stores, per tensor:
+ *     [ n_elem int8 ][ n_elem/GS float ]
+ * ------------------------------------------------------------------------- */
+static void scan_tensors(std::ifstream &f, size_t n_elem,
+                         size_t *w_ptr, size_t *sf_ptr, int n)
+{
+	const size_t w_bytes  = n_elem * sizeof(int8_t);
+	const size_t sf_bytes = (n_elem / MODEL_SCALING_FACTOR) * sizeof(my_float_t);
+
+	for (int i = 0; i < n; i++) {
+		w_ptr[i] = static_cast<size_t>(f.tellg());
+		f.seekg(w_bytes, std::ios::cur);          // relative!
+		sf_ptr[i] = static_cast<size_t>(f.tellg());
+		f.seekg(sf_bytes, std::ios::cur);         // relative!
+		if (!f) { std::cerr << "scan_tensors: ran off the end of the checkpoint\n"; exit(EXIT_FAILURE); }
+	}
+}
+
+/* ---------------------------------------------------------------------------
+ * Repack one tensor into the interleaved device layout:
+ *     [192 scale floats][192*64 int8] repeated (n_elem / 12288) times
+ * ------------------------------------------------------------------------- */
+// static void pack_tensor(std::ifstream &f, char *dst, size_t &idx,
+//                         size_t w_base, size_t sf_base, size_t n_elem)
+// {
+// 	assert(n_elem % (QUANT_FRAME * MODEL_SCALING_FACTOR) == 0 &&
+// 	       "frame size must divide the tensor exactly");
+// 	const size_t n_frame = n_elem / (QUANT_FRAME * MODEL_SCALING_FACTOR);
+
+// 	for (size_t j = 0; j < n_frame; j++) {
+// 		f.seekg(sf_base + j * FRAME_SF_BYTES, std::ios::beg);
+// 		f.read(dst + idx, FRAME_SF_BYTES);
+// 		if (f.gcount() != (std::streamsize)FRAME_SF_BYTES) {
+// 			std::cerr << "pack_tensor: short read on scale factors\n"; exit(EXIT_FAILURE);
+// 		}
+// 		idx += FRAME_SF_BYTES;
+
+// 		f.seekg(w_base + j * FRAME_W_BYTES, std::ios::beg);
+// 		f.read(dst + idx, FRAME_W_BYTES);
+// 		if (f.gcount() != (std::streamsize)FRAME_W_BYTES) {
+// 			std::cerr << "pack_tensor: short read on weights\n"; exit(EXIT_FAILURE);
+// 		}
+// 		idx += FRAME_W_BYTES;
+// 	}
+// }
+
+struct TensorRef { size_t w_base, sf_base, n_elem; };
+
+/* Emit one GeMV's weights, split into NPORT contiguous row-halves and then
+ * interleaved frame-by-frame so mm2ds_input_data's even/odd pickup delivers
+ * each port a contiguous run of output rows. */
+static void pack_gemv(std::ifstream &f, char *dst, size_t &idx,
+                      const TensorRef *ts, int n_ts, int NPORT)
+{
+	/* flatten the concatenated matmul into one frame list */
+	std::vector<std::pair<size_t, size_t>> fr;      // (w_off, sf_off)
+	for (int t = 0; t < n_ts; t++) {
+		assert(ts[t].n_elem % (QUANT_FRAME * MODEL_SCALING_FACTOR) == 0);
+		const size_t nf = ts[t].n_elem / (QUANT_FRAME * MODEL_SCALING_FACTOR);
+		for (size_t j = 0; j < nf; j++)
+			fr.emplace_back(ts[t].w_base  + j * FRAME_W_BYTES,
+			                ts[t].sf_base + j * FRAME_SF_BYTES);
+	}
+	assert(fr.size() % NPORT == 0 && "GeMV frames must divide across ports");
+	const size_t per_port = fr.size() / NPORT;
+
+	for (size_t j = 0; j < per_port; j++) {
+		for (int k = 0; k < NPORT; k++) {
+			const auto &e = fr[k * per_port + j];       // <-- per_port, not n_frame
+
+			f.seekg(e.second, std::ios::beg);
+			f.read(dst + idx, FRAME_SF_BYTES);
+			if (f.gcount() != (std::streamsize)FRAME_SF_BYTES) {
+				std::cerr << "pack_gemv: short read on scale factors\n"; exit(EXIT_FAILURE);
+			}
+			idx += FRAME_SF_BYTES;
+
+			f.seekg(e.first, std::ios::beg);
+			f.read(dst + idx, FRAME_W_BYTES);
+			if (f.gcount() != (std::streamsize)FRAME_W_BYTES) {
+				std::cerr << "pack_gemv: short read on weights\n"; exit(EXIT_FAILURE);
+			}
+			idx += FRAME_W_BYTES;
+		}
+	}
+}
+
 int top_tb(){
 	std::cout<<"starting First Third testbench"<<std::endl;
-	
-	axi_reg axi_reg;
-	std::cout<<"Opened all the files sucessfully"<<std::endl;
-/* ====== INPUT DATA AND CHECKS ============ INPUT DATA AND CHECKS ============ INPUT DATA AND CHECKS ====== */
+
+	axi_reg_t axi_regs{};
+
+/* ====== INPUT DATA AND CHECKS ============ INPUT DATA AND CHECKS ====== */
 	std::string checkpoint = "weights/stories110M_q8.bin";
 	std::ifstream file(checkpoint, std::ios::binary | std::ios::ate);
 	std::ifstream coin_data("newgolden/150_coin.bin", std::ios::binary);
 	std::ifstream token_data("newgolden/150_tokens.bin", std::ios::binary);
-	// std::ifstream emb_token_data("weights/token_embedding.bin", std::ios::binary);
 	std::ifstream data_output("newgolden/150_pre_quantized.bin", std::ios::binary);
 	std::ifstream gemv_data_output("newgolden/150_post_matmul.bin", std::ios::binary);
 	std::ifstream out_key_dat("newgolden/150_key_cache.bin", std::ios::binary);
 	std::ifstream out_value_dat("newgolden/150_value_cache.bin", std::ios::binary);
-	std::ifstream input_tokens("newgolden/150_01_rms_att_in.bin", std::ios::binary); //weird name, but first set of tokens into forward function
+	std::ifstream input_tokens("newgolden/150_01_rms_att_in.bin", std::ios::binary);
 
-	if (!out_value_dat.is_open() ) {
-	std::cout<<"out_value_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	if (!out_key_dat.is_open() ) {
-	std::cout<<"out_key_dat. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-
-	if (!file.is_open() ) {
-	std::cout<<"No. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-
-	if (!input_tokens.is_open() ) {
-	std::cout<<"No input. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
+	struct { std::ifstream *s; const char *n; } fl[] = {
+		{&file, "checkpoint"}, {&coin_data, "coin_data"}, {&token_data, "token_data"},
+		{&data_output, "data_output"}, {&gemv_data_output, "gemv_data_output"},
+		{&out_key_dat, "out_key_dat"}, {&out_value_dat, "out_value_dat"},
+		{&input_tokens, "input_tokens"},
+	};
+	for (auto &e : fl) {
+		if (!e.s->is_open()) {
+			std::cerr << "Could not open " << e.n << ". Already off to a bad start." << std::endl;
+			exit(EXIT_FAILURE);
+		}
 	}
 
-	if (!data_output.is_open() ) {
-	std::cout<<"No data_output. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	
-	if (!gemv_data_output.is_open() ) {
-	std::cout<<"No gemv_data_output. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	
-	// if (!emb_token_data.is_open() ) {
-	// std::cout<<"No emb_token_data. Already off to a bad start."<<std::endl;
-	// exit(EXIT_FAILURE);
-	// }
-	
-	if (!coin_data.is_open() ) {
-	std::cout<<"No coin_data. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
-	
-	if (!token_data.is_open() ) {
-	std::cout<<"No token_data. Already off to a bad start."<<std::endl;
-	exit(EXIT_FAILURE);
-	}
+/* ===== MEMORY VECTOR ARRAY CONSTRUCTOR ===== */
 
-/* ===== MEMORY AVECTOR ARRAY CONSTRUCTOR ========= MEMORY AVECTOR ARRAY CONSTRUCTOR ========= MEMORY AVECTOR ARRAY CONSTRUCTOR ====*/
+	const size_t rms_att_size   = MODEL_ELEMENTS * MODEL_NUM_LAYERS * sizeof(my_float_t);
+	const size_t rms_ffn_size   = rms_att_size;
+	const size_t rms_final_size = MODEL_ELEMENTS * sizeof(my_float_t);
 
-	size_t rms_att_size = (MODEL_ELEMENTS * 12 * sizeof(my_float_t));
-	size_t rms_ffn_size = rms_att_size;
-	size_t rms_final_size = MODEL_ELEMENTS * sizeof(my_float_t);
-	
-	size_t nn_size = MODEL_ELEMENTS * MODEL_ELEMENTS;
-	size_t nn_sf_size = nn_size * sizeof(float) / MODEL_SCALING_FACTOR;
-	
-	size_t nm_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM;
-	size_t nm_sf_size = nm_size * sizeof(float) / MODEL_SCALING_FACTOR;
-	
-	size_t embed_size = MODEL_ELEMENTS * MODEL_TOKENS * sizeof(int8_t);
-	size_t embed_sf_size = MODEL_ELEMENTS * MODEL_TOKENS * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
-	size_t qkv_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 3 * sizeof(int8_t);
-	size_t qkv_sf_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 3 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
-	size_t o_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 1 * sizeof(int8_t);
-	size_t o_sf_size = MODEL_ELEMENTS * MODEL_ELEMENTS * MODEL_NUM_LAYERS * 1 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
-	size_t w1w3_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 2 * sizeof(int8_t);
-	size_t w1w3_sf_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 2 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
-	size_t w2_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(int8_t);
-	size_t w2_sf_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * MODEL_NUM_LAYERS * 1 * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
-	size_t data_out_size = ((MODEL_ELEMENTS * 3 + MODEL_HIDDEN_DIM) * MODEL_NUM_LAYERS + MODEL_ELEMENTS) * sizeof(my_float_t);
-	size_t gemv_data_out_size = ((MODEL_ELEMENTS * 5 + MODEL_HIDDEN_DIM * 2) * MODEL_NUM_LAYERS + MODEL_ELEMENTS) * sizeof(my_float_t);
+	/* element counts, not byte counts - scan_tensors/pack_tensor derive bytes */
+	const size_t nn_elem    = (size_t)MODEL_ELEMENTS * MODEL_ELEMENTS;      // wq/wk/wv/wo
+	const size_t nm_elem    = (size_t)MODEL_ELEMENTS * MODEL_HIDDEN_DIM;    // w1/w2/w3
+	const size_t embed_elem = (size_t)MODEL_ELEMENTS * MODEL_TOKENS;        // q_tokens
 
-	
-	// file.seekg(0, std::ios::end);
-	size_t file_size = file.tellg();
+	const size_t embed_size    = embed_elem * sizeof(int8_t);
+	const size_t embed_sf_size = (embed_elem / MODEL_SCALING_FACTOR) * sizeof(my_float_t);
+
+	const size_t data_out_size      = ((MODEL_ELEMENTS * 3 + MODEL_HIDDEN_DIM) * MODEL_NUM_LAYERS + MODEL_ELEMENTS) * sizeof(my_float_t);
+	const size_t gemv_data_out_size = ((MODEL_ELEMENTS * 5 + MODEL_HIDDEN_DIM * 2) * MODEL_NUM_LAYERS + MODEL_ELEMENTS) * sizeof(my_float_t);
+
+	/* opened with ios::ate, so tellg() here is the file size */
+	const size_t file_size = static_cast<size_t>(file.tellg());
 	file.seekg(0, std::ios::beg);
-	
-	size_t q_size = (MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3 ) * MODEL_NUM_LAYERS + MODEL_TOKENS)) * sizeof(int8_t);
-	size_t rms_size = (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)) * sizeof(my_float_t);
-	size_t sf_size = (q_size * sizeof(my_float_t) / (sizeof(int8_t) * MODEL_SCALING_FACTOR));
-	size_t dequant_size = MODEL_ELEMENTS * MODEL_TOKENS * sizeof(float_t);
-	
-	std::vector<idata_v_t> quant_w_arr(q_size / sizeof(idata_v_t));
-	std::vector<mfdata_v_t> sf_w_arr(sf_size / sizeof(mfdata_v_t));
+
+	/* raw int8 payload of every quantized tensor in the model */
+	const size_t q_raw_size = (size_t)MODEL_ELEMENTS *
+	    ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3) * MODEL_NUM_LAYERS + MODEL_TOKENS);
+	/* interleaved buffer also carries one float per group -> 17/16 of the raw size */
+	const size_t packed_size = q_raw_size + q_raw_size * sizeof(my_float_t) / MODEL_SCALING_FACTOR;
+
+	const size_t rms_size     = (size_t)MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1) * sizeof(my_float_t);
+	const size_t dequant_size = embed_elem * sizeof(my_float_t);
+
+	assert(packed_size % sizeof(wide_t) == 0);
+	assert(packed_size / sizeof(wide_t) % TXFR_FRAME == 0);
+
+	std::cout << "checkpoint " << file_size << " B, packed weight buffer "
+	          << packed_size << " B (" << packed_size / sizeof(wide_t) << " beats, "
+	          << packed_size / sizeof(wide_t) / TXFR_FRAME << " frames)" << std::endl;
+
+	/* the buffer the kernel actually reads through w_0 / w_1 */
+	std::vector<wide_t> quant_arr(packed_size / sizeof(wide_t));
+	/* staging for the embedding table only (int8 + scales), used to build sf_w0_arr */
+	std::vector<idata_v_t> embed_q_arr(embed_size / sizeof(idata_v_t));
+	std::vector<mfdata_v_t> embed_sf_arr(embed_sf_size / sizeof(mfdata_v_t));
+
 	std::vector<fdata_v_t> sf_w0_arr(dequant_size / sizeof(fdata_v_t));
 	std::vector<fdata_v_t> rms_w_arr(rms_size / sizeof(fdata_v_t));
 	std::vector<fdata_v_t> data_out_arr(data_out_size / sizeof(fdata_v_t));
 	std::vector<fdata_v_t> GeMV_data_out_arr(gemv_data_out_size / sizeof(fdata_v_t));
 
-	std::fill(data_out_arr.begin(), data_out_arr.end(), 0);
-	
-	char * q_ptr = reinterpret_cast<char*>(quant_w_arr.data());
-	char *sf_ptr = reinterpret_cast<char*>(sf_w_arr.data());
-	char *sf0_ptr = reinterpret_cast<char*>(sf_w0_arr.data());
-	char *rms_ptr = reinterpret_cast<char*>(rms_w_arr.data());
-/* ==== RMS NORM DATA ======== RMS NORM DATA ======== RMS NORM DATA ======== RMS NORM DATA ======== RMS NORM DATA ====*/
-	size_t file_ptr = 256;
+	std::fill(data_out_arr.begin(), data_out_arr.end(), fdata_v_t(0));
+
+	char *q_ptr        = reinterpret_cast<char*>(quant_arr.data());
+	char *embed_q_ptr  = reinterpret_cast<char*>(embed_q_arr.data());
+	char *embed_sf_p   = reinterpret_cast<char*>(embed_sf_arr.data());
+	char *rms_ptr      = reinterpret_cast<char*>(rms_w_arr.data());
+
+/* ==== RMS NORM DATA ==== */
 	size_t rms_idx = 0;
-	file.seekg(file_ptr, std::ios::beg);
-	
-	axi_reg.rms_att_W = 0;
+	file.seekg(256, std::ios::beg);              // v2 header is 256 bytes
+
+	axi_regs.rms_att_W = 0;
 	file.read(rms_ptr + rms_idx, rms_att_size);
 	rms_idx += rms_att_size;
-	
-	axi_reg.rms_ffn_W = axi_reg.rms_att_W + rms_att_size;
+
+	axi_regs.rms_ffn_W = axi_regs.rms_att_W + (int)rms_att_size;
 	file.read(rms_ptr + rms_idx, rms_ffn_size);
 	rms_idx += rms_ffn_size;
-	
-	axi_reg.rms_final_W = axi_reg.rms_ffn_W + rms_ffn_size;
+
+	axi_regs.rms_final_W = axi_regs.rms_ffn_W + (int)rms_ffn_size;
 	file.read(rms_ptr + rms_idx, rms_final_size);
-	file_ptr = file.tellg();
-	
-	/* ==== QUANT AND SF DATA ======== QUANT AND SF DATA ======== QUANT AND SF DATA ======== QUANT AND SF DATA ====*/
+	rms_idx += rms_final_size;
+
+	if (!file || rms_idx != rms_size) {
+		std::cerr << "rmsnorm read failed (" << rms_idx << " vs " << rms_size << ")\n";
+		exit(EXIT_FAILURE);
+	}
+
+/* ==== SCAN THE QUANTIZED REGION ====
+ * File order (runq.c memory_map_weights): q_tokens, wq, wk, wv, wo, w1, w2, w3.
+ * Note w2 precedes w3 on disk even though the kernel consumes w1, w3, w2.
+ */
+	size_t embed_w_ptr = 0, embed_sf_ptr = 0;
+	size_t query_w_ptr[MODEL_NUM_LAYERS], query_sf_ptr[MODEL_NUM_LAYERS];
+	size_t key_w_ptr[MODEL_NUM_LAYERS],   key_sf_ptr[MODEL_NUM_LAYERS];
+	size_t value_w_ptr[MODEL_NUM_LAYERS], value_sf_ptr[MODEL_NUM_LAYERS];
+	size_t out_w_ptr[MODEL_NUM_LAYERS],   out_sf_ptr[MODEL_NUM_LAYERS];
+	size_t w1_w_ptr[MODEL_NUM_LAYERS],    w1_sf_ptr[MODEL_NUM_LAYERS];
+	size_t w2_w_ptr[MODEL_NUM_LAYERS],    w2_sf_ptr[MODEL_NUM_LAYERS];
+	size_t w3_w_ptr[MODEL_NUM_LAYERS],    w3_sf_ptr[MODEL_NUM_LAYERS];
+
+	scan_tensors(file, embed_elem, &embed_w_ptr, &embed_sf_ptr, 1);
+	scan_tensors(file, nn_elem, query_w_ptr, query_sf_ptr, MODEL_NUM_LAYERS);
+	scan_tensors(file, nn_elem, key_w_ptr,   key_sf_ptr,   MODEL_NUM_LAYERS);
+	scan_tensors(file, nn_elem, value_w_ptr, value_sf_ptr, MODEL_NUM_LAYERS);
+	scan_tensors(file, nn_elem, out_w_ptr,   out_sf_ptr,   MODEL_NUM_LAYERS);
+	scan_tensors(file, nm_elem, w1_w_ptr,    w1_sf_ptr,    MODEL_NUM_LAYERS);
+	scan_tensors(file, nm_elem, w2_w_ptr,    w2_sf_ptr,    MODEL_NUM_LAYERS);
+	scan_tensors(file, nm_elem, w3_w_ptr,    w3_sf_ptr,    MODEL_NUM_LAYERS);
+
+	/* stories110M ties the classifier to the embedding, so nothing should follow w3 */
+	const size_t scan_end = static_cast<size_t>(file.tellg());
+	if (scan_end != file_size) {
+		std::cerr << "WARNING: scan ended at " << scan_end << " but file is " << file_size
+		          << " B (" << (long long)file_size - (long long)scan_end
+		          << " B unaccounted - separate wcls?)" << std::endl;
+	}
+
+/* ==== BUILD THE DEQUANTIZED EMBEDDING TABLE ==== */
+	file.seekg(embed_w_ptr, std::ios::beg);
+	file.read(embed_q_ptr, embed_size);
+	file.seekg(embed_sf_ptr, std::ios::beg);
+	file.read(embed_sf_p, embed_sf_size);
+	if (!file) { std::cerr << "embedding read failed\n"; exit(EXIT_FAILURE); }
+
+	for (size_t i = 0; i < embed_elem; i++) {
+		const size_t group  = i / MODEL_SCALING_FACTOR;   // group of 64 sharing a scale
+		const size_t q_sub  = i % MODEL_SCALING_FACTOR;   // lane within the int8 vector
+		const size_t sfg    = group / MAX_FL_ELEM;        // which mfdata_v_t (16 scales)
+		const size_t sfs    = group % MAX_FL_ELEM;
+
+		const float dq = static_cast<float>(embed_q_arr[group][q_sub]) * embed_sf_arr[sfg][sfs];
+		sf_w0_arr[i / SM_FL_ELEM][i % SM_FL_ELEM] = dq;
+	}
+
+/* ==== REPACK EVERYTHING INTO THE INTERLEAVED DEVICE LAYOUT ====
+ * Consumption order must match the FSM in weight_fsm():
+ *   per layer: QKV (one 3*768-row GeMV), O, w1+w3, w2
+ *   then once: embedding table as the classifier
+ */
 	size_t q_idx = 0;
-	size_t sf_idx = 0;
-	
-	axi_reg.Embed_W = 0;
-	file.read(q_ptr + q_idx, embed_size);
-	q_idx += embed_size;
-	
-	axi_reg.Embed_sf_W = 0;
-	file.read(sf_ptr + sf_idx, embed_sf_size);
-	sf_idx += embed_sf_size;
-
-	for (int i = 0; i < (MODEL_ELEMENTS * MODEL_TOKENS); i++) {
-		int group = i / 64;               // which group of 64 shares a scale factor
-		int q_sub = i % 64;               // position within the quant group
-		int sf_group = group / 16;        // which mfdata_v_t (16 scales packed together)
-		int sf_sub = group % 16;          // position within that scale vector
-
-		float dq = static_cast<float>(quant_w_arr[group][q_sub]) *
-				sf_w_arr[sf_group][sf_sub];
-
-		sf_w0_arr[i / 4][i % 4] = dq;      // fdata_v_t is 4-wide
-	}
-
-	// emb_token_data.read(sf0_ptr, dequant_size);
-	
-	
-	// read QKV
-	axi_reg.QKV_sf_W = sf_idx;
-	axi_reg.QKV_W = q_idx;
-	
-	file_ptr = file_ptr + embed_sf_size + embed_size;
-	
 	for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
-	
-		for (int j = 0; j < 3; j++) {
-			file.seekg((file_ptr + j * (nn_size + nn_sf_size) * (MODEL_NUM_LAYERS - 0)), std::ios::beg);
-			file.read(q_ptr + q_idx, nn_size);
-			q_idx += nn_size;
-			file.read(sf_ptr + sf_idx, nn_sf_size);
-			sf_idx += nn_sf_size;
-		}
-		file_ptr += (nn_sf_size + nn_size);
-	}
-	
-	axi_reg.Out_sf_W = sf_idx;
-	axi_reg.Out_W = q_idx;
-	//already at Output
-	for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
-		
-		file.read(q_ptr + q_idx, nn_size);
-		q_idx += nn_size;
-		file.read(sf_ptr + sf_idx, nn_sf_size);
-		sf_idx += nn_sf_size;
-	}
-	file_ptr = file.tellg();
-	
-	axi_reg.FF_w1w3_sf_W = sf_idx;
-	axi_reg.FF_w1w3_W = q_idx;
-	//now at w1
-	for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
-	
-		for (int j = 0; j < 2; j++) {
-			file.seekg((file_ptr + j * 2 * (nm_size + nm_sf_size) * (MODEL_NUM_LAYERS - 0)), std::ios::beg); // skip over FFN2
-			file.read(q_ptr + q_idx, nm_size);
-			q_idx += nm_size;
-			file.read(sf_ptr + sf_idx, nm_sf_size);
-			sf_idx += nm_sf_size;
-		}
-		file_ptr += (nm_size + nm_sf_size);
-	}
+		const TensorRef qkv[3] = {{query_w_ptr[i], query_sf_ptr[i], nn_elem},
+		                          {key_w_ptr[i],   key_sf_ptr[i],   nn_elem},
+		                          {value_w_ptr[i], value_sf_ptr[i], nn_elem}};
+		const TensorRef o  [1] = {{out_w_ptr[i],   out_sf_ptr[i],   nn_elem}};
+		const TensorRef w13[2] = {{w1_w_ptr[i],    w1_sf_ptr[i],    nm_elem},
+		                          {w3_w_ptr[i],    w3_sf_ptr[i],    nm_elem}};
+		const TensorRef w2 [1] = {{w2_w_ptr[i],    w2_sf_ptr[i],    nm_elem}};
 
-	axi_reg.FF_w2_W = q_idx;
-	axi_reg.FF_w2_sf_W = sf_idx;
-	file.seekg(file_ptr, std::ios::beg);
-	for (int i = 0; i < MODEL_NUM_LAYERS; i++) {
-		
-		file.read(q_ptr + q_idx, nm_size);
-		q_idx += nm_size;
-		file.read(sf_ptr + sf_idx, nm_sf_size);
-		sf_idx += nm_sf_size;
+		pack_gemv(file, q_ptr, q_idx, qkv, 3, 2);
+		pack_gemv(file, q_ptr, q_idx, o,   1, 2);
+		pack_gemv(file, q_ptr, q_idx, w13, 2, 2);
+		pack_gemv(file, q_ptr, q_idx, w2,  1, 2);
 	}
-	
-	// std::memcpy(sf0_ptr, sf_ptr, sf_size);
+	const TensorRef emb[1] = {{embed_w_ptr, embed_sf_ptr, embed_elem}};
+	pack_gemv(file, q_ptr, q_idx, emb, 1, 2);
 
-	/* ============================== constants related to tb ===================================== */
-	int pos = 150;
-	const int layer_cnt = 12;
-	const int out_data_size = MODEL_ELEMENTS * 4;
-	const int quant_data_size = MODEL_ELEMENTS * MODEL_ELEMENTS * layer_cnt;
-	const int sf_data_size = quant_data_size * 4 / MODEL_SCALING_FACTOR;
-	const int slice_w_data_size = MODEL_ELEMENTS * MODEL_ELEMENTS;
-	const int slice_sf_data_size = slice_w_data_size * 4 / MODEL_SCALING_FACTOR;
-	const int rms_w_size = MODEL_ELEMENTS * 4 * layer_cnt;
-	const int tokens_size = MODEL_ELEMENTS * 4;
-	const int tok_w1_size = MODEL_HIDDEN_DIM * 4;
-	const int logits_size = INTERNAL_DATA_SIZE * sizeof(float);//* MODEL_TOKENS * 4;//
-	const int logits_quant_size = MODEL_ELEMENTS * MODEL_TOKENS * 1;
-	const int logits_sf_size = MODEL_ELEMENTS * MODEL_TOKENS / MODEL_SCALING_FACTOR * 4;
-	// const int sf_el = MODEL_ELEMENTS / 64;
-	// const int wo_sf_size = 36864;
-	
-	// const int wo_size = 589824;
-	const int cache_size = 1024*768*4 * 12;
-	const int t_size = 768 * 4;
-	const int xb2_size = 3072;
-	const int hd_tok_size = MODEL_ELEMENTS * MODEL_HIDDEN_DIM * layer_cnt;
-	const int hd_sf_size = hd_tok_size / MODEL_SCALING_FACTOR * 4;
-	// const int rms_tok_size = MODEL_ELEMENTS * 4 * layer_cnt;
-	
-	const int out_data_cnt = out_data_size / sizeof(mfdata_v_t);
-	const int quant_data_cnt = quant_data_size / sizeof(idata_v_t);
-	const int sf_data_cnt = sf_data_size / sizeof(fdata_v_t);
-	const int rms_w_cnt = rms_w_size / sizeof(fdata_v_t);
-	const int tokens_cnt = tokens_size / sizeof(fdata_v_t);
-	const int tok_w1_cnt = tok_w1_size / sizeof(fdata_v_t);
-	const int logits_cnt = logits_size / sizeof(fdata_v_t);
-	const int logits_q_cnt = logits_quant_size / sizeof(idata_v_t);
-	const int logits_sf_cnt = logits_sf_size / sizeof(fdata_v_t);
-	const int slice_w_data_cnt = slice_w_data_size / sizeof(mfdata_v_t);
-	const int slice_sf_data_cnt = slice_sf_data_size / sizeof(fdata_v_t);
-	// const int wo_cnt = wo_size / sizeof(idata_v_t);
-	// const int wo_sf_cnt = wo_sf_size / sizeof(fdata_v_t);
-	const int cache_cnt = cache_size / sizeof(mfdata_v_t);
-	const int tok_cnt = t_size / sizeof(mfdata_v_t);
-	const int xb2_cnt = xb2_size / sizeof(mfdata_v_t);
-	const int hd_tok_cnt = hd_tok_size / sizeof(idata_v_t);
-	const int hd_sf_cnt = hd_sf_size / sizeof(fdata_v_t);
-	const int data_goa_cnt = (MODEL_ELEMENTS * 3 + MODEL_HIDDEN_DIM) * 12 / SM_FL_ELEM;
-	const int data_goa_size = data_goa_cnt * sizeof(my_float_t);
-	const int data_gemv_goa_cnt = (MODEL_ELEMENTS * 5 + MODEL_HIDDEN_DIM * 2) * 12 / SM_FL_ELEM;
-	const int data_gemv_goa_size = data_goa_cnt * sizeof(my_float_t);
-	// const int rms_tok_cnt = rms_tok_size / sizeof(mfdata_v_t);
+/* ============================== constants related to tb ============================== */
+	const int layer_cnt      = MODEL_NUM_LAYERS;
+	const int tokens_size    = MODEL_ELEMENTS * (int)sizeof(my_float_t);
+	const int tok_w1_size    = MODEL_HIDDEN_DIM * (int)sizeof(my_float_t);
+	const int logits_size    = INTERNAL_DATA_SIZE * (int)sizeof(my_float_t);
+	const size_t cache_size  = (size_t)MODEL_SEQUENCE_LEN * MODEL_ELEMENTS * sizeof(my_float_t) * MODEL_NUM_LAYERS;
 
-	
+	const int cache_cnt      = (int)(cache_size / sizeof(mfdata_v_t));
+	const int tokens_cnt     = tokens_size / (int)sizeof(fdata_v_t);
+	const int tok_w1_cnt     = tok_w1_size / (int)sizeof(fdata_v_t);
+	const int logits_cnt     = logits_size / (int)sizeof(fdata_v_t);
+	const int data_goa_cnt   = (MODEL_ELEMENTS * 3 + MODEL_HIDDEN_DIM) * layer_cnt / SM_FL_ELEM;
+	const int data_gemv_goa_cnt = (MODEL_ELEMENTS * 5 + MODEL_HIDDEN_DIM * 2) * layer_cnt / SM_FL_ELEM;
 
 /* ===================================== declare our vectors ===================================== */
 
 	std::vector<fdata_v_t> tokens_arr(tokens_cnt * 3);
-	std::vector<fdata_v_t> swiglu_arr(hd_tok_cnt * 2);
-	std::vector<adata_v_t> mha_tokens_arr((tokens_size / (sizeof(adata_v_t))));
+	std::vector<fdata_v_t> swiglu_arr(tok_w1_cnt * 2);
 	std::vector<fdata_v_t> output_arr(logits_cnt);
-	// std::vector<fdata_v_t> input_arr(logits_cnt);
 	std::vector<fdata_v_t> golden_output_arr(data_goa_cnt);
 	std::vector<fdata_v_t> golden_gemv_output_arr(data_gemv_goa_cnt);
-	std::cout<<"GOA"<<std::endl;
-	char *goa = reinterpret_cast<char*>(golden_output_arr.data());
-	size_t goa_idx = 0;
-	std::fill(golden_output_arr.begin(), golden_output_arr.end(), 0);
 
-	data_output.seekg(0, std::ios::end);
-	size_t goa_file_size = data_output.tellg();
-	data_output.seekg(0, std::ios::beg);
-	
-	
-	data_output.read(goa, goa_file_size);
+	std::fill(golden_output_arr.begin(), golden_output_arr.end(), fdata_v_t(0));
+	std::fill(golden_gemv_output_arr.begin(), golden_gemv_output_arr.end(), fdata_v_t(0));
 
-	char *ggoa = reinterpret_cast<char*>(golden_gemv_output_arr.data());
-	size_t ggoa_idx = 0;
-
-	gemv_data_output.seekg(0, std::ios::end);
-	size_t ggoa_file_size = gemv_data_output.tellg();
-	gemv_data_output.seekg(0, std::ios::beg);
-	std::cout<<"Opened all the files sucessfully"<<std::endl;
-
-	gemv_data_output.read(ggoa, ggoa_file_size);
-
-
-	std::vector<std::vector<mfdata_v_t>> key_arr(2, std::vector<mfdata_v_t>(cache_cnt));
-	std::vector<std::vector<mfdata_v_t>> value_arr(2, std::vector<mfdata_v_t>(cache_cnt));
-
-// Assuming your types and constants are defined...
-int head_dim_bytes = MODEL_HEAD_SIZE * sizeof(my_float_t); 
-
-	std::cout<<"Opened all the files sucessfully"<<std::endl;
-// 1. Read the entire file into a raw token-major buffer (FAST)
-std::vector<char> raw_token_major_buf(cache_size);
-out_key_dat.read(raw_token_major_buf.data(), cache_size);
-
-// 2. Prepare your destination head-major buffer
-// We can cast this directly into your existing key_arr
-char* dest_ptr = reinterpret_cast<char*>(key_arr[0].data());
-const char* src_ptr = raw_token_major_buf.data();
-
-// 3. In-memory Transpose
-for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
-	for (int h = 0; h < MODEL_NUM_HEADS; h++) {
-		for (int t = 0; t < MODEL_SEQUENCE_LEN; t++) {
-				
-			// Calculate where this specific head chunk lives in the source (token-major)
-			// Layout: [Layer][Token][Head][Head_Dim]
-			size_t src_offset = l * (MODEL_SEQUENCE_LEN * MODEL_NUM_HEADS * head_dim_bytes) +
-													t * (MODEL_NUM_HEADS * head_dim_bytes) +
-													h * head_dim_bytes;
-
-			// Copy 64 elements (head_dim_bytes) from source to our sequential destination
-			std::memcpy(dest_ptr, src_ptr + src_offset, head_dim_bytes);
-			
-			// Advance our destination pointer! (Fixes the overwrite bug)
-			dest_ptr += head_dim_bytes; 
+	/* read golden references, clamped to the destination so a stale/oversized
+	 * golden file can't scribble past the vector */
+	auto read_clamped = [](std::ifstream &s, char *dst, size_t cap, const char *what) {
+		s.seekg(0, std::ios::end);
+		const size_t sz = static_cast<size_t>(s.tellg());
+		s.seekg(0, std::ios::beg);
+		if (sz > cap) {
+			std::cerr << "WARNING: " << what << " is " << sz << " B, buffer is " << cap
+			          << " B - truncating" << std::endl;
 		}
-	}
-}
+		s.read(dst, std::min(sz, cap));
+		return std::min(sz, cap);
+	};
 
-out_value_dat.read(raw_token_major_buf.data(), cache_size);
+	read_clamped(data_output, reinterpret_cast<char*>(golden_output_arr.data()),
+	             golden_output_arr.size() * sizeof(fdata_v_t), "150_pre_quantized.bin");
+	read_clamped(gemv_data_output, reinterpret_cast<char*>(golden_gemv_output_arr.data()),
+	             golden_gemv_output_arr.size() * sizeof(fdata_v_t), "150_post_matmul.bin");
+	read_clamped(input_tokens, reinterpret_cast<char*>(output_arr.data()),
+	             output_arr.size() * sizeof(fdata_v_t), "150_01_rms_att_in.bin");
 
-dest_ptr = reinterpret_cast<char*>(value_arr[0].data());
+/* ===================================== KV cache transpose ===================================== */
 
-// 3. In-memory Transpose
-for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
-	for (int h = 0; h < MODEL_NUM_HEADS; h++) {
-		for (int t = 0; t < MODEL_SEQUENCE_LEN; t++) {
-				
-			// Calculate where this specific head chunk lives in the source (token-major)
-			// Layout: [Layer][Token][Head][Head_Dim]
-			size_t src_offset = l * (MODEL_SEQUENCE_LEN * MODEL_NUM_HEADS * head_dim_bytes) +
-													t * (MODEL_NUM_HEADS * head_dim_bytes) +
-													h * head_dim_bytes;
+	std::vector<mfdata_v_t> key_arr(cache_cnt);
+	std::vector<mfdata_v_t> value_arr(cache_cnt);
 
-			// Copy 64 elements (head_dim_bytes) from source to our sequential destination
-			std::memcpy(dest_ptr, src_ptr + src_offset, head_dim_bytes);
-			
-			// Advance our destination pointer! (Fixes the overwrite bug)
-			dest_ptr += head_dim_bytes; 
+	const size_t head_dim_bytes = MODEL_HEAD_SIZE * sizeof(my_float_t);
+	std::vector<char> raw_token_major_buf(cache_size);
+
+	/* golden caches are [layer][token][head][head_dim]; the kernel wants
+	 * [layer][head][token][head_dim] */
+	auto transpose_cache = [&](std::ifstream &src, mfdata_v_t *dstv, const char *what) {
+		src.read(raw_token_major_buf.data(), cache_size);
+		if ((size_t)src.gcount() != cache_size) {
+			std::cerr << "short read on " << what << " (" << src.gcount()
+			          << " of " << cache_size << ")" << std::endl;
+			exit(EXIT_FAILURE);
 		}
-	}
-}
+		char *dst = reinterpret_cast<char*>(dstv);
+		const char *src_ptr = raw_token_major_buf.data();
+		for (int l = 0; l < MODEL_NUM_LAYERS; l++)
+			for (int h = 0; h < MODEL_NUM_HEADS; h++)
+				for (int t = 0; t < MODEL_SEQUENCE_LEN; t++) {
+					const size_t src_off = l * (MODEL_SEQUENCE_LEN * MODEL_NUM_HEADS * head_dim_bytes)
+					                     + t * (MODEL_NUM_HEADS * head_dim_bytes)
+					                     + h * head_dim_bytes;
+					std::memcpy(dst, src_ptr + src_off, head_dim_bytes);
+					dst += head_dim_bytes;
+				}
+		assert((size_t)(dst - reinterpret_cast<char*>(dstv)) == cache_size);
+	};
 
+	transpose_cache(out_key_dat,   key_arr.data(),   "key cache");
+	transpose_cache(out_value_dat, value_arr.data(), "value cache");
 
-	std::cout<<"OA"<<std::endl;
-	char *oa = reinterpret_cast<char*>(output_arr.data());
-	input_tokens.seekg(0, std::ios::end);
-	file_size = input_tokens.tellg();
-	input_tokens.seekg(0, std::ios::beg);
-	input_tokens.read(oa, file_size);
-
-
-	std::vector<std::vector<mfdata_v_t>> tok_out_arr(2, std::vector<mfdata_v_t>(tokens_cnt));
-	std::vector<std::vector<mfdata_v_t>> tok_w1_out_arr(2, std::vector<mfdata_v_t>(tok_w1_cnt));
-	std::vector<std::vector<mfdata_v_t>> log_out_arr(2, std::vector<mfdata_v_t>(logits_cnt));
-	std::vector<std::vector<my_float_t>> att_score_arr(2, std::vector<my_float_t>(MODEL_ELEMENTS));
-
-
-	std::vector<mfdata_v_t> key_in_arr(tokens_cnt * 3);
-	std::vector<mfdata_v_t> value_in_arr(tokens_cnt * 3);
-	std::vector<mfdata_v_t> key_arr_a(cache_cnt);
-	std::vector<mfdata_v_t> value_arr_a(cache_cnt);
-
-	/* ================================== read data into array =================================== */
+/* ================================== token / coin setup =================================== */
+/* ================================== read data into array =================================== */
 
 	int curr_pos = 150;
 	std::cout<<"Loaded the files into memory"<<std::endl;
@@ -437,7 +414,7 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	coin_data.read(coin_ptr, 4);
 	// token_data.read(reinterpret_cast<char*>(&curr_token), 4);
 	// token_data.read(token_ptr, 4);
-	
+
 	file.close();
 	coin_data.close();
 	token_data.close();
@@ -447,44 +424,40 @@ for (int l = 0; l < MODEL_NUM_LAYERS; l++) {
 	out_value_dat.close();
 	input_tokens.close();
 
-/* ===================================== Declare the streams ========================================= */
-/* remember - if it's suppsoed to be m_axi, no need to create a stream. just use the created vector, ie: foo_arr.data() */
+/* ============================ call the kernel ====================== */
 
-	/* ============================ write inputs to the streams ====================== */
-		
+	const float temperature = 0.9f;
+	std::cout << "Loaded the files into memory" << std::endl;
 
-	float temperature = 0.9;
-	std::cout<<"Delcared and Loaded the Streams"<<std::endl;
-transformer_cu(	sf_w0_arr.data(), //output_arr.data(), 
-				sf_w_arr.data(), quant_w_arr.data(), 
-				sf_w_arr.data(), quant_w_arr.data(), 
-				rms_w_arr.data(), key_arr[0].data(), value_arr[0].data(), 
-				curr_pos, //MODEL_ELEMENTS, MODEL_ELEMENTS, 
-				axi_reg.QKV_W, axi_reg.QKV_sf_W, axi_reg.Out_W, axi_reg.Out_sf_W, 
-				axi_reg.FF_w1w3_W, axi_reg.FF_w1w3_sf_W, axi_reg.FF_w2_W, 
-				axi_reg.FF_w2_sf_W, axi_reg.Embed_W, axi_reg.Embed_sf_W, 
-				axi_reg.rms_att_W, axi_reg.rms_ffn_W, axi_reg.rms_final_W, ct.data(),
-				#ifdef __DEBUG__
-				4, 0, 0, data_out_arr.data(),
-				#endif
-				#ifdef __ULTRADEBUG__
-					GeMV_data_out_arr.data(),
-				#endif
-				temperature, coin, true, false
-				);
+	transformer_cu(
+			sf_w0_arr.data(),                       // fdata_v_t *tokens (dequantized embedding table)
+			quant_arr.data(), quant_arr.data(),     // wide_t *w_0, *w_1 - same buffer, port 1 starts one frame in
+			rms_w_arr.data(),                       // fdata_v_t *weights
+			key_arr.data(), value_arr.data(),       // mfdata_v_t *key_cache, *value_cache
+			curr_pos,                               // const int POS
+			axi_regs.rms_att_W, axi_regs.rms_ffn_W, axi_regs.rms_final_W,
+			ct.data(),
+			#ifdef __DEBUG__
+			4, 0, 0, data_out_arr.data(),
+			#endif
+			#ifdef __ULTRADEBUG__
+			GeMV_data_out_arr.data(),
+			#endif
+			temperature, coin, true, false
+			);
 
-	int32_t gold_token;
 	#ifdef __DEBUG__
-	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
+	std::cout << "===== pre-quantized token data =====" << std::endl;
 	parse_results<fdata_v_t, float>(golden_output_arr, data_out_arr);
 	#endif
 
 	#ifdef __ULTRADEBUG__
-	std::cout<< "========================= Tokens output array data ========================"<<std::endl;
+	std::cout << "===== post-matmul GeMV data =====" << std::endl;
 	parse_results<fdata_v_t, float>(golden_gemv_output_arr, GeMV_data_out_arr);
 	#endif
 
-	std::cout<< "Golden token: \t" <<next_token<<"\t Actual token: \t"<<ct.at(curr_pos + 1)<<std::endl;
+	const int32_t got = ct.at(curr_pos + 1);
+	std::cout << "Golden token: \t" << next_token << "\t Actual token: \t" << got << std::endl;
+	// return (got == next_token) ? 0 : 1;
 	return 0;
-
 }

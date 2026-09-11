@@ -1,4 +1,5 @@
 #include "mha_forward.h"
+#include <limits>
 // #include <cstdint>
 // #include <ios>
 
@@ -143,6 +144,123 @@ void gemv_split(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::s
   // bool next = done.read(); // lets cu_selecter start the next calculation. 
   ProbIndex ss_val = {32420, std::numeric_limits<my_float_t>::lowest()};
   
+  flush:
+  for (int i = 0; i < REG_SIZE; i++) {
+    #pragma HLS PIPELINE II=1
+    sys_sort.write(ss_val);
+  }
+}
+
+
+// template<typename T, size_t N, int P>//
+// void gemv_comb(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort, hls::stream<T> (&gemv_out)[P], 
+//                 const int M_DIM, const bool BOOP//, hls::stream<bool> &done
+//                 #ifdef __ULTRADEBUG__
+//                   , fdata_v_t *data_out, const int SAVE_ADDR
+//                 #endif
+//                 ){
+  
+// 	const int Nn = (QUANT_FRAME / SF_FRAME);
+//   // const int offset = Nn;
+//   typedef hls::vector<T, N> gdata_v_t;
+//   const int c_idx = M_DIM / (P * Nn);
+
+// 	for (int i = 0;  i < c_idx; i++) {
+		
+// 		for (int j = 0; j < P; j++) {
+//       gdata_v_t data;
+//       const int idx = (i * 2 + j) * Nn;
+// 			const int kdx = idx / N;
+//       // int fidx = i * 4 + j * (MODEL_TOKENS / 2);
+// 			for (int k = 0; k < (Nn/N); k++) {
+// 				int fdx = idx + k * N;
+// 				for (int kk = 0; kk < N; kk++) {
+// 					#pragma HLS PIPELINE II=1
+// 					T tmp = gemv_out[j].read();
+// 					data[kk] = tmp;
+// 					ProbIndex ss_val;
+// 					ss_val.prob = BOOP ? std::numeric_limits<my_float_t>::lowest() : tmp;
+// 					ss_val.index = fdx + kk;
+// 					sys_sort.write(ss_val);
+// 				}
+// 				if (BOOP) {
+// 				out[kdx + k] = data;
+//         #ifdef __ULTRADEBUG__
+//           int udx = i + j * (M_DIM / (N * P)) + SAVE_ADDR;
+//           data_out[udx] = data;
+//         #endif
+// 				}
+// 			}
+			
+// 		}
+// 	}
+//   // bool next = done.read(); // lets cu_selecter start the next calculation. 
+//   ProbIndex ss_val = {32420, std::numeric_limits<my_float_t>::lowest()};
+  
+//   flush:
+//   for (int i = 0; i < REG_SIZE; i++) {
+//     #pragma HLS PIPELINE II=1
+//     sys_sort.write(ss_val);
+//   }
+// }
+
+
+
+template<typename T, size_t N, int P>
+void gemv_comb(hls::vector<T, N> *out, hls::stream<ProbIndex> &sys_sort,
+               hls::stream<T> (&gemv_out)[P],
+               const int M_DIM, const int ROWS_PER_FRAME, const bool BOOP
+               #ifdef __ULTRADEBUG__
+                 , fdata_v_t *data_out, const int SAVE_ADDR
+               #endif
+               ){
+
+  static_assert((N & (N - 1)) == 0, "N must be a power of two");
+  typedef hls::vector<T, N> gdata_v_t;
+
+  const int R     = ROWS_PER_FRAME;        // 16 for N_DIM=768, 6 for N_DIM=2048
+  const int c_idx = M_DIM / (P * R);
+
+  gdata_v_t data;                          // shift accumulator, oldest lane first
+  #pragma HLS ARRAY_PARTITION variable=data complete dim=1
+  int cnt = 0;                             // logical output row, monotonic
+
+  comb_block:
+  for (int i = 0; i < c_idx; i++) {
+    #pragma HLS LOOP_TRIPCOUNT min=24 max=(MODEL_TOKENS / (P * 16))
+    comb_thread:
+    for (int j = 0; j < P; j++) {
+      comb_row:
+      for (int r = 0; r < R; r++) {
+        #pragma HLS LOOP_TRIPCOUNT min=6 max=16
+        #pragma HLS PIPELINE II=1
+
+        const T tmp = gemv_out[j].read();
+
+        ProbIndex ss_val;
+        ss_val.prob  = BOOP ? std::numeric_limits<my_float_t>::lowest() : tmp;
+        ss_val.index = cnt;
+        sys_sort.write(ss_val);
+
+        for (int s = 0; s < (int)N - 1; s++) {
+          #pragma HLS UNROLL
+          data[s] = data[s + 1];
+        }
+        data[N - 1] = tmp;
+
+        if (BOOP && (cnt & ((int)N - 1)) == (int)N - 1) {
+          const int vidx = cnt / (int)N;
+          out[vidx] = data;
+          #ifdef __ULTRADEBUG__
+            data_out[SAVE_ADDR + vidx] = data;
+          #endif
+        }
+        cnt++;
+      }
+    }
+  }
+
+  ProbIndex ss_val = {32420, std::numeric_limits<my_float_t>::lowest()};
   flush:
   for (int i = 0; i < REG_SIZE; i++) {
     #pragma HLS PIPELINE II=1

@@ -3,7 +3,7 @@
 #define MARK_FORWARD
 
 #include <cmath>
-// #define __DEBUG__
+#define __DEBUG__
 // #define __ULTRADEBUG__
 
 #include <cstddef>
@@ -76,8 +76,14 @@ const int SQUARE_TOK = MODEL_ELEMENTS * MODEL_ELEMENTS;
 const int SQUARE_SF = SQUARE_TOK / MODEL_SCALING_FACTOR;
 const int RECT_TOK = MODEL_ELEMENTS * MODEL_HIDDEN_DIM;
 const int RECT_SF = RECT_TOK / MODEL_SCALING_FACTOR;
+const int SF_FRAME = 12;
+const int QUANT_FRAME = 192;
+const int TXFR_FRAME = SF_FRAME + QUANT_FRAME;
 
 /* ==================================================================================== */
+
+typedef ap_uint<MAX_DW> wide_t;
+typedef hls::stream<wide_t>	s_wide_t;
 
 typedef hls::vector<my_quant_data_t, MAX_QUANT_ELEM> idata_v_t;
 typedef hls::vector<my_float_t, SM_FL_ELEM>  fdata_v_t;
@@ -88,6 +94,36 @@ typedef hls::stream<idata_v_t> s_idata_v_t;
 typedef hls::stream<fdata_v_t> s_fdata_v_t; 
 typedef hls::stream<mfdata_v_t> s_mfdata_v_t;
 typedef hls::stream<adata_v_t> s_adata_v_t;
+
+/* ********************** CONVERSIONS ************************************ */
+
+inline mfdata_v_t to_mfdvt(const wide_t &t){
+	#pragma HLS INLINE
+	mfdata_v_t v;
+	for (int cii = 0; cii < MAX_FL_ELEM; cii++) {
+		#pragma HLS UNROLL	
+		ap_uint<32> slice = t.range((cii + 1) * 32 - 1 , cii * 32);
+
+		union { 
+			uint32_t u; 
+			float f;
+		} conv;
+		conv.u = slice.to_uint();
+		v[cii] = conv.f;
+	}
+	return v;
+}
+
+inline idata_v_t to_idvt(const wide_t &t){
+	#pragma HLS INLINE
+	idata_v_t v;
+	for (int ci = 0; ci < MAX_QUANT_ELEM; ci++) {
+		#pragma HLS UNROLL
+		ap_int<8> b = t.range(( ci + 1) * 8 - 1, ci * 8);
+		v[ci] = b;
+	}
+	return v;
+}
 
 template<typename T, int N>
 void inf_split_tee(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vCount){
@@ -112,8 +148,8 @@ void inf_split_tee(hls::stream<hls::vector<T, M>> (&out)[N], hls::stream<T> &in,
     #pragma HLS PIPELINE II=1
     // T data = in.read();
 
-    for (int i = 0 ; i < M; i++) {
-      tmp[i] = in.read();
+    for (int ii = 0 ; ii < M; ii++) {
+      tmp[ii] = in.read();
     }
     for (int j = 0; j < N; j++) {
       #pragma HLS UNROLL
@@ -244,6 +280,69 @@ void mm2s_input_data(hls::stream<T> &out, T *in, const int COUNT, const int CURR
   }
 }
 
+template<typename T>//
+void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, T *in, const int COUNT, const int CURR_LAYER, const int offset){
+  
+	// const int COUNT = MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3) * MODEL_NUM_LAYERS + MODEL_TOKENS) * 17 / (16 * MAX_QUANT_ELEM);
+	// const int COUNT = PCOUNT / (MAX_QUANT_ELEM * TXFR_FRAME);
+	const int vCount = COUNT / (TXFR_FRAME * 2);
+  const int tot_off = CURR_LAYER * COUNT + offset; //line 286
+	#pragma HLS BIND_OP variable=tot_off op=mul impl=dsp latency=2 // WTF
+	T* base_ptr = in + tot_off;
+	
+	AXI4_TXFR:
+	for (int i = 0; i < vCount; i++) {
+		T* sf_ptr = in + tot_off + i * 2 * TXFR_FRAME;
+		T* quant_ptr = in + tot_off + i * 2 * TXFR_FRAME + SF_FRAME;
+		
+		SF_PTR:
+		for (int j = 0; j < SF_FRAME; j++) {
+			#pragma HLS PIPELINE II=1
+			sf.write(sf_ptr[j]);
+		}
+
+		Q_PTR:
+		for (int j = 0; j < QUANT_FRAME; j++) {
+			#pragma HLS PIPELINE II=1
+			w.write(quant_ptr[j]);
+		}
+	}
+}
+template<typename T>//
+void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, T *in, const int N_FRAMES, const int PORT, const int NPORT, const int offset){
+  
+	const int STRIDE = TXFR_FRAME * NPORT; // 204 * 2
+	
+	// #pragma HLS BIND_OP variable=tot_off op=mul impl=dsp latency=2 // WTF
+	T* base = in + offset + PORT * TXFR_FRAME;
+	
+	AXI4_TXFR:
+	for (int i = 0; i < N_FRAMES; i++) {
+		T* frame = base + i * STRIDE;
+		
+		// SF_PTR:
+		// for (int j = 0; j < SF_FRAME; j++) {
+		// 	#pragma HLS PIPELINE II=1
+		// 	sf.write(frame[j]);
+		// }
+
+		// Q_PTR:
+		// for (int j = 0; j < QUANT_FRAME; j++) {
+		// 	#pragma HLS PIPELINE II=1
+		// 	w.write(frame[j + SF_FRAME]);
+		// }
+
+		FRAME_READ:
+		for (int j = 0; j < TXFR_FRAME; j++) {
+			#pragma HLS PIPELINE II=1
+			T beat = frame[j];
+			
+			if (j < SF_FRAME)	sf.write(beat);
+			else 							w.write(beat); 
+		}
+	}
+}
+
 template<typename T, size_t N>
 void mm2mm_store(hls::vector<T, N> *mm_out, hls::vector<T,N> *mm_in, const int count){
   
@@ -309,6 +408,8 @@ void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>>
 
 void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, s_mfdata_v_t &s_wsf, s_idata_v_t &s_w, const int N_DIM, const int M_DIM);
 
+void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, s_wide_t &s_wsf, s_wide_t &s_w, const int N_DIM, const int M_DIM);
+
 constexpr size_t TOK_QUANT_MAX =  (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM);
 constexpr size_t TOK_SF_MAX = (MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR);
 
@@ -320,44 +421,109 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
 void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM, fdata_v_t *data_out, const int SAVE_ADDR);
 
 /* *************************** RoPE FUNCTION *************************************/
+/* ---------- compile-time RoPE frequency table ---------- */
+namespace rope_detail {
 
-template<int HEAD>
-void init_freq_arr(float arr[HEAD]){
-  for (int i = 0; i < HEAD; i++) {
-  arr[i] = 1.0f / hls::powf(10000.0f, ((i) / (float) MODEL_HEAD_SIZE));
-  }
+// constexpr exp, used only to build the table. Never synthesized.
+constexpr double ce_exp(double x) {
+    const long n = (long)(x * 1.4426950408889634 + (x < 0 ? -0.5 : 0.5));
+    const double r = x - n * 0.6931471805599453;
+    double term = 1.0, sum = 1.0;
+    for (int i = 1; i < 24; i++) { term *= r / i; sum += term; }
+    double p = 1.0;
+    if (n >= 0) for (long i = 0; i <  n; i++) p *= 2.0;
+    else        for (long i = 0; i < -n; i++) p *= 0.5;
+    return sum * p;
 }
+constexpr double LN_ROPE_BASE = 9.210340371976184;   // ln(10000); use ln(500000) for Llama-3
 
-template<typename T, size_t N, int N_DIM = MODEL_ELEMENTS>
-void rope_kernel (hls::stream<hls::vector<T, N>> &o, hls::stream<hls::vector<T, N>> &in, const int POS){
-  float arr[MODEL_HEAD_SIZE];
-  init_freq_arr<MODEL_HEAD_SIZE>(arr);
-  ROPE_MAIN:
-  for (int i = 0; i < (N_DIM / N); i++) {
-    #pragma HLS loop_flatten 
- // increment by number of element in fdata_v_t
-  
-  int k = i * N;
-    hls::vector<T, N> tmp = in.read();
-    hls::vector<T, N> tmp_o;
-    head_dim_unroll_loop:
-    for (int j = 0 ; j < (N / 2); j++) {
-      #pragma HLS PIPELINE
-      #pragma HLS UNROLL factor = 2
-      int head_dim = (k + j * 2) % MODEL_HEAD_SIZE;
-      float freq =  arr[head_dim]; /*1.0f / hls::powf(10000.0f, (float)head_dim/HEAD_SIZE);*/ 
-      float val = POS * freq;
-      float fcr;
-      float fci;
-      hls::sincosf(val, &fci, &fcr);
-      float v0 = tmp[j * 2 + 0];
-      float v1 = tmp[j * 2 + 1];
-      tmp_o[j * 2 + 0] = v0 * fcr - v1 * fci;
-      tmp_o[j * 2 + 1] = v0 * fci + v1 * fcr;
+constexpr int ROPE_PAIRS = MODEL_HEAD_SIZE / 2;
+
+struct FreqTable {
+    float f[ROPE_PAIRS];
+    constexpr FreqTable() : f() {
+        for (int i = 0; i < ROPE_PAIRS; i++)
+            f[i] = (float) ce_exp(-LN_ROPE_BASE * (2.0 * i) / (double) MODEL_HEAD_SIZE);
     }
-    o.write(tmp_o);
-  }
+};
+constexpr FreqTable kRopeFreq{};
+
+}   // namespace rope_detail
+template<typename T, size_t N, int N_DIM = MODEL_ELEMENTS>
+void rope_kernel(hls::stream<hls::vector<T, N>> &o,
+                 hls::stream<hls::vector<T, N>> &in, const int POS) {
+
+    static_assert(MODEL_HEAD_SIZE % N == 0, "vector must not straddle a head");
+    constexpr int PAIRS = rope_detail::ROPE_PAIRS;
+    static_assert((PAIRS & (PAIRS - 1)) == 0, "PAIRS must be a power of two for the mask");
+
+    /* 32 sincos per call instead of N_DIM/2 */
+    float tw_cos[PAIRS], tw_sin[PAIRS];
+    #pragma HLS ARRAY_PARTITION variable=tw_cos complete dim=1
+    #pragma HLS ARRAY_PARTITION variable=tw_sin complete dim=1
+
+    rope_twiddle:
+    for (int p = 0; p < PAIRS; p++) {
+        #pragma HLS PIPELINE II=1
+        float s, c;
+        hls::sincosf(POS * rope_detail::kRopeFreq.f[p], &s, &c);
+        tw_cos[p] = c;
+        tw_sin[p] = s;
+    }
+
+    ROPE_MAIN:
+    for (int i = 0; i < (N_DIM / N); i++) {
+        #pragma HLS PIPELINE II=1
+        hls::vector<T, N> tmp = in.read();
+        hls::vector<T, N> tmp_o;
+        for (int j = 0; j < (int)(N / 2); j++) {
+            #pragma HLS UNROLL
+            const int p   = (i * (int)(N / 2) + j) & (PAIRS - 1);
+            const float fcr = tw_cos[p], fci = tw_sin[p];
+            const float v0 = tmp[j * 2 + 0], v1 = tmp[j * 2 + 1];
+            tmp_o[j * 2 + 0] = v0 * fcr - v1 * fci;
+            tmp_o[j * 2 + 1] = v0 * fci + v1 * fcr;
+        }
+        o.write(tmp_o);
+    }
 }
+// template<int HEAD>
+// void init_freq_arr(float arr[HEAD]){
+//   for (int i = 0; i < HEAD; i++) {
+//   arr[i] = 1.0f / hls::powf(10000.0f, ((i) / (float) MODEL_HEAD_SIZE));
+//   }
+// }
+
+// template<typename T, size_t N, int N_DIM = MODEL_ELEMENTS>
+// void rope_kernel (hls::stream<hls::vector<T, N>> &o, hls::stream<hls::vector<T, N>> &in, const int POS){
+//   float arr[MODEL_HEAD_SIZE];
+//   init_freq_arr<MODEL_HEAD_SIZE>(arr);
+//   ROPE_MAIN:
+//   for (int i = 0; i < (N_DIM / N); i++) {
+//     #pragma HLS loop_flatten 
+//  // increment by number of element in fdata_v_t
+  
+//   int k = i * N;
+//     hls::vector<T, N> tmp = in.read();
+//     hls::vector<T, N> tmp_o;
+//     head_dim_unroll_loop:
+//     for (int j = 0 ; j < (N / 2); j++) {
+//       #pragma HLS PIPELINE
+//       #pragma HLS UNROLL factor = 2
+//       int head_dim = (k + j * 2) % MODEL_HEAD_SIZE;
+//       float freq =  arr[head_dim]; /*1.0f / hls::powf(10000.0f, (float)head_dim/HEAD_SIZE);*/ 
+//       float val = POS * freq;
+//       float fcr;
+//       float fci;
+//       hls::sincosf(val, &fci, &fcr);
+//       float v0 = tmp[j * 2 + 0];
+//       float v1 = tmp[j * 2 + 1];
+//       tmp_o[j * 2 + 0] = v0 * fcr - v1 * fci;
+//       tmp_o[j * 2 + 1] = v0 * fci + v1 * fcr;
+//     }
+//     o.write(tmp_o);
+//   }
+// }
 
 /* *************************** MULTIHEAD ATTENTION FUNCTION *************************************/
 void mha_kernel(s_fdata_v_t &output, fdata_v_t *tokens, adata_v_t *key_cache,  adata_v_t *value_cache,  const int POS, const int CURR_LAYER);
@@ -395,11 +561,13 @@ void swiglu_kernel(s_fdata_v_t &output, fdata_v_t *w1w3);
 
 void transformer_cu(  
     fdata_v_t *tokens, 
-    mfdata_v_t *w_sf_0, idata_v_t *w_0, mfdata_v_t *w_sf_1, idata_v_t *w_1, 
+    // mfdata_v_t *w_sf_0, idata_v_t *w_0, mfdata_v_t *w_sf_1, idata_v_t *w_1, 
+		wide_t *w_0, wide_t *w_1,
     fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
-    const int POS, int QKV_W, const int QKV_sf_W,
-    const int Out_W, const int Out_sf_W, const int FF_w1w3_W, const int FF_w1w3_sf_W,
-    const int FF_w2_W, const int FF_w2_sf_W, const int Embed_W, const int Embed_sf_W, 
+    const int POS, 
+		// int QKV_W, const int QKV_sf_W,
+    // const int Out_W, const int Out_sf_W, const int FF_w1w3_W, const int FF_w1w3_sf_W,
+    // const int FF_w2_W, const int FF_w2_sf_W, const int Embed_W, const int Embed_sf_W, 
     const int rms_att_W, const int rms_ffn_W, const int rms_final_W, int *curr_token,
   #ifdef __DEBUG__
       const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
