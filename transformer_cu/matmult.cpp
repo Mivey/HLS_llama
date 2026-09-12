@@ -94,7 +94,7 @@ void mm_w_sum(hls::stream<float_t> &out, s_wide_t &w, s_idata_v_t &tok_w, hls::s
 		arr[i] = tok_w.read();
 	}
 
-	float_t psum_out[TOK_SF_MAX]{};
+	float_t psum_out[4]{};
 	float_t sum_out = 0;
 	#pragma HLS ARRAY_PARTITION variable=psum_out dim=1 type=complete
 	
@@ -113,26 +113,31 @@ void mm_w_sum(hls::stream<float_t> &out, s_wide_t &w, s_idata_v_t &tok_w, hls::s
 				#pragma HLS UNROLL
 				prod += (int32_t) (curr_tok[kk] * curr_w[kk]);
 			}
+
+			psum_out[jj % 4] += (float_t) prod * sf_in.read();
+
+			// float_t t = psum_out[7];
 			
-			for (int k = (TOK_SF_MAX - 1); k > 0; k--) {
-				#pragma HLS UNROLL
-				psum_out[k] = psum_out[k - 1];
-			}
-			psum_out[0] = (float_t)prod * sf_in.read();
+			// for (int k = (TOK_SF_MAX - 1); k > 0; k--) {
+			// 	#pragma HLS UNROLL
+			// 	psum_out[k] = psum_out[k - 1];
+			// }
+			// psum_out[0] = (float_t)prod * sf_in.read() + t;
 			
 		}
 		
-		for (int k = 0; k < TOK_SF_MAX; k++) {
+		for (int k = 0; k < 4; k++) {
 			#pragma HLS UNROLL
 			sum_out += psum_out[k];
+			psum_out[k] = 0;
 		}
 
 		out.write(sum_out);
 		
-		for (int k = 0; k < TOK_SF_MAX; k++) {
-			#pragma HLS UNROLL
-			psum_out[k] = 0;
-		}
+		// for (int k = 0; k < TOK_SF_MAX; k++) {
+		// 	#pragma HLS UNROLL
+		// 	psum_out[k] = 0;
+		// }
 		
 		sum_out = 0;
 	}

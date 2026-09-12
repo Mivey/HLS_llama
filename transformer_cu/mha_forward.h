@@ -422,108 +422,108 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
 
 /* *************************** RoPE FUNCTION *************************************/
 /* ---------- compile-time RoPE frequency table ---------- */
-namespace rope_detail {
+// namespace rope_detail {
 
-// constexpr exp, used only to build the table. Never synthesized.
-constexpr double ce_exp(double x) {
-    const long n = (long)(x * 1.4426950408889634 + (x < 0 ? -0.5 : 0.5));
-    const double r = x - n * 0.6931471805599453;
-    double term = 1.0, sum = 1.0;
-    for (int i = 1; i < 24; i++) { term *= r / i; sum += term; }
-    double p = 1.0;
-    if (n >= 0) for (long i = 0; i <  n; i++) p *= 2.0;
-    else        for (long i = 0; i < -n; i++) p *= 0.5;
-    return sum * p;
-}
-constexpr double LN_ROPE_BASE = 9.210340371976184;   // ln(10000); use ln(500000) for Llama-3
-
-constexpr int ROPE_PAIRS = MODEL_HEAD_SIZE / 2;
-
-struct FreqTable {
-    float f[ROPE_PAIRS];
-    constexpr FreqTable() : f() {
-        for (int i = 0; i < ROPE_PAIRS; i++)
-            f[i] = (float) ce_exp(-LN_ROPE_BASE * (2.0 * i) / (double) MODEL_HEAD_SIZE);
-    }
-};
-constexpr FreqTable kRopeFreq{};
-
-}   // namespace rope_detail
-template<typename T, size_t N, int N_DIM = MODEL_ELEMENTS>
-void rope_kernel(hls::stream<hls::vector<T, N>> &o,
-                 hls::stream<hls::vector<T, N>> &in, const int POS) {
-
-    static_assert(MODEL_HEAD_SIZE % N == 0, "vector must not straddle a head");
-    constexpr int PAIRS = rope_detail::ROPE_PAIRS;
-    static_assert((PAIRS & (PAIRS - 1)) == 0, "PAIRS must be a power of two for the mask");
-
-    /* 32 sincos per call instead of N_DIM/2 */
-    float tw_cos[PAIRS], tw_sin[PAIRS];
-    #pragma HLS ARRAY_PARTITION variable=tw_cos complete dim=1
-    #pragma HLS ARRAY_PARTITION variable=tw_sin complete dim=1
-
-    rope_twiddle:
-    for (int p = 0; p < PAIRS; p++) {
-        #pragma HLS PIPELINE II=1
-        float s, c;
-        hls::sincosf(POS * rope_detail::kRopeFreq.f[p], &s, &c);
-        tw_cos[p] = c;
-        tw_sin[p] = s;
-    }
-
-    ROPE_MAIN:
-    for (int i = 0; i < (N_DIM / N); i++) {
-        #pragma HLS PIPELINE II=1
-        hls::vector<T, N> tmp = in.read();
-        hls::vector<T, N> tmp_o;
-        for (int j = 0; j < (int)(N / 2); j++) {
-            #pragma HLS UNROLL
-            const int p   = (i * (int)(N / 2) + j) & (PAIRS - 1);
-            const float fcr = tw_cos[p], fci = tw_sin[p];
-            const float v0 = tmp[j * 2 + 0], v1 = tmp[j * 2 + 1];
-            tmp_o[j * 2 + 0] = v0 * fcr - v1 * fci;
-            tmp_o[j * 2 + 1] = v0 * fci + v1 * fcr;
-        }
-        o.write(tmp_o);
-    }
-}
-// template<int HEAD>
-// void init_freq_arr(float arr[HEAD]){
-//   for (int i = 0; i < HEAD; i++) {
-//   arr[i] = 1.0f / hls::powf(10000.0f, ((i) / (float) MODEL_HEAD_SIZE));
-//   }
+// // constexpr exp, used only to build the table. Never synthesized.
+// constexpr double ce_exp(double x) {
+//     const long n = (long)(x * 1.4426950408889634 + (x < 0 ? -0.5 : 0.5));
+//     const double r = x - n * 0.6931471805599453;
+//     double term = 1.0, sum = 1.0;
+//     for (int i = 1; i < 24; i++) { term *= r / i; sum += term; }
+//     double p = 1.0;
+//     if (n >= 0) for (long i = 0; i <  n; i++) p *= 2.0;
+//     else        for (long i = 0; i < -n; i++) p *= 0.5;
+//     return sum * p;
 // }
+// constexpr double LN_ROPE_BASE = 9.210340371976184;   // ln(10000); use ln(500000) for Llama-3
 
-// template<typename T, size_t N, int N_DIM = MODEL_ELEMENTS>
-// void rope_kernel (hls::stream<hls::vector<T, N>> &o, hls::stream<hls::vector<T, N>> &in, const int POS){
-//   float arr[MODEL_HEAD_SIZE];
-//   init_freq_arr<MODEL_HEAD_SIZE>(arr);
-//   ROPE_MAIN:
-//   for (int i = 0; i < (N_DIM / N); i++) {
-//     #pragma HLS loop_flatten 
-//  // increment by number of element in fdata_v_t
-  
-//   int k = i * N;
-//     hls::vector<T, N> tmp = in.read();
-//     hls::vector<T, N> tmp_o;
-//     head_dim_unroll_loop:
-//     for (int j = 0 ; j < (N / 2); j++) {
-//       #pragma HLS PIPELINE
-//       #pragma HLS UNROLL factor = 2
-//       int head_dim = (k + j * 2) % MODEL_HEAD_SIZE;
-//       float freq =  arr[head_dim]; /*1.0f / hls::powf(10000.0f, (float)head_dim/HEAD_SIZE);*/ 
-//       float val = POS * freq;
-//       float fcr;
-//       float fci;
-//       hls::sincosf(val, &fci, &fcr);
-//       float v0 = tmp[j * 2 + 0];
-//       float v1 = tmp[j * 2 + 1];
-//       tmp_o[j * 2 + 0] = v0 * fcr - v1 * fci;
-//       tmp_o[j * 2 + 1] = v0 * fci + v1 * fcr;
+// constexpr int ROPE_PAIRS = MODEL_HEAD_SIZE / 2;
+
+// struct FreqTable {
+//     float f[ROPE_PAIRS];
+//     constexpr FreqTable() : f() {
+//         for (int i = 0; i < ROPE_PAIRS; i++)
+//             f[i] = (float) ce_exp(-LN_ROPE_BASE * (2.0 * i) / (double) MODEL_HEAD_SIZE);
 //     }
-//     o.write(tmp_o);
-//   }
+// };
+// constexpr FreqTable kRopeFreq{};
+
+// }   // namespace rope_detail
+// template<typename T, size_t N, int N_DIM = MODEL_ELEMENTS>
+// void rope_kernel(hls::stream<hls::vector<T, N>> &o,
+//                  hls::stream<hls::vector<T, N>> &in, const int POS) {
+
+//     static_assert(MODEL_HEAD_SIZE % N == 0, "vector must not straddle a head");
+//     constexpr int PAIRS = rope_detail::ROPE_PAIRS;
+//     static_assert((PAIRS & (PAIRS - 1)) == 0, "PAIRS must be a power of two for the mask");
+
+//     /* 32 sincos per call instead of N_DIM/2 */
+//     float tw_cos[PAIRS], tw_sin[PAIRS];
+//     #pragma HLS ARRAY_PARTITION variable=tw_cos complete dim=1
+//     #pragma HLS ARRAY_PARTITION variable=tw_sin complete dim=1
+
+//     rope_twiddle:
+//     for (int p = 0; p < PAIRS; p++) {
+//         #pragma HLS PIPELINE II=1
+//         float s, c;
+//         hls::sincosf(POS * rope_detail::kRopeFreq.f[p], &s, &c);
+//         tw_cos[p] = c;
+//         tw_sin[p] = s;
+//     }
+
+//     ROPE_MAIN:
+//     for (int i = 0; i < (N_DIM / N); i++) {
+//         #pragma HLS PIPELINE II=1
+//         hls::vector<T, N> tmp = in.read();
+//         hls::vector<T, N> tmp_o;
+//         for (int j = 0; j < (int)(N / 2); j++) {
+//             #pragma HLS UNROLL
+//             const int p   = (i * (int)(N / 2) + j) & (PAIRS - 1);
+//             const float fcr = tw_cos[p], fci = tw_sin[p];
+//             const float v0 = tmp[j * 2 + 0], v1 = tmp[j * 2 + 1];
+//             tmp_o[j * 2 + 0] = v0 * fcr - v1 * fci;
+//             tmp_o[j * 2 + 1] = v0 * fci + v1 * fcr;
+//         }
+//         o.write(tmp_o);
+//     }
 // }
+template<int HEAD>
+void init_freq_arr(float arr[HEAD]){
+  for (int i = 0; i < HEAD; i++) {
+  arr[i] = 1.0f / hls::powf(10000.0f, ((i) / (float) MODEL_HEAD_SIZE));
+  }
+}
+
+template<typename T, size_t N, int N_DIM = MODEL_ELEMENTS>
+void rope_kernel (hls::stream<hls::vector<T, N>> &o, hls::stream<hls::vector<T, N>> &in, const int POS){
+  float arr[MODEL_HEAD_SIZE];
+  init_freq_arr<MODEL_HEAD_SIZE>(arr);
+  ROPE_MAIN:
+  for (int i = 0; i < (N_DIM / N); i++) {
+    #pragma HLS loop_flatten 
+ // increment by number of element in fdata_v_t
+  
+  int k = i * N;
+    hls::vector<T, N> tmp = in.read();
+    hls::vector<T, N> tmp_o;
+    head_dim_unroll_loop:
+    for (int j = 0 ; j < (N / 2); j++) {
+      #pragma HLS PIPELINE
+      #pragma HLS UNROLL factor = 2
+      int head_dim = (k + j * 2) % MODEL_HEAD_SIZE;
+      float freq =  arr[head_dim]; /*1.0f / hls::powf(10000.0f, (float)head_dim/HEAD_SIZE);*/ 
+      float val = POS * freq;
+      float fcr;
+      float fci;
+      hls::sincosf(val, &fci, &fcr);
+      float v0 = tmp[j * 2 + 0];
+      float v1 = tmp[j * 2 + 1];
+      tmp_o[j * 2 + 0] = v0 * fcr - v1 * fci;
+      tmp_o[j * 2 + 1] = v0 * fci + v1 * fcr;
+    }
+    o.write(tmp_o);
+  }
+}
 
 /* *************************** MULTIHEAD ATTENTION FUNCTION *************************************/
 void mha_kernel(s_fdata_v_t &output, fdata_v_t *tokens, adata_v_t *key_cache,  adata_v_t *value_cache,  const int POS, const int CURR_LAYER);
@@ -537,7 +537,7 @@ void swiglu(hls::stream<hls::vector<T, N>> &hb_out, hls::stream<hls::vector<T, N
   typedef hls::vector<T, N> tmp_t;
   const int HD_N_RATIO = MODEL_HIDDEN_DIM / N;
   for (int i = 0 ; i < HD_N_RATIO; i++) {
-  #pragma HLS pipeline II=1
+  #pragma HLS pipeline II=4
     tmp_t val = hb_in.read();
     tmp_t tmp_hb2 = hb2_in.read();
     tmp_t eval;
