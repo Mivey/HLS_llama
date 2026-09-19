@@ -5,7 +5,7 @@
 void debug_abs_intake(s_fdata_v_t &tokens_out, s_fdata_v_t &abs_tokens, s_fdata_v_t &tokens_in, 
                     fdata_v_t *data_out, const int save_addr, const int SF_COUNT){
   
-  const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
+  constexpr size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
   my_float_t max_val = 0.0f;
   
   group_scaling:
@@ -48,8 +48,8 @@ void abs_intake(s_fdata_v_t &tokens_out, s_fdata_v_t &abs_tokens, s_fdata_v_t &t
 
 void max_finder(hls::stream<my_float_t> &max_val, s_fdata_v_t & abs_tokens){
   
-  const my_float_t Q_MAX = 1.0f / 127.0f;
-  const int cnt = MODEL_SCALING_FACTOR / SM_FL_ELEM;
+  constexpr my_float_t Q_MAX = 1.0f / 127.0f;
+  constexpr int cnt = MODEL_SCALING_FACTOR / SM_FL_ELEM;
   my_float_t c_val[MODEL_SCALING_FACTOR];
   #pragma HLS ARRAY_PARTITION variable=c_val dim=1 type=complete
   //here we store token_out and then assign token_out[i] to c_val[i * MAX_FL_ELEM + k] = hls::absf(token_out[i][k])
@@ -77,31 +77,37 @@ void max_finder(hls::stream<my_float_t> &max_val, s_fdata_v_t & abs_tokens){
 
 void quant_out( hls::stream<my_float_t> &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens_in, hls::stream<my_float_t> &max_val){
   
-  const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
+  const int TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
+	constexpr int ratio = MODEL_SCALING_FACTOR / MAX_QUANT_ELEM;
+	constexpr int jratio = TOK_COUNT / ratio;
   my_float_t dscale = max_val.read(); 
   my_float_t scale = hls::recipf(dscale);//Q_MAX / max_val;
-  idata_v_t quant_tmp; // not an array anymore
+  idata_v_t quant_tmp[ratio]; // not an array anymore
   
   create_q_val:
-  for (size_t j = 0; j < TOK_COUNT; j++) {
+  for (int j = 0; j < TOK_COUNT; j++) {
     #pragma HLS PIPELINE
     fdata_v_t proc_tok = tokens_in.read();
+		const int jdx = j % jratio;
+		const int upper = j / jratio;
     
     create_q_val_ppl:	
-    for (size_t k = 0; k < SM_FL_ELEM; k++) {
+    for (int k = 0; k < SM_FL_ELEM; k++) {
       #pragma HLS UNROLL
-      quant_tmp[j * SM_FL_ELEM + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);
+      quant_tmp[upper][jdx * SM_FL_ELEM + k] = (my_quant_data_t) hls::roundf(proc_tok[k] * scale);
     }
   }
   
-  tok_out.write(quant_tmp);
+	for (int j = 0; j < ratio; j++) {
+		#pragma HLS UNROLL
+  	tok_out.write(quant_tmp[j]);
+	}
   tok_sf_out.write(dscale);
 }
 
 void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out, s_fdata_v_t &tokens, const int N_DIM){
   
   const size_t SF_COUNT = N_DIM / MODEL_SCALING_FACTOR;
-  const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
   
   for (int i = 0; i < SF_COUNT; i++) {
     #pragma HLS LOOP_TRIPCOUNT max=MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR min=MODEL_ELEMENTS / MODEL_SCALING_FACTOR
@@ -122,7 +128,6 @@ void quantizer_kernel(hls::stream<my_float_t>  &tok_sf_out, s_idata_v_t &tok_out
                       fdata_v_t *data_out, const int SAVE_ADDR){
                         
   const size_t SF_COUNT = N_DIM / MODEL_SCALING_FACTOR;
-  const size_t TOK_COUNT = MODEL_SCALING_FACTOR / SM_FL_ELEM;
   // #pragma HLS STREAM variable=tok_out depth=64
   // #pragma HLS STREAM variable=tok_sf_out depth=64
   for (int i = 0; i < SF_COUNT; i++) {

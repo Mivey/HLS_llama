@@ -233,14 +233,14 @@ void mha_kernel(s_fdata_v_t &output,//
 
 	mha_init(s_query, s_key_cache_in, s_value_cache_in, tokens, POS);
 	
-	mha_WAR_cache_read(s_key_cache_sl, key_cache, CURR_LAYER, POS);
-	mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, s_key_cache_sl, CURR_LAYER, POS);
+	// mha_WAR_cache_read(s_key_cache_sl, key_cache, CURR_LAYER, POS);
+	// mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, s_key_cache_sl, CURR_LAYER, POS);
 	
-	mha_WAR_cache_read(s_value_cache_sl, value_cache, CURR_LAYER, POS);
-	mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, s_value_cache_sl, CURR_LAYER, POS);
+	// mha_WAR_cache_read(s_value_cache_sl, value_cache, CURR_LAYER, POS);
+	// mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, s_value_cache_sl, CURR_LAYER, POS);
 	
-	// mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS); 
-	// mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, CURR_LAYER, POS);
+	mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS); 
+	mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, CURR_LAYER, POS);
 	mha_iterate(mha_it_sm, s_max_val, s_query, s_key_cache_to_kernel, POS + 1);
 	mha_softmax(att_sm_ws, s_iss_val, s_max_val, mha_it_sm, POS + 1);
 	mha_weighted_sum(xb_ws_q, att_sm_ws, s_iss_val, s_value_cache_to_kernel, POS + 1);
