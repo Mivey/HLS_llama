@@ -279,17 +279,23 @@ inline void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cach
 void transformer_cu(
         fdata_v_t *tokens,
 				wide_t *w_0, wide_t *w_1,
-        fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
+        fdata_v_t *weights, 
+				mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
         const int POS, 
-        const int rms_att_W, const int rms_ffn_W, const int rms_final_W, int *curr_token,
+        const int rms_att_W, 
+				const int rms_ffn_W, 
+				const int rms_final_W, 
+				int *curr_token,
       #ifdef __DEBUG__
         const int faker, const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
       #endif
       #ifdef __ULTRADEBUG__
         fdata_v_t *GeMV_data_out,
       #endif
-        const float temperature, const float coin,
-        const bool init_rms_flag, const bool prefill_flag){
+        const float temperature, 
+				const float coin,
+        const bool init_rms_flag, 
+				const bool prefill_flag){
   
   
   constexpr int q_size = (MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3 ) * MODEL_NUM_LAYERS + MODEL_TOKENS)) * sizeof(int8_t);
@@ -309,9 +315,9 @@ void transformer_cu(
 
   #pragma HLS INTERFACE mode=m_axi port=tokens         bundle=w_n_t_gemm     depth=nTOK_OUT_DEPTH   offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)
   // #pragma HLS INTERFACE mode=m_axi port=w_sf_0         bundle=D_TOK_W_SF_0     depth=HD_SF_DEPTH     offset=slave max_read_burst_length=(1024/MAX_DW * 8)    num_read_outstanding=4
-  #pragma HLS INTERFACE mode=m_axi port=w_0           bundle=D_W_GEMM_0     depth=WIDE_DEPTH   offset=slave max_read_burst_length=(4096/MAX_DW * 8)     num_read_outstanding=64 
+  #pragma HLS INTERFACE mode=m_axi port=w_0           bundle=D_W_GEMM_0     depth=WIDE_DEPTH   offset=slave max_read_burst_length=(4096/MAX_DW * 8)     num_read_outstanding=64 num_write_outstanding=1 max_write_burst_length=2
   // #pragma HLS INTERFACE mode=m_axi port=w_sf_1         bundle=D_TOK_W_SF_1       depth=HD_SF_DEPTH     offset=slave max_read_burst_length=(1024/MAX_DW * 8)    num_read_outstanding=4
-  #pragma HLS INTERFACE mode=m_axi port=w_1           bundle=D_W_GEMM_1     depth=WIDE_DEPTH   offset=slave max_read_burst_length=(4096/MAX_DW * 8)     num_read_outstanding=64 
+  #pragma HLS INTERFACE mode=m_axi port=w_1           bundle=D_W_GEMM_1     depth=WIDE_DEPTH   offset=slave max_read_burst_length=(4096/MAX_DW * 8)     num_read_outstanding=64 num_write_outstanding=1 max_write_burst_length=2
   #pragma HLS INTERFACE mode=m_axi port=weights        bundle=w_n_t_gemm     depth=RMS_DEPTH        offset=slave max_read_burst_length=(4096/SM_DW * 8)
   #pragma HLS INTERFACE mode=m_axi port=value_cache    bundle=vc_gemm        depth=CACHE_DEPTH      offset=slave max_read_burst_length=(4096/MAX_DW * 8)  max_write_burst_length=(512/MAX_DW * 8)	num_read_outstanding=64 
   #pragma HLS INTERFACE mode=m_axi port=key_cache      bundle=kc_gemm        depth=CACHE_DEPTH      offset=slave max_read_burst_length=(4096/MAX_DW * 8)  max_write_burst_length=(512/MAX_DW * 8)	num_read_outstanding=64 
