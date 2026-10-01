@@ -51,8 +51,8 @@ typedef float my_float_t;
 typedef int8_t my_quant_data_t;
 /* ************************************* */
 
-constexpr size_t MAX_DW = 256;
-constexpr size_t MID_DW = 256;
+constexpr size_t MAX_DW = 512;
+constexpr size_t MID_DW = 512;
 constexpr size_t QUANT_MODIFIER = 1;//(MAX_DW == 512) ? 2 : 1;
 constexpr size_t SM_DW = 128;
 constexpr size_t MAX_FL_ELEM = (MAX_DW / (sizeof(my_float_t) * 8));
@@ -125,6 +125,16 @@ inline idata_v_t to_idvt(const wide_t &t){
 	return v;
 }
 
+inline wide_t to_wide_t(const idata_v_t &t){
+	#pragma HLS INLINE
+	wide_t v;
+	for (int ci = 0; ci < MAX_QUANT_ELEM; ci++) {
+		#pragma HLS UNROLL
+		v.range(( ci + 1) * 8 - 1, ci * 8) = t[ci];
+	}
+	return v;
+}
+
 template<typename T, int N>
 void inf_split_tee(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vCount){
   
@@ -173,7 +183,7 @@ void inf_round_robin(hls::stream<T> (&out)[N], hls::stream<T> &in, const int vEl
       elem_per_stream_loop:
       for (int k = 0; k < vElem; k++) {
       #pragma HLS PIPELINE II=1 //style=flp
-        #pragma HLS LOOP_TRIPCOUNT min=(MODEL_ELEMENTS / (MODEL_SCALING_FACTOR * SM_FL_ELEM)) max=(MODEL_TOKENS/MAX_QUANT_ELEM)
+        // #pragma HLS LOOP_TRIPCOUNT min=(MODEL_ELEMENTS / (MODEL_SCALING_FACTOR * SM_FL_ELEM)) max=(MODEL_TOKENS/MAX_QUANT_ELEM)
         T data = in.read();
         out[j].write(data);
       }
@@ -308,9 +318,10 @@ void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, T *in, const int CO
 		}
 	}
 }
-template<typename T>//
-void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, T *in, const int N_FRAMES, const int PORT, const int NPORT, const int offset){
-  
+
+template<typename T, int PORT, int NPORT>//
+void mm2ds_get_data(hls::stream<T> &out, T *in, const int N_FRAMES, const int offset){
+	
 	const int STRIDE = TXFR_FRAME * NPORT; // 204 * 2
 	
 	// #pragma HLS BIND_OP variable=tot_off op=mul impl=dsp latency=2 // WTF
@@ -319,28 +330,73 @@ void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, T *in, const int N_
 	AXI4_TXFR:
 	for (int i = 0; i < N_FRAMES; i++) {
 		T* frame = base + i * STRIDE;
-		
-		// SF_PTR:
-		// for (int j = 0; j < SF_FRAME; j++) {
-		// 	#pragma HLS PIPELINE II=1
-		// 	sf.write(frame[j]);
-		// }
-
-		// Q_PTR:
-		// for (int j = 0; j < QUANT_FRAME; j++) {
-		// 	#pragma HLS PIPELINE II=1
-		// 	w.write(frame[j + SF_FRAME]);
-		// }
 
 		FRAME_READ:
 		for (int j = 0; j < TXFR_FRAME; j++) {
 			#pragma HLS PIPELINE II=1
 			T beat = frame[j];
-			
-			if (j < SF_FRAME)	sf.write(beat);
-			else 							w.write(beat); 
+			out.write(beat);
 		}
 	}
+}
+
+template<typename T>
+void amm2ds_split_data(hls::stream<T> &sf, hls::stream<T> &w, hls::stream<T> &in, const int N_FRAMES){
+  
+	// const int STRIDE = TXFR_FRAME * NPORT; // 204 * 2
+	
+	// #pragma HLS BIND_OP variable=tot_off op=mul impl=dsp latency=2 // WTF
+	// T* base = in + offset + PORT * TXFR_FRAME;
+	
+	AXI4_TXFR:
+	for (int i = 0; i < N_FRAMES; i++) {
+		// #pragma HLS PIPELINE
+		FRAME_SF_READ:
+		for (int j = 0; j < SF_FRAME; j++) {
+			#pragma HLS PIPELINE II=1
+			sf.write(in.read());
+		}
+		
+		FRAME_W_READ:
+		for (int j = 0; j < QUANT_FRAME; j++) {
+			#pragma HLS PIPELINE II=1
+			w.write(in.read());
+		}
+	}
+}
+
+template<typename T>
+void mm2ds_split_data(hls::stream<T> &sf, hls::stream<T> &w, hls::stream<T> &in, const int N_FRAMES){
+  
+	// const int STRIDE = TXFR_FRAME * NPORT; // 204 * 2
+	
+	// #pragma HLS BIND_OP variable=tot_off op=mul impl=dsp latency=2 // WTF
+	// T* base = in + offset + PORT * TXFR_FRAME;
+	int j = 0;
+	AXI4_TXFR:
+	for (int i = 0; i < N_FRAMES * TXFR_FRAME; i++) {
+		// #pragma HLS PIPELINE
+
+		T tmp = in.read();
+		
+		if (j < SF_FRAME) {
+			j++;
+			sf.write(tmp);
+		} else {
+			j = (j == (TXFR_FRAME - 1)) ? 0 : j + 1;
+			w.write(tmp);
+		}
+	}
+}
+
+template<typename T, int PORT, int NPORT>//
+void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, T *in, const int N_FRAMES, const int offset){
+  
+	#pragma HLS DATAFLOW
+	hls::stream<T> dout;
+	#pragma HLS STREAM variable=dout depth=32
+	mm2ds_get_data<T, PORT, NPORT>(dout, in, N_FRAMES, offset);
+	mm2ds_split_data(sf, w, dout, N_FRAMES);
 }
 
 template<typename T, size_t N>
@@ -402,17 +458,90 @@ void mha_WAR_store_load(hls::vector<T, N> *cache, hls::stream<hls::vector<T, N>>
     }
 	}
 }
+/* *************************** GeMV rtl FUNCTION *************************************/
+void s_rtl_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, s_wide_t &s_wsf, s_wide_t &s_w, const int N_DIM, const int M_DIM);
 
 /* *************************** GeMV FUNCTION *************************************/
-
-
-void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, s_mfdata_v_t &s_wsf, s_idata_v_t &s_w, const int N_DIM, const int M_DIM);
-
-void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, s_wide_t &s_wsf, s_wide_t &s_w, const int N_DIM, const int M_DIM);
 
 constexpr size_t TOK_QUANT_MAX =  (MODEL_HIDDEN_DIM / MAX_QUANT_ELEM);
 constexpr size_t TOK_SF_MAX = (MODEL_HIDDEN_DIM / MODEL_SCALING_FACTOR);
 
+void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, s_mfdata_v_t &s_wsf, s_idata_v_t &s_w, const int N_DIM, const int M_DIM);
+
+// template<int MM_THR = 2>
+// void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, s_wide_t &s_wsf, s_wide_t &s_w, const int N_DIM, const int M_DIM);
+void mm_part_out (hls::stream<float_t> &out, s_wide_t &w, s_idata_v_t &tok_w, hls::stream<float_t> &sf_in, const int N_DIM_SF, const int vCount);
+void mm_reduce_add (hls::stream<float_t> &out, hls::stream<float_t> &in, const int SF_CNT, const int M_DIM);
+
+template<typename T, size_t N, size_t M>
+void mm_sf_val(hls::stream<float_t> &out, hls::stream<hls::vector<T, N>> &tok_sf, s_wide_t &w_sf, const int N_DIM_SF, const int vCount){
+	
+	float_t arr[TOK_SF_MAX];
+	const int sfCnt = N_DIM_SF;
+	// const int vCount = (N_DIM_SF * M_DIM);
+	
+	mm_tok_sf:
+	for (int i = 0; i < sfCnt/N; i++) {
+		#pragma HLS PIPELINE
+		hls::vector<T, N> tmp = tok_sf.read();
+		for (int j = 0; j < N; j++) {
+			#pragma HLS UNROLL
+			arr[i * N + j] = tmp[j];
+		}
+	}
+	
+	// wide_t tmp_w;
+	hls::vector<T, M> tmp_shift;
+
+	mm_sf_out:
+	for (int ii = 0; ii < vCount; ii++) {
+		#pragma HLS PIPELINE II=1
+		
+		int idx = ii % M;
+		int kdx = ii % sfCnt;
+		
+		if (idx == 0) {
+			// tmp_w = ;
+			tmp_shift = to_mfdvt(w_sf.read());
+		}
+
+		float_t tmpo = tmp_shift[0] * arr[kdx];
+		out.write(tmpo);
+
+		for (int jj = 0 ; jj < (M - 1); jj++) {
+			#pragma HLS UNROLL
+			tmp_shift[jj] = tmp_shift[jj + 1];
+		}
+	}
+}
+
+template<int MM_THR>
+void s_GeMV_kernel(hls::stream<my_float_t> &out, s_fdata_v_t &tok_sf, s_idata_v_t &tok_q, //
+    s_wide_t &s_wsf, s_wide_t &s_w, const int N_DIM, const int M_DIM){
+	
+  const int N_DIM_SF = N_DIM / MODEL_SCALING_FACTOR;
+	const int vCount = M_DIM * N_DIM_SF;
+	const int SF_CNT = N_DIM_SF;
+  
+  #pragma HLS DATAFLOW
+  hls::stream<my_float_t> part_out;
+	hls::stream<float_t> sf_out;
+	hls::stream<float_t> part_rr[MM_THR], out_rr[MM_THR];
+	#pragma HLS STREAM variable=part_rr depth = 96
+	#pragma HLS STREAM variable=out_rr depth = 64
+	#pragma HLS STREAM variable=part_out depth = 64
+	#pragma HLS STREAM variable=sf_out depth = 64
+  
+	mm_sf_val<float_t, SM_FL_ELEM, MAX_FL_ELEM>(sf_out, tok_sf, s_wsf, N_DIM_SF, vCount);
+	mm_part_out(part_out, s_w, tok_q, sf_out, N_DIM_SF, vCount);
+	inf_round_robin(part_rr, part_out, N_DIM_SF, M_DIM);
+	for (int i = 0; i < MM_THR; i++) {
+		#pragma HLS UNROLL
+		mm_reduce_add(out_rr[i], part_rr[i], N_DIM_SF, M_DIM/MM_THR);
+	}
+	rr_merge(out, out_rr, M_DIM);
+  return;
+}
 
 
 /* *************************** QUANTIZER FUNCTION *************************************/
