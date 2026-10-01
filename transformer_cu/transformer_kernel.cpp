@@ -61,30 +61,31 @@ void cu_selecter(  s_fdata_v_t &s_tokens, hls::stream<keys> &key_out,
 	// bool go = start.read(); // not using for now...
   fsm_data cs = curr_state.read();
   keys r = cs.gemv_config;
-  
+  key_out.write(r);
+	
   switch (cs.state) {
 		case 0 :  
-			key_out.write(r);
+			// key_out.write(r);
 			rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_att_W / sizeof(fdata_v_t)); 
 			break;
 							
 		case 1 :  
-			key_out.write(r);
+			// key_out.write(r);
 			mha_kernel(s_tokens, diff, key_cache, value_cache, tt.POS, r.CURR_LAYER); 
 			break;
 							
 		case 2 :  
-			key_out.write(r);
+			// key_out.write(r);
 			rmsnorm_kernel(s_tokens, diff, weights, res_con, r.CURR_LAYER, tt.rms_ffn_W / sizeof(fdata_v_t));
 			break;
 							
 		case 3 :  
-			key_out.write(r);
+			// key_out.write(r);
 			swiglu_kernel(s_tokens, diff); 
 			break;
 							
 		case 4 :  
-			key_out.write(r);
+			// key_out.write(r);
 			rmsnorm_kernel(s_tokens, diff, weights, res_con, 0, tt.rms_final_W/ sizeof(fdata_v_t)); 
 			break;
   }
@@ -148,18 +149,9 @@ fsm_data weight_fsm(const axi_reg &tt, fsm_data &next_state){
   return curr_state;
 }
 
-// void weights_df(s_wide_t (&s_sf)[2], s_wide_t (&s_w)[2], wide_t *w_0, wide_t *w_1, const int CTRL_CNT){
-// 	// const int CTRL_CNT = MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3) * MODEL_NUM_LAYERS + MODEL_TOKENS) * 17 / (16 * MAX_QUANT_ELEM);
-
-//   #pragma HLS DATAFLOW
-// 	mm2ds_input_data(s_sf[0], s_w[0], w_0, CTRL_CNT, 0, 0);
-// 	mm2ds_input_data(s_sf[1], s_w[1], w_1, CTRL_CNT, 0, TXFR_FRAME);
-// }
-
-
 void calc_loop(  fdata_v_t *out, ProbIndex *ss_reg, 
         wide_t* w_0, wide_t* w_1,
-        s_fdata_v_t &s_cu_sel_in, hls::stream<keys> &vec_cnt
+        s_fdata_v_t &s_cu_sel_in, const keys r
         #ifdef __DEBUG__
         , fdata_v_t *data_out
         #endif
@@ -169,7 +161,7 @@ void calc_loop(  fdata_v_t *out, ProbIndex *ss_reg,
         ){
 	
   #pragma HLS DATAFLOW 
-  const keys r = vec_cnt.read();
+  // const keys r = vec_cnt.read();
   // #pragma HLS INLINE
 	// s_mfdata_v_t s_wsf[mm_thr];
   s_idata_v_t s_tok_q, s_inf_tok_q[mm_thr];
@@ -191,8 +183,8 @@ void calc_loop(  fdata_v_t *out, ProbIndex *ss_reg,
   #pragma HLS STREAM variable=s_inf_tok_q depth=8 //MODEL_HIDDEN_DIM/MAX_QUANT_ELEM
   #pragma HLS STREAM variable=sys_sort depth=64
 	
-	mm2ds_input_data(s_sf[0], s_w[0], w_0, r.N_FRAMES, 0, mm_thr, r.OFFSET);
-	mm2ds_input_data(s_sf[1], s_w[1], w_1, r.N_FRAMES, 1, mm_thr, r.OFFSET);
+	mm2ds_input_data<wide_t, 0, 2>(s_sf[0], s_w[0], w_0, r.N_FRAMES, r.OFFSET);
+	mm2ds_input_data<wide_t, 1, 2>(s_sf[1], s_w[1], w_1, r.N_FRAMES, r.OFFSET);
 	
   quantizer_kernel(s_tok_sf, s_tok_q, s_cu_sel_in, r.N_DIM
   #ifdef __DEBUG__
@@ -205,7 +197,7 @@ void calc_loop(  fdata_v_t *out, ProbIndex *ss_reg,
 
 	for (int k = 0 ; k < mm_thr; k++) {
 	#pragma HLS UNROLL
-	s_GeMV_kernel(s_out[k], s_inf_tok_sf[k], s_inf_tok_q[k], s_sf[k], s_w[k], r.N_DIM, r.M_DIM/2); }
+	s_rtl_GeMV_kernel(s_out[k], s_inf_tok_sf[k], s_inf_tok_q[k], s_sf[k], s_w[k], r.N_DIM, r.M_DIM/mm_thr); }
   
   gemv_split(out, sys_sort, s_out, r.M_DIM, r.FINAL_FLAG
                 #ifdef __ULTRADEBUG__
@@ -213,65 +205,6 @@ void calc_loop(  fdata_v_t *out, ProbIndex *ss_reg,
                 #endif
                 );
   insertion_sort(sys_sort, ss_reg, r.M_DIM);
-}
-
-inline void calc_fsm(fdata_v_t *tokens, fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
-              wide_t* w_0, wide_t* w_1,
-							const int CTRL_CNT, hls::stream<fsm_data> &s_curr_fsm, const axi_reg &tt,
-      #ifdef __DEBUG__
-        const int CURR_LAYER, const int NEXT_STATE, fdata_v_t *data_out,
-      #endif
-      #ifdef __ULTRADEBUG__
-        fdata_v_t *GeMV_data_out,
-      #endif 
-      const float_t temperature, int32_t *curr_token, const float_t coin, const bool rms_flag, const bool prefill_flag){
-  
-	#pragma HLS INLINE
-  const int RMS_SIZE = MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1);
-  fdata_v_t internal_token[INTERNAL_DATA_SIZE/SM_FL_ELEM];
-  fdata_v_t res_con[MODEL_ELEMENTS / SM_FL_ELEM]{};
-  static fdata_v_t internal_rms_weights[RMS_SIZE / SM_FL_ELEM];
-  ProbIndex ss_reg[REG_SIZE];
-  float_t internal_coin;
-  
-  #pragma HLS ARRAY_PARTITION variable=internal_token dim=1 factor=2 type=block
-  #pragma HLS BIND_STORAGE variable=internal_token type=ram_1p impl=bram
-  #pragma HLS BIND_STORAGE variable=internal_rms_weights type=ram_1p impl=uram
-  #pragma HLS ARRAY_PARTITION variable=ss_reg complete dim=1
-  #pragma HLS BIND_STORAGE variable=res_con type=ram_2p
-  
-	// ===== IINITIALIZE RMS =====
-  if (rms_flag) {
-    // load weights into memory
-    mm2mm_store(internal_rms_weights, weights, (MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1)));
-  }
-	// int ct = *curr_token;
-  // ===== INITIALIZE TOKENS =====
-	int ct = curr_token[tt.POS];
-  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 0, INTERNAL_DATA_SIZE, ct * (int32_t) (MODEL_ELEMENTS / SM_FL_ELEM));
-  mm2mm_store(internal_token, tokens, MODEL_ELEMENTS, 2, 1, INTERNAL_DATA_SIZE, ct * (int32_t) (MODEL_ELEMENTS / SM_FL_ELEM));
-
-  for(int ii = 0; ii < CTRL_CNT; ii++) {
-    s_fdata_v_t s_cu_sel_out;
-    hls::stream<keys> vec_cnt;
-    #pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
-    
-    cu_selecter(s_cu_sel_out, vec_cnt, internal_rms_weights, internal_token, key_cache, value_cache, res_con, s_curr_fsm, tt);
-    calc_loop(internal_token, ss_reg, w_0, w_1, s_cu_sel_out, vec_cnt
-      #ifdef __DEBUG__
-      , data_out
-      #endif
-      #ifdef __ULTRADEBUG__
-      , GeMV_data_out
-      #endif
-    );
-  }
-    // ss_final(ss_reg, tokens, temperature, 0.9, coin);
-		ss_final(ss_reg, ct, temperature, 0.9, coin);
-		if (!prefill_flag) {
-			curr_token[tt.POS + 1] = ct;
-		}
-		
 }
 
 /* ================ TRANSFORMER KERNEL ================ TRANSFORMER KERNEL ================ TRANSFORMER KERNEL ================ TRANSFORMER KERNEL ================ */ 
@@ -387,27 +320,6 @@ void transformer_cu(
 
 
 	/* ========== DATAFLOW ========== DATAFLOW ========== DATAFLOW ========== DATAFLOW ========== DATAFLOW ========== DATAFLOW ========== DATAFLOW */
-  // #pragma HLS DATAFLOW
-	// s_wide_t s_w[mm_thr];
-	// s_wide_t s_sf[mm_thr];
-	// #pragma HLS STREAM variable=s_w	depth=4096
-	// #pragma HLS BIND_STORAGE variable=s_w type=fifo impl=uram
-	// #pragma HLS STREAM variable=s_sf	depth=4096
-	// #pragma HLS BIND_STORAGE variable=s_sf type=fifo impl=uram
-	// weights_df(s_sf, s_w, w_0, w_1, TOT_CNT);
-
-	
-	// calc_fsm(tokens, weights, key_cache, value_cache, w_0, w_1, CTRL_CNT, s_curr_state, tt,
-  //     #ifdef __DEBUG__
-  //       CURR_LAYER, NEXT_STATE, data_out,
-  //     #endif
-			
-  //     #ifdef __ULTRADEBUG__
-  //       GeMV_data_out,
-  //     #endif 
-			
-	// 		 temperature, curr_token, coin, init_rms_flag, prefill_flag);
-
 
   const int RMS_SIZE = MODEL_ELEMENTS * (MODEL_NUM_LAYERS * 2 + 1);
   fdata_v_t internal_token[INTERNAL_DATA_SIZE/SM_FL_ELEM];
@@ -439,7 +351,8 @@ void transformer_cu(
     #pragma HLS STREAM variable=s_cu_sel_out depth=MODEL_HIDDEN_DIM/SM_FL_ELEM
     
     cu_selecter(s_cu_sel_out, vec_cnt, internal_rms_weights, internal_token, key_cache, value_cache, res_con, s_curr_state, tt);
-    calc_loop(internal_token, ss_reg, w_0, w_1, s_cu_sel_out, vec_cnt
+		const keys r = vec_cnt.read();
+    calc_loop(internal_token, ss_reg, w_0, w_1, s_cu_sel_out, r
       #ifdef __DEBUG__
       , data_out
       #endif
