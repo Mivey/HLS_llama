@@ -190,6 +190,13 @@ void mha_kernel(s_fdata_v_t &output,//
   const size_t VAL_START = (INTERNAL_DATA_SIZE / 2) / MODEL_HEAD_SIZE + MODEL_NUM_HEADS / 2;
   const size_t KEY_START = MODEL_NUM_HEADS;
 
+  const int vec_per_head = MODEL_HEAD_SIZE / MAX_FL_ELEM;
+
+  const int layer_offset = CURR_LAYER * MODEL_NUM_HEADS * MODEL_SEQUENCE_LEN * vec_per_head;
+  const int head_offset = MODEL_SEQUENCE_LEN * vec_per_head;
+  const int pos_offset = POS * vec_per_head;
+  const int vec_to_read = vec_per_head * (POS); // remove the + 1 from here.
+
 	
 	s_mfdata_v_t xb_ws_q("WS to Quantizer for XB Stream");
 	s_fdata_v_t max_tok_out;
@@ -230,11 +237,20 @@ void mha_kernel(s_fdata_v_t &output,//
 
 	
 	#pragma HLS DATAFLOW
+	s_mfdata_v_t s_kc_data, s_kc_ddr, s_vc_data, s_vc_ddr;
 
 	mha_init(s_query, s_key_cache_in, s_value_cache_in, tokens, POS);
 	
-	mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS); 
-	mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, CURR_LAYER, POS);
+	// mha_WAR_store_load(key_cache, s_key_cache_to_kernel, s_key_cache_in, CURR_LAYER, POS); 
+	mha_stream_read(key_cache, s_kc_data, s_key_cache_in, head_offset, layer_offset, vec_per_head, pos_offset);
+	mha_DDR_read(key_cache, s_kc_ddr, layer_offset, head_offset, vec_to_read);
+	mha_interweave(s_key_cache_to_kernel, s_kc_ddr, s_kc_data, vec_per_head, layer_offset, head_offset, vec_to_read);
+	
+	// mha_WAR_store_load(value_cache, s_value_cache_to_kernel, s_value_cache_in, CURR_LAYER, POS);
+	mha_stream_read(value_cache, s_vc_data, s_value_cache_in, head_offset, layer_offset, vec_per_head, pos_offset);
+	mha_DDR_read(value_cache, s_vc_ddr, layer_offset, head_offset, vec_to_read);
+	mha_interweave(s_value_cache_to_kernel, s_vc_ddr, s_vc_data, vec_per_head, layer_offset, head_offset, vec_to_read);
+	
 	mha_iterate(mha_it_sm, s_max_val, s_query, s_key_cache_to_kernel, POS + 1);
 	mha_softmax(att_sm_ws, s_iss_val, s_max_val, mha_it_sm, POS + 1);
 	mha_weighted_sum(xb_ws_q, att_sm_ws, s_iss_val, s_value_cache_to_kernel, POS + 1);
