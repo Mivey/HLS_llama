@@ -375,7 +375,7 @@ void mm2ds_split_data(hls::stream<T> &sf, hls::stream<T> &w, hls::stream<T> &in,
 	int j = 0;
 	AXI4_TXFR:
 	for (int i = 0; i < N_FRAMES * TXFR_FRAME; i++) {
-		// #pragma HLS PIPELINE
+		#pragma HLS PIPELINE II=1
 
 		T tmp = in.read();
 		

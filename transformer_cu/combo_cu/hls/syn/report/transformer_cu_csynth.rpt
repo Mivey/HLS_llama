@@ -3,7 +3,7 @@
 ================================================================
 == Vitis HLS Report for 'transformer_cu'
 ================================================================
-* Date:           Sat Oct  3 16:35:08 2026
+* Date:           Sat Oct  3 17:32:34 2026
 
 * Version:        2025.2 (Build 6295257 on Nov 14 2025)
 * Project:        combo_cu
@@ -20,7 +20,7 @@
     +--------+---------+----------+------------+
     |  Clock |  Target | Estimated| Uncertainty|
     +--------+---------+----------+------------+
-    |ap_clk  |  3.30 ns|  2.370 ns|     0.99 ns|
+    |ap_clk  |  3.30 ns|  2.380 ns|     0.99 ns|
     +--------+---------+----------+------------+
 
 + Latency: 
@@ -71,16 +71,16 @@
 |DSP              |        -|    -|       -|       -|    -|
 |Expression       |        -|    -|       0|     481|    -|
 |FIFO             |       13|    -|     587|     232|    -|
-|Instance         |      166|  318|  142712|  273890|   82|
+|Instance         |      166|  318|  142553|  273546|   82|
 |Memory           |        8|    -|     128|     524|    4|
-|Multiplexer      |        -|    -|       0|    1782|    -|
-|Register         |        -|    -|    5615|       -|    -|
+|Multiplexer      |        -|    -|       0|    1612|    -|
+|Register         |        -|    -|    5423|       -|    -|
 +-----------------+---------+-----+--------+--------+-----+
-|Total            |      187|  318|  149042|  276909|   86|
+|Total            |      187|  318|  148691|  276395|   86|
 +-----------------+---------+-----+--------+--------+-----+
 |Available        |      310|  464|  300544|  150272|  155|
 +-----------------+---------+-----+--------+--------+-----+
-|Utilization (%)  |       60|   68|      49|     184|   55|
+|Utilization (%)  |       60|   68|      49|     183|   55|
 +-----------------+---------+-----+--------+--------+-----+
 
 + Detail: 
@@ -89,8 +89,8 @@
     |                          Instance                          |                     Module                     | BRAM_18K| DSP |   FF  |   LUT  | URAM|
     +------------------------------------------------------------+------------------------------------------------+---------+-----+-------+--------+-----+
     |D_W_GEMM_0_m_axi_U                                          |D_W_GEMM_0_m_axi                                |        0|    0|   2219|    1586|    8|
-    |D_W_GEMM_1_m_axi_U                                          |D_W_GEMM_1_m_axi                                |        0|    0|   2196|    1242|    8|
-    |grp_calc_loop_fu_1627                                       |calc_loop                                       |       16|   83|  63450|   90751|   32|
+    |D_W_GEMM_1_m_axi_U                                          |D_W_GEMM_1_m_axi                                |        0|    0|   2219|    1586|    8|
+    |grp_calc_loop_fu_1627                                       |calc_loop                                       |       16|   83|  63314|   90751|   32|
     |control_s_axi_U                                             |control_s_axi                                   |        0|    0|    952|    1644|    0|
     |fcmp_32ns_32ns_1_1_no_dsp_1_x_U2006                         |fcmp_32ns_32ns_1_1_no_dsp_1_x                   |        0|    0|      0|       0|    0|
     |frecip_32ns_32ns_32_18_full_dsp_1_U2007                     |frecip_32ns_32ns_32_18_full_dsp_1               |        0|    8|    277|     115|    0|
@@ -108,9 +108,9 @@
     |grp_transformer_cu_Pipeline_softmax_exp_loop_fu_1787        |transformer_cu_Pipeline_softmax_exp_loop        |        0|    3|   3642|    2789|    0|
     |grp_transformer_cu_Pipeline_softmax_normalize_loop_fu_1921  |transformer_cu_Pipeline_softmax_normalize_loop  |        0|    1|    198|     754|    0|
     |vc_gemm_m_axi_U                                             |vc_gemm_m_axi                                   |        0|    0|   4662|    3008|    8|
-    |w_n_t_gemm_m_axi_U                                          |w_n_t_gemm_m_axi                                |        0|    0|   3054|    3095|    2|
+    |w_n_t_gemm_m_axi_U                                          |w_n_t_gemm_m_axi                                |        0|    0|   3008|    2407|    2|
     +------------------------------------------------------------+------------------------------------------------+---------+-----+-------+--------+-----+
-    |Total                                                       |                                                |      166|  318| 142712|  273890|   82|
+    |Total                                                       |                                                |      166|  318| 142553|  273546|   82|
     +------------------------------------------------------------+------------------------------------------------+---------+-----+-------+--------+-----+
 
     * DSP: 
@@ -163,15 +163,15 @@
     |add_ln423_fu_2157_p2                         |         +|   0|  0|  64|          64|          64|
     |ros_fu_2186_p2                               |         +|   0|  0|  32|          32|           7|
     |IN_OFF_fu_2140_p2                            |         -|   0|  0|  32|          32|          32|
-    |ap_block_state142_on_subcall_done            |       and|   0|  0|   2|           1|           1|
-    |ap_block_state219_io                         |       and|   0|  0|   2|           1|           1|
-    |ap_block_state505_on_subcall_done            |       and|   0|  0|   2|           1|           1|
-    |ap_block_state627                            |       and|   0|  0|   2|           1|           1|
+    |ap_block_state155_io                         |       and|   0|  0|   2|           1|           1|
+    |ap_block_state313_on_subcall_done            |       and|   0|  0|   2|           1|           1|
+    |ap_block_state435                            |       and|   0|  0|   2|           1|           1|
+    |ap_block_state78_on_subcall_done             |       and|   0|  0|   2|           1|           1|
     |icmp_ln348_fu_2243_p2                        |      icmp|   0|  0|  16|          32|          32|
     |ap_block_state1                              |        or|   0|  0|   2|           1|           1|
     |ap_block_state2_on_subcall_done              |        or|   0|  0|   2|           1|           1|
-    |ap_block_state503_on_subcall_done            |        or|   0|  0|   2|           1|           1|
-    |ap_predicate_pred8370_state503               |        or|   0|  0|   2|           1|           1|
+    |ap_block_state311_on_subcall_done            |        or|   0|  0|   2|           1|           1|
+    |ap_predicate_pred6834_state311               |        or|   0|  0|   2|           1|           1|
     |ap_sync_grp_calc_loop_fu_1627_ap_ready       |        or|   0|  0|   2|           1|           1|
     |ap_sync_grp_mha_kernel_fu_1590_ap_ready      |        or|   0|  0|   2|           1|           1|
     |ap_sync_grp_rmsnorm_kernel_fu_1549_ap_ready  |        or|   0|  0|   2|           1|           1|
@@ -190,7 +190,7 @@
     |D_W_GEMM_0_0_RREADY                                                                    |    1|          2|    1|          2|
     |D_W_GEMM_1_0_ARVALID                                                                   |    1|          2|    1|          2|
     |D_W_GEMM_1_0_RREADY                                                                    |    1|          2|    1|          2|
-    |ap_NS_fsm                                                                              |  341|        628|    1|        628|
+    |ap_NS_fsm                                                                              |  171|        436|    1|        436|
     |ap_done                                                                                |    1|          2|    1|          2|
     |ap_phi_mux_ct_1_phi_fu_1485_p6                                                         |   16|          3|   16|         48|
     |ct_1_reg_1482                                                                          |   16|          3|   16|         48|
@@ -295,7 +295,7 @@
     |w_n_t_gemm_0_WVALID                                                                    |    1|          2|    1|          2|
     |w_n_t_gemm_blk_n_AR                                                                    |    1|          2|    1|          2|
     +---------------------------------------------------------------------------------------+-----+-----------+-----+-----------+
-    |Total                                                                                  | 1782|        967| 1073|       4145|
+    |Total                                                                                  | 1612|        775| 1073|       3953|
     +---------------------------------------------------------------------------------------+-----+-----------+-----+-----------+
 
     * Register: 
@@ -307,12 +307,12 @@
     |POS_r_read_reg_4683                                                      |   32|   0|   32|          0|
     |add_ln348_reg_4787                                                       |   31|   0|   31|          0|
     |add_ln367_reg_5267                                                       |   32|   0|   32|          0|
-    |ap_CS_fsm                                                                |  627|   0|  627|          0|
+    |ap_CS_fsm                                                                |  435|   0|  435|          0|
     |ap_done_reg                                                              |    1|   0|    1|          0|
-    |ap_predicate_pred3309_state503                                           |    1|   0|    1|          0|
-    |ap_predicate_pred3326_state503                                           |    1|   0|    1|          0|
-    |ap_predicate_pred3329_state503                                           |    1|   0|    1|          0|
-    |ap_predicate_pred8370_state503                                           |    1|   0|    1|          0|
+    |ap_predicate_pred3117_state311                                           |    1|   0|    1|          0|
+    |ap_predicate_pred3134_state311                                           |    1|   0|    1|          0|
+    |ap_predicate_pred3137_state311                                           |    1|   0|    1|          0|
+    |ap_predicate_pred6834_state311                                           |    1|   0|    1|          0|
     |ap_rst_n_inv                                                             |    1|   0|    1|          0|
     |ap_rst_reg_1                                                             |    1|   0|    1|          0|
     |ap_rst_reg_2                                                             |    1|   0|    1|          0|
@@ -515,7 +515,7 @@
     |w_n_t_gemm_0_ARVALID_local                                               |    1|   0|    1|          0|
     |w_n_t_gemm_0_rreq_wait_hs                                                |    1|   0|    1|          0|
     +-------------------------------------------------------------------------+-----+----+-----+-----------+
-    |Total                                                                    | 5615|   0| 5658|         43|
+    |Total                                                                    | 5423|   0| 5466|         43|
     +-------------------------------------------------------------------------+-----+----+-----+-----------+
 
 

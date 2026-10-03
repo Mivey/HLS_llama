@@ -4,7 +4,7 @@
 == Synthesis Summary Report of 'transformer_cu'
 ================================================================
 + General Information: 
-    * Date:           Sat Oct  3 16:35:28 2026
+    * Date:           Sat Oct  3 17:32:49 2026
     * Version:        2025.2 (Build 6295257 on Nov 14 2025)
     * Project:        combo_cu
     * Solution:       hls (Vitis Kernel Flow Target)
@@ -17,7 +17,7 @@
 |                                 Modules                                 |  Issue |                     | Iteration|         |   Trip   |          |        Latency       |       |           |           |              |               |          |
 |                                 & Loops                                 |  Type  |    Violation Type   |  Latency | Interval|   Count  | Pipelined| (cycles) |    (ns)   | Slack |   BRAM    |    DSP    |      FF      |      LUT      |   URAM   |
 +-------------------------------------------------------------------------+--------+---------------------+----------+---------+----------+----------+----------+-----------+-------+-----------+-----------+--------------+---------------+----------+
-|+ transformer_cu                                                         |  Timing|                    -|         -|        -|         -|        no|         -|          -|  -0.06|  187 (60%)|  318 (68%)|  149042 (49%)|  276939 (184%)|  86 (55%)|
+|+ transformer_cu                                                         |  Timing|                    -|         -|        -|         -|        no|         -|          -|  -0.07|  187 (60%)|  318 (68%)|  148691 (49%)|  276425 (183%)|  86 (55%)|
 | + transformer_cu_Pipeline_WL_fsm                                        |       -|                    -|         -|        -|         -|       yes|         -|          -|   0.06|          -|    4 (~0%)|     910 (~0%)|      789 (~0%)|         -|
 |  o WL_fsm                                                               |      II|    Memory Dependency|         9|        2|         -|       yes|         -|          -|   2.31|          -|          -|             -|              -|         -|
 | + transformer_cu_Pipeline_2                                             |       -|                    -|         -|        -|         -|       yes|       194|    640.200|   0.36|          -|          -|      19 (~0%)|       31 (~0%)|         -|
@@ -106,27 +106,27 @@
 |      o mha_ws_stream_out_xb                                             |       -|                    -|         4|        1|         4|       yes|         6|     19.800|   2.31|          -|          -|             -|              -|         -|
 |   + vec_down_converter_float_4ul_16ul_s                                 |       -|                    -|         -|      193|         -|    rewind|       195|    643.500|   0.03|          -|          -|     527 (~0%)|      428 (~0%)|         -|
 |    o mha_WAR_store                                                      |       -|                    -|         3|        1|       192|       yes|       193|    636.900|   2.31|          -|          -|             -|              -|         -|
-|  + calc_loop*                                                           |  Timing|                    -|         -|        -|         -|  dataflow|         -|          -|  -0.06|    16 (5%)|   83 (17%)|   63450 (21%)|    90765 (60%)|  32 (20%)|
-|   + mm2ds_input_data_ap_uint_512_0_2_s*                                 |  Timing|                    -|         -|        -|         -|  dataflow|         -|          -|  -0.05|          -|          -|    2754 (~0%)|      1617 (1%)|         -|
+|  + calc_loop*                                                           |  Timing|                    -|         -|        -|         -|  dataflow|         -|          -|  -0.07|    16 (5%)|   83 (17%)|   63314 (21%)|    90765 (60%)|  32 (20%)|
+|   + mm2ds_input_data_ap_uint_512_0_2_s*                                 |  Timing|                    -|         -|        -|         -|  dataflow|         -|          -|  -0.07|          -|          -|    2686 (~0%)|      1611 (1%)|         -|
 |    + mm2ds_get_data_ap_uint_512_0_2_s                                   |  Timing|                    -|         -|        -|         -|        no|         -|          -|  -0.05|          -|          -|    1464 (~0%)|      863 (~0%)|         -|
 |     + mm2ds_get_data_ap_uint_512_0_2_Pipeline_AXI4_TXFR_FRAME_READ      |  Timing|                    -|         -|        -|         -|       yes|         -|          -|  -0.05|          -|          -|    1260 (~0%)|      613 (~0%)|         -|
 |      o AXI4_TXFR_FRAME_READ                                             |       -|                    -|       146|        1|         -|       yes|         -|          -|   2.31|          -|          -|             -|              -|         -|
-|    + mm2ds_split_data_ap_uint_512_s                                     |       -|                    -|         -|        -|         -|        no|         -|          -|   0.03|          -|          -|     752 (~0%)|      424 (~0%)|         -|
-|     + mm2ds_split_data_ap_uint_512_Pipeline_AXI4_TXFR                   |       -|                    -|         -|        -|         -|       yes|         -|          -|   0.03|          -|          -|     650 (~0%)|      256 (~0%)|         -|
-|      o AXI4_TXFR                                                        |      II|    Memory Dependency|         3|        2|         -|       yes|         -|          -|   2.31|          -|          -|             -|              -|         -|
-|   + mm2ds_input_data_ap_uint_512_1_2_s*                                 |  Timing|                    -|         -|        -|         -|  dataflow|         -|          -|  -0.05|          -|          -|    2627 (~0%)|      1626 (1%)|         -|
-|    + mm2ds_get_data_ap_uint_512_1_2_s                                   |  Timing|                    -|         -|        -|         -|        no|         -|          -|  -0.05|          -|          -|    1337 (~0%)|      872 (~0%)|         -|
-|     + mm2ds_get_data_ap_uint_512_1_2_Pipeline_AXI4_TXFR_FRAME_READ      |  Timing|                    -|         -|        -|         -|       yes|         -|          -|  -0.05|          -|          -|    1132 (~0%)|      589 (~0%)|         -|
-|      o AXI4_TXFR_FRAME_READ                                             |       -|                    -|        82|        1|         -|       yes|         -|          -|   2.31|          -|          -|             -|              -|         -|
-|    + mm2ds_split_data_ap_uint_512_1                                     |       -|                    -|         -|        -|         -|        no|         -|          -|   0.03|          -|          -|     752 (~0%)|      424 (~0%)|         -|
-|     + mm2ds_split_data_ap_uint_512_1_Pipeline_AXI4_TXFR                 |       -|                    -|         -|        -|         -|       yes|         -|          -|   0.03|          -|          -|     650 (~0%)|      256 (~0%)|         -|
-|      o AXI4_TXFR                                                        |      II|    Memory Dependency|         3|        2|         -|       yes|         -|          -|   2.31|          -|          -|             -|              -|         -|
-|   + quantizer_kernel                                                    |  Timing|                    -|         -|     1651|         -|        no|      1651|  5.448e+03|  -0.04|     8 (2%)|    13 (2%)|    19889 (6%)|    55568 (36%)|         -|
-|    + dataflow_parent_loop_proc                                          |  Timing|                    -|         -|     1536|         -|        no|      1649|  5.442e+03|  -0.04|     8 (2%)|    13 (2%)|    19706 (6%)|    55479 (36%)|         -|
-|     o VITIS_LOOP_133_1                                                  |       -|                    -|       161|       48|        32|  dataflow|      1648|  5.438e+03|   2.31|          -|          -|             -|              -|         -|
-|      + dataflow_in_loop_VITIS_LOOP_133_1_1*                             |  Timing|                    -|         -|       48|         -|  dataflow|       158|    521.400|  -0.04|     8 (2%)|    13 (2%)|    19654 (6%)|    55363 (36%)|         -|
-|       + debug_abs_intake8                                               |       -|                    -|         -|       16|         -|    rewind|       158|    521.400|   0.09|          -|          -|     705 (~0%)|      174 (~0%)|         -|
-|        o group_scaling                                                  |       -|                    -|       142|        1|        16|       yes|       156|    514.800|   2.31|          -|          -|             -|              -|         -|
+|    + mm2ds_split_data_ap_uint_512_s                                     |  Timing|                    -|         -|        -|         -|        no|         -|          -|  -0.07|          -|          -|     684 (~0%)|      418 (~0%)|         -|
+|     + mm2ds_split_data_ap_uint_512_Pipeline_AXI4_TXFR                   |  Timing|                    -|         -|        -|         -|       yes|         -|          -|  -0.07|          -|          -|     582 (~0%)|      250 (~0%)|         -|
+|      o AXI4_TXFR                                                        |       -|                    -|         3|        1|         -|       yes|         -|          -|   2.31|          -|          -|             -|              -|         -|
+|   + mm2ds_input_data_ap_uint_512_1_2_s*                                 |  Timing|                    -|         -|        -|         -|  dataflow|         -|          -|  -0.07|          -|          -|    2687 (~0%)|      1644 (1%)|         -|
+|    + mm2ds_get_data_ap_uint_512_1_2_s                                   |  Timing|                    -|         -|        -|         -|        no|         -|          -|  -0.05|          -|          -|    1465 (~0%)|      896 (~0%)|         -|
+|     + mm2ds_get_data_ap_uint_512_1_2_Pipeline_AXI4_TXFR_FRAME_READ      |  Timing|                    -|         -|        -|         -|       yes|         -|          -|  -0.05|          -|          -|    1260 (~0%)|      613 (~0%)|         -|
+|      o AXI4_TXFR_FRAME_READ                                             |       -|                    -|       146|        1|         -|       yes|         -|          -|   2.31|          -|          -|             -|              -|         -|
+|    + mm2ds_split_data_ap_uint_512_1                                     |  Timing|                    -|         -|        -|         -|        no|         -|          -|  -0.07|          -|          -|     684 (~0%)|      418 (~0%)|         -|
+|     + mm2ds_split_data_ap_uint_512_1_Pipeline_AXI4_TXFR                 |  Timing|                    -|         -|        -|         -|       yes|         -|          -|  -0.07|          -|          -|     582 (~0%)|      250 (~0%)|         -|
+|      o AXI4_TXFR                                                        |       -|                    -|         3|        1|         -|       yes|         -|          -|   2.31|          -|          -|             -|              -|         -|
+|   + quantizer_kernel                                                    |  Timing|                    -|         -|     1587|         -|        no|      1587|  5.237e+03|  -0.04|     8 (2%)|    13 (2%)|    19761 (6%)|    55556 (36%)|         -|
+|    + dataflow_parent_loop_proc                                          |  Timing|                    -|         -|     1536|         -|        no|      1585|  5.230e+03|  -0.04|     8 (2%)|    13 (2%)|    19578 (6%)|    55467 (36%)|         -|
+|     o VITIS_LOOP_133_1                                                  |       -|                    -|        97|       48|        32|  dataflow|      1584|  5.227e+03|   2.31|          -|          -|             -|              -|         -|
+|      + dataflow_in_loop_VITIS_LOOP_133_1_1*                             |  Timing|                    -|         -|       48|         -|  dataflow|        94|    310.200|  -0.04|     8 (2%)|    13 (2%)|    19526 (6%)|    55351 (36%)|         -|
+|       + debug_abs_intake8                                               |       -|                    -|         -|       16|         -|    rewind|        94|    310.200|   0.09|          -|          -|     577 (~0%)|      162 (~0%)|         -|
+|        o group_scaling                                                  |       -|                    -|        78|        1|        16|       yes|        92|    303.600|   2.31|          -|          -|             -|              -|         -|
 |       + max_finder9                                                     |       -|                    -|         -|       34|         -|        no|        34|    112.200|   0.19|          -|    1 (~0%)|     6201 (2%)|      3150 (2%)|         -|
 |        + max_finder9_Pipeline_mf_intake                                 |       -|                    -|         -|        -|         -|       yes|        17|     56.100|   0.37|          -|          -|    2054 (~0%)|       28 (~0%)|         -|
 |         o mf_intake                                                     |       -|                    -|         1|        1|        16|       yes|        15|     49.500|   2.31|          -|          -|             -|              -|         -|
@@ -197,11 +197,11 @@
 |                  |            | (SW->HW)   |               |         |        |          | Bitwidth  | Burst Length | Burst Length | Outstanding | Outstanding |                   |
 +------------------+------------+------------+---------------+---------+--------+----------+-----------+--------------+--------------+-------------+-------------+-------------------+
 | m_axi_D_W_GEMM_0 | READ_ONLY  | 512 -> 512 | 64            | 128     | slave  | 0        | 512       | 64           | 2            | 64          | 1           | URAM=8            |
-| m_axi_D_W_GEMM_1 | READ_ONLY  | 512 -> 512 | 64            | 64      | slave  | 0        | 512       | 64           | 2            | 64          | 1           | URAM=8            |
+| m_axi_D_W_GEMM_1 | READ_ONLY  | 512 -> 512 | 64            | 128     | slave  | 0        | 512       | 64           | 2            | 64          | 1           | URAM=8            |
 | m_axi_kc_gemm    | READ_WRITE | 512 -> 512 | 64            | 64      | slave  | 0        | 512       | 64           | 8            | 64          | 16          | URAM=8            |
 | m_axi_token_val  | READ_WRITE | 32 -> 32   | 64            | 64      | slave  | 0        | 512       | 1            | 1            | 1           | 1           |                   |
 | m_axi_vc_gemm    | READ_WRITE | 512 -> 512 | 64            | 64      | slave  | 0        | 512       | 64           | 8            | 64          | 16          | URAM=8            |
-| m_axi_w_n_t_gemm | READ_WRITE | 128 -> 128 | 64            | 128     | slave  | 0        | 512       | 256          | 16           | 16          | 16          | URAM=2            |
+| m_axi_w_n_t_gemm | READ_WRITE | 128 -> 128 | 64            | 64      | slave  | 0        | 512       | 256          | 16           | 16          | 16          | URAM=2            |
 +------------------+------------+------------+---------------+---------+--------+----------+-----------+--------------+--------------+-------------+-------------+-------------------+
 
 * S_AXILITE Interfaces
@@ -414,14 +414,14 @@
 |    empty_164_fu_126_p2                                                 |     |        | empty_164                   | add       | fabric                   | 0       |
 |    exitcond95_fu_132_p2                                                |     |        | exitcond95                  | seteq     | auto                     | 0       |
 |  + transformer_cu_Pipeline_mm2mm_writer                                | 0   |        |                             |           |                          |         |
-|    add_ln408_fu_163_p2                                                 |     |        | add_ln408                   | add       | fabric                   | 0       |
-|    icmp_ln408_fu_169_p2                                                |     |        | icmp_ln408                  | seteq     | auto                     | 0       |
+|    add_ln408_fu_161_p2                                                 |     |        | add_ln408                   | add       | fabric                   | 0       |
+|    icmp_ln408_fu_167_p2                                                |     |        | icmp_ln408                  | seteq     | auto                     | 0       |
 |  + transformer_cu_Pipeline_mm2mm_writer8                               | 0   |        |                             |           |                          |         |
-|    add_ln423_fu_163_p2                                                 |     |        | add_ln423                   | add       | fabric                   | 0       |
-|    icmp_ln423_fu_169_p2                                                |     |        | icmp_ln423                  | seteq     | auto                     | 0       |
+|    add_ln423_fu_161_p2                                                 |     |        | add_ln423                   | add       | fabric                   | 0       |
+|    icmp_ln423_fu_167_p2                                                |     |        | icmp_ln423                  | seteq     | auto                     | 0       |
 |  + transformer_cu_Pipeline_mm2mm_writer9                               | 0   |        |                             |           |                          |         |
-|    add_ln423_fu_163_p2                                                 |     |        | add_ln423                   | add       | fabric                   | 0       |
-|    icmp_ln423_fu_169_p2                                                |     |        | icmp_ln423                  | seteq     | auto                     | 0       |
+|    add_ln423_fu_161_p2                                                 |     |        | add_ln423                   | add       | fabric                   | 0       |
+|    icmp_ln423_fu_167_p2                                                |     |        | icmp_ln423                  | seteq     | auto                     | 0       |
 |  + rmsnorm_kernel                                                      | 26  |        |                             |           |                          |         |
 |   + rms_mm2s_data                                                      | 0   |        |                             |           |                          |         |
 |    + rms_mm2s_data_Pipeline_AXI4_to_STREAM                             | 0   |        |                             |           |                          |         |
@@ -848,30 +848,30 @@
 |    + mha_weighted_sum_Pipeline_mha_pos                                 | 76  |        |                             |           |                          |         |
 |      fadd_32ns_32ns_32_2_primitive_dsp_1_U597                          | 1   |        | tmp                         | fadd      | primitivedsp             | 1       |
 |      fadd_32ns_32ns_32_2_primitive_dsp_1_U598                          | 1   |        | tmp_42                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U599                          | 1   |        | tmp_43                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U600                          | 1   |        | tmp_44                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U601                          | 1   |        | tmp_45                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U602                          | 1   |        | tmp_46                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U603                          | 1   |        | tmp_47                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U604                          | 1   |        | tmp_48                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U605                          | 1   |        | tmp_49                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U606                          | 1   |        | tmp_50                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U607                          | 1   |        | tmp_51                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U608                          | 1   |        | tmp_52                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U597                          | 1   |        | tmp_53                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U598                          | 1   |        | tmp_54                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U599                          | 1   |        | tmp_55                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U600                          | 1   |        | tmp_56                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U601                          | 1   |        | tmp_57                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U602                          | 1   |        | tmp_58                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U603                          | 1   |        | tmp_59                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U604                          | 1   |        | tmp_60                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U605                          | 1   |        | tmp_61                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U606                          | 1   |        | tmp_62                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U607                          | 1   |        | tmp_63                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U608                          | 1   |        | tmp_64                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U597                          | 1   |        | tmp_65                      | fadd      | primitivedsp             | 1       |
-|      fadd_32ns_32ns_32_2_primitive_dsp_1_U598                          | 1   |        | tmp_66                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U597                          | 1   |        | tmp_43                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U598                          | 1   |        | tmp_44                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U599                          | 1   |        | tmp_45                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U600                          | 1   |        | tmp_46                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U601                          | 1   |        | tmp_47                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U602                          | 1   |        | tmp_48                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U603                          | 1   |        | tmp_49                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U604                          | 1   |        | tmp_50                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U605                          | 1   |        | tmp_51                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U606                          | 1   |        | tmp_52                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U607                          | 1   |        | tmp_53                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U608                          | 1   |        | tmp_54                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U597                          | 1   |        | tmp_55                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U598                          | 1   |        | tmp_56                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U599                          | 1   |        | tmp_57                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U600                          | 1   |        | tmp_58                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U601                          | 1   |        | tmp_59                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U602                          | 1   |        | tmp_60                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U603                          | 1   |        | tmp_61                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U604                          | 1   |        | tmp_62                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U605                          | 1   |        | tmp_63                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U606                          | 1   |        | tmp_64                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U607                          | 1   |        | tmp_65                      | fadd      | primitivedsp             | 1       |
+|      fadd_32ns_32ns_32_2_primitive_dsp_1_U608                          | 1   |        | tmp_66                      | fadd      | primitivedsp             | 1       |
 |      fadd_32ns_32ns_32_2_primitive_dsp_1_U599                          | 1   |        | tmp_67                      | fadd      | primitivedsp             | 1       |
 |      fadd_32ns_32ns_32_2_primitive_dsp_1_U600                          | 1   |        | tmp_68                      | fadd      | primitivedsp             | 1       |
 |      fadd_32ns_32ns_32_2_primitive_dsp_1_U601                          | 1   |        | tmp_69                      | fadd      | primitivedsp             | 1       |
@@ -1081,39 +1081,39 @@
 |    + mm2ds_split_data_ap_uint_512_s                                    | 0   |        |                             |           |                          |         |
 |      sub_ln377_fu_75_p2                                                |     |        | sub_ln377                   | sub       | fabric                   | 0       |
 |     + mm2ds_split_data_ap_uint_512_Pipeline_AXI4_TXFR                  | 0   |        |                             |           |                          |         |
-|       add_ln377_fu_113_p2                                              |     |        | add_ln377                   | add       | fabric                   | 0       |
-|       icmp_ln377_fu_104_p2                                             |     |        | icmp_ln377                  | setlt     | auto                     | 0       |
-|       icmp_ln382_fu_120_p2                                             |     |        | icmp_ln382                  | setlt     | auto                     | 0       |
-|       j_fu_126_p2                                                      |     |        | j                           | add       | fabric                   | 0       |
-|       icmp_ln386_fu_132_p2                                             |     |        | icmp_ln386                  | seteq     | auto                     | 0       |
-|       j_6_fu_148_p3                                                    |     |        | j_6                         | select    | auto_sel                 | 0       |
+|       add_ln377_fu_100_p2                                              |     |        | add_ln377                   | add       | fabric                   | 0       |
+|       icmp_ln377_fu_110_p2                                             |     |        | icmp_ln377                  | setlt     | auto                     | 0       |
+|       icmp_ln382_fu_126_p2                                             |     |        | icmp_ln382                  | setlt     | auto                     | 0       |
+|       j_fu_132_p2                                                      |     |        | j                           | add       | fabric                   | 0       |
+|       icmp_ln386_fu_138_p2                                             |     |        | icmp_ln386                  | seteq     | auto                     | 0       |
+|       j_6_fu_144_p3                                                    |     |        | j_6                         | select    | auto_sel                 | 0       |
 |   + mm2ds_input_data_ap_uint_512_1_2_s                                 | 0   |        |                             |           |                          |         |
 |    + mm2ds_get_data_ap_uint_512_1_2_s                                  | 0   |        |                             |           |                          |         |
-|      add_ln328_fu_142_p2                                               |     |        | add_ln328                   | add       | fabric                   | 0       |
-|      empty_177_fu_100_p2                                               |     |        | empty_177                   | setgt     | auto                     | 0       |
-|      smax_fu_106_p3                                                    |     |        | smax                        | select    | auto_sel                 | 0       |
-|      p_sub_fu_132_p2                                                   |     |        | p_sub                       | sub       | fabric                   | 0       |
+|      add_ln328_fu_144_p2                                               |     |        | add_ln328                   | add       | fabric                   | 0       |
+|      empty_177_fu_102_p2                                               |     |        | empty_177                   | setgt     | auto                     | 0       |
+|      smax_fu_108_p3                                                    |     |        | smax                        | select    | auto_sel                 | 0       |
+|      p_sub_fu_134_p2                                                   |     |        | p_sub                       | sub       | fabric                   | 0       |
 |     + mm2ds_get_data_ap_uint_512_1_2_Pipeline_AXI4_TXFR_FRAME_READ     | 0   |        |                             |           |                          |         |
-|       add_ln331_fu_186_p2                                              |     |        | add_ln331                   | add       | fabric                   | 0       |
-|       icmp_ln331_fu_192_p2                                             |     |        | icmp_ln331                  | seteq     | auto                     | 0       |
-|       icmp_ln335_fu_208_p2                                             |     |        | icmp_ln335                  | seteq     | auto                     | 0       |
-|       or_ln331_fu_214_p2                                               |     |        | or_ln331                    | or        | auto                     | 0       |
-|       add_ln331_1_fu_220_p2                                            |     |        | add_ln331_1                 | add       | fabric                   | 0       |
-|       select_ln331_fu_226_p3                                           |     |        | select_ln331                | select    | auto_sel                 | 0       |
-|       sub_ln332_fu_276_p2                                              |     |        | sub_ln332                   | sub       | fabric                   | 0       |
-|       add_ln332_fu_318_p2                                              |     |        | add_ln332                   | add       | fabric                   | 0       |
-|       add_ln332_1_fu_334_p2                                            |     |        | add_ln332_1                 | add       | fabric                   | 0       |
-|       add_ln335_fu_234_p2                                              |     |        | add_ln335                   | add       | fabric                   | 0       |
-|       select_ln335_fu_240_p3                                           |     |        | select_ln335                | select    | auto_sel                 | 0       |
+|       add_ln331_fu_188_p2                                              |     |        | add_ln331                   | add       | fabric                   | 0       |
+|       icmp_ln331_fu_194_p2                                             |     |        | icmp_ln331                  | seteq     | auto                     | 0       |
+|       icmp_ln335_fu_210_p2                                             |     |        | icmp_ln335                  | seteq     | auto                     | 0       |
+|       or_ln331_fu_216_p2                                               |     |        | or_ln331                    | or        | auto                     | 0       |
+|       add_ln331_1_fu_222_p2                                            |     |        | add_ln331_1                 | add       | fabric                   | 0       |
+|       select_ln331_fu_228_p3                                           |     |        | select_ln331                | select    | auto_sel                 | 0       |
+|       sub_ln332_fu_278_p2                                              |     |        | sub_ln332                   | sub       | fabric                   | 0       |
+|       add_ln332_fu_320_p2                                              |     |        | add_ln332                   | add       | fabric                   | 0       |
+|       add_ln332_1_fu_336_p2                                            |     |        | add_ln332_1                 | add       | fabric                   | 0       |
+|       add_ln335_fu_236_p2                                              |     |        | add_ln335                   | add       | fabric                   | 0       |
+|       select_ln335_fu_242_p3                                           |     |        | select_ln335                | select    | auto_sel                 | 0       |
 |    + mm2ds_split_data_ap_uint_512_1                                    | 0   |        |                             |           |                          |         |
 |      sub_ln377_fu_75_p2                                                |     |        | sub_ln377                   | sub       | fabric                   | 0       |
 |     + mm2ds_split_data_ap_uint_512_1_Pipeline_AXI4_TXFR                | 0   |        |                             |           |                          |         |
-|       add_ln377_fu_113_p2                                              |     |        | add_ln377                   | add       | fabric                   | 0       |
-|       icmp_ln377_fu_104_p2                                             |     |        | icmp_ln377                  | setlt     | auto                     | 0       |
-|       icmp_ln382_fu_120_p2                                             |     |        | icmp_ln382                  | setlt     | auto                     | 0       |
-|       j_fu_126_p2                                                      |     |        | j                           | add       | fabric                   | 0       |
-|       icmp_ln386_fu_132_p2                                             |     |        | icmp_ln386                  | seteq     | auto                     | 0       |
-|       j_8_fu_148_p3                                                    |     |        | j_8                         | select    | auto_sel                 | 0       |
+|       add_ln377_fu_100_p2                                              |     |        | add_ln377                   | add       | fabric                   | 0       |
+|       icmp_ln377_fu_110_p2                                             |     |        | icmp_ln377                  | setlt     | auto                     | 0       |
+|       icmp_ln382_fu_126_p2                                             |     |        | icmp_ln382                  | setlt     | auto                     | 0       |
+|       j_fu_132_p2                                                      |     |        | j                           | add       | fabric                   | 0       |
+|       icmp_ln386_fu_138_p2                                             |     |        | icmp_ln386                  | seteq     | auto                     | 0       |
+|       j_8_fu_144_p3                                                    |     |        | j_8                         | select    | auto_sel                 | 0       |
 |   + quantizer_kernel                                                   | 13  |        |                             |           |                          |         |
 |     sub_ln130_fu_121_p2                                                |     |        | sub_ln130                   | sub       | fabric                   | 0       |
 |     sub_ln130_1_fu_147_p2                                              |     |        | sub_ln130_1                 | sub       | fabric                   | 0       |
@@ -1121,10 +1121,10 @@
 |    + dataflow_parent_loop_proc                                         | 13  |        |                             |           |                          |         |
 |     + dataflow_in_loop_VITIS_LOOP_133_1_1                              | 13  |        |                             |           |                          |         |
 |      + debug_abs_intake8                                               | 0   |        |                             |           |                          |         |
-|        add_ln12_fu_209_p2                                              |     |        | add_ln12                    | add       | fabric                   | 0       |
-|        add_ln12_1_fu_246_p2                                            |     |        | add_ln12_1                  | add       | fabric                   | 0       |
-|        add_ln12_2_fu_218_p2                                            |     |        | add_ln12_2                  | add       | fabric                   | 0       |
-|        icmp_ln12_fu_224_p2                                             |     |        | icmp_ln12                   | seteq     | auto                     | 0       |
+|        add_ln12_fu_207_p2                                              |     |        | add_ln12                    | add       | fabric                   | 0       |
+|        add_ln12_1_fu_244_p2                                            |     |        | add_ln12_1                  | add       | fabric                   | 0       |
+|        add_ln12_2_fu_216_p2                                            |     |        | add_ln12_2                  | add       | fabric                   | 0       |
+|        icmp_ln12_fu_222_p2                                             |     |        | icmp_ln12                   | seteq     | auto                     | 0       |
 |      + max_finder9                                                     | 1   |        |                             |           |                          |         |
 |        fcmp_32ns_32ns_1_1_no_dsp_1_x_U1058                             |     |        | cmp                         | fcmp      | auto                     | 0       |
 |        select_ln71_fu_950_p3                                           |     |        | select_ln71                 | select    | auto_sel                 | 0       |
@@ -2533,7 +2533,6 @@
 | LOOP_FLATTEN    |                                                                                                                                                                                                                                                                                                        | loop VITIS_LOOP_483_1 (./mha_forward.h:483:21) in mha_interweave<float, 16ul>.11 (mha_forward.h:483)                                                                                                                                                                                                                              | pipeline mha_forward.h:486    |
 | LOOP_FLATTEN    |                                                                                                                                                                                                                                                                                                        | loop ROPE_MAIN (./mha_forward.h:714:3) in rope_kernel<float, 16ul, 768> (mha_forward.h:714)                                                                                                                                                                                                                                       | pipeline mha_forward.h:723    |
 | ARRAY_PARTITION | dim=2 type=complete variable=res_con                                                                                                                                                                                                                                                                   | variable res_con in transformer_cu (transformer_kernel.cpp:326)                                                                                                                                                                                                                                                                   | pipeline rmsnorm.h:51         |
-| PIPELINE        |                                                                                                                                                                                                                                                                                                        | loop AXI4_TXFR (./mha_forward.h:377:2) in mm2ds_split_data<ap_uint<512> > (mha_forward.h:377)                                                                                                                                                                                                                                     | syn.compile.pipeline_loops=64 |
 | PIPELINE        |                                                                                                                                                                                                                                                                                                        | loop anonymous (mha.cpp:146:33) in mha_weighted_sum (mha.cpp:146)                                                                                                                                                                                                                                                                 | syn.compile.pipeline_loops=64 |
 +-----------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------------------------+
 
@@ -2684,6 +2683,7 @@
 | PIPELINE           | ii=1                                                                                                                                                                                           | in mm2ds_get_data (mha_forward.h:336)          |
 | PIPELINE           | ii=1                                                                                                                                                                                           | in amm2ds_split_data (mha_forward.h:356)       |
 | PIPELINE           | ii=1                                                                                                                                                                                           | in amm2ds_split_data (mha_forward.h:362)       |
+| PIPELINE           | ii=1                                                                                                                                                                                           | in mm2ds_split_data (mha_forward.h:378)        |
 | DATAFLOW           |                                                                                                                                                                                                | in mm2ds_input_data (mha_forward.h:395)        |
 | STREAM             | variable=dout depth=32                                                                                                                                                                         | in mm2ds_input_data (mha_forward.h:397)        |
 | PIPELINE           | ii=1                                                                                                                                                                                           | in mm2mm_store (mha_forward.h:409)             |
@@ -2770,8 +2770,8 @@
 | AGGREGATE          | variable = data_out                                                                                                                                                                            | in transformer_cu (transformer_kernel.cpp:240) |
 | INTERFACE          | mode=m_axi port=tokens bundle=w_n_t_gemm depth=nTOK_OUT_DEPTH offset=slave max_write_burst_length=16 max_read_burst_length=(4096/SM_DW*8)                                                      | in transformer_cu (transformer_kernel.cpp:249) |
 | INTERFACE          | mode=m_axi port=w_0 bundle=D_W_GEMM_0 depth=WIDE_DEPTH latency=128 max_read_burst_length=(4096/MAX_DW*8) max_write_burst_length=2 num_read_outstanding=64 num_write_outstanding=1 offset=slave | in transformer_cu (transformer_kernel.cpp:251) |
-| INTERFACE          | mode=m_axi port=w_1 bundle=D_W_GEMM_1 depth=WIDE_DEPTH offset=slave max_read_burst_length=(4096/MAX_DW * 8) num_read_outstanding=64 num_write_outstanding=1 max_write_burst_length=2           | in transformer_cu (transformer_kernel.cpp:253) |
-| INTERFACE          | mode=m_axi port=weights bundle=w_n_t_gemm depth=RMS_DEPTH latency=128 max_read_burst_length=(4096/SM_DW*8) offset=slave                                                                        | in transformer_cu (transformer_kernel.cpp:254) |
+| INTERFACE          | mode=m_axi port=w_1 bundle=D_W_GEMM_1 depth=WIDE_DEPTH latency=128 max_read_burst_length=(4096/MAX_DW*8) max_write_burst_length=2 num_read_outstanding=64 num_write_outstanding=1 offset=slave | in transformer_cu (transformer_kernel.cpp:253) |
+| INTERFACE          | mode=m_axi port=weights bundle=w_n_t_gemm depth=RMS_DEPTH max_read_burst_length=(4096/SM_DW*8) offset=slave                                                                                    | in transformer_cu (transformer_kernel.cpp:254) |
 | INTERFACE          | mode=m_axi port=value_cache bundle=vc_gemm depth=CACHE_DEPTH offset=slave max_read_burst_length=(4096/MAX_DW * 8) max_write_burst_length=(512/MAX_DW * 8) num_read_outstanding=64              | in transformer_cu (transformer_kernel.cpp:255) |
 | INTERFACE          | mode=m_axi port=key_cache bundle=kc_gemm depth=CACHE_DEPTH offset=slave max_read_burst_length=(4096/MAX_DW * 8) max_write_burst_length=(512/MAX_DW * 8) num_read_outstanding=64                | in transformer_cu (transformer_kernel.cpp:256) |
 | INTERFACE          | mode=m_axi port=curr_token bundle=token_val depth=1024 offset=slave max_read_burst_length=1 max_write_burst_length=1 num_read_outstanding=1 num_write_outstanding=1                            | in transformer_cu (transformer_kernel.cpp:257) |

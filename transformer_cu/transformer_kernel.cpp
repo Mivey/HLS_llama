@@ -250,8 +250,8 @@ void transformer_cu(
   // #pragma HLS INTERFACE mode=m_axi port=w_sf_0         bundle=D_TOK_W_SF_0     depth=HD_SF_DEPTH     offset=slave max_read_burst_length=(1024/MAX_DW * 8)    num_read_outstanding=4
 #pragma HLS INTERFACE mode=m_axi port=w_0 bundle=D_W_GEMM_0 depth=WIDE_DEPTH latency=128 max_read_burst_length=(4096/MAX_DW*8) max_write_burst_length=2 num_read_outstanding=64 num_write_outstanding=1 offset=slave
   // #pragma HLS INTERFACE mode=m_axi port=w_sf_1         bundle=D_TOK_W_SF_1       depth=HD_SF_DEPTH     offset=slave max_read_burst_length=(1024/MAX_DW * 8)    num_read_outstanding=4
-  #pragma HLS INTERFACE mode=m_axi port=w_1           bundle=D_W_GEMM_1     depth=WIDE_DEPTH   offset=slave max_read_burst_length=(4096/MAX_DW * 8)     num_read_outstanding=64 num_write_outstanding=1 max_write_burst_length=2
-#pragma HLS INTERFACE mode=m_axi port=weights bundle=w_n_t_gemm depth=RMS_DEPTH latency=128 max_read_burst_length=(4096/SM_DW*8) offset=slave
+#pragma HLS INTERFACE mode=m_axi port=w_1 bundle=D_W_GEMM_1 depth=WIDE_DEPTH latency=128 max_read_burst_length=(4096/MAX_DW*8) max_write_burst_length=2 num_read_outstanding=64 num_write_outstanding=1 offset=slave
+#pragma HLS INTERFACE mode=m_axi port=weights bundle=w_n_t_gemm depth=RMS_DEPTH max_read_burst_length=(4096/SM_DW*8) offset=slave
   #pragma HLS INTERFACE mode=m_axi port=value_cache    bundle=vc_gemm        depth=CACHE_DEPTH      offset=slave max_read_burst_length=(4096/MAX_DW * 8)  max_write_burst_length=(512/MAX_DW * 8)	num_read_outstanding=64 
   #pragma HLS INTERFACE mode=m_axi port=key_cache      bundle=kc_gemm        depth=CACHE_DEPTH      offset=slave max_read_burst_length=(4096/MAX_DW * 8)  max_write_burst_length=(512/MAX_DW * 8)	num_read_outstanding=64 
 	#pragma HLS INTERFACE mode=m_axi port=curr_token 			bundle=token_val depth=MODEL_SEQUENCE_LEN offset=slave max_read_burst_length=1 max_write_burst_length=1 num_read_outstanding=1 num_write_outstanding=1
