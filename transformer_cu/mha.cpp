@@ -1,5 +1,6 @@
 
 #include "mha_forward.h"
+#include <hls_math.h>
 
 /*
 In the orignial design, Karpathy used a 'Token-Major' memory layout. 
@@ -238,6 +239,10 @@ void mha_kernel(s_fdata_v_t &output,//
 	
 	#pragma HLS DATAFLOW
 	s_mfdata_v_t s_kc_data, s_kc_ddr, s_vc_data, s_vc_ddr;
+	#pragma HLS STREAM variable= s_kc_data depth=64
+	#pragma HLS STREAM variable= s_vc_data depth=64
+	#pragma HLS STREAM variable= s_kc_ddr depth=64
+	#pragma HLS STREAM variable= s_vc_ddr depth=64
 
 	mha_init(s_query, s_key_cache_in, s_value_cache_in, tokens, POS);
 	
