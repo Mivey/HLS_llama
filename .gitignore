@@ -77,11 +77,17 @@ transformer_cu/combo_cu/**
 # Allow Git to look into the report folder path
 !transformer_cu/combo_cu/hls/
 !transformer_cu/combo_cu/hls/syn/
+!transformer_cu/combo_cu/hls/impl/
+!transformer_cu/combo_cu/hls/impl/misc/
+!transformer_cu/combo_cu/hls/impl/misc/drivers/
+!transformer_cu/combo_cu/hls/impl/misc/drivers/transformer_cu_v1_0/
+!transformer_cu/combo_cu/hls/impl/misc/drivers/transformer_cu_v1_0/src/
 !transformer_cu/combo_cu/hls/syn/report/
 !transformer_cu/testbench/weights/
 
 # Un-ignore your specific file
 !transformer_cu/combo_cu/hls/syn/report/transformer_cu_csynth.rpt
+!transformer_cu/combo_cu/hls/impl/misc/drivers/transformer_cu_v1_0/src/*
 !transformer_cu/combo_cu/hls/syn/report/csynth.rpt
 # !transformer_cu/testbench/weights/token_embedding.bin
 man_tcu.cpp
