@@ -18,55 +18,6 @@
 #endif
 #include "compute_units.h"
 
-// Globals
-int GS = 0;
-
-// ----------------------------------------------------------------------------
-// File IO
-//
-// Only the 256-byte header is parsed here, for the tokenizer's vocab_size and
-// the step clamp. The engine re-reads and validates the header itself against
-// the geometry the kernel was synthesized for, and owns the weight repack.
-
-void read_checkpoint(const char* checkpoint, Config* config,
-                     int* fd, float** data, ssize_t* file_size) {
-    *fd = -1;
-    *data = NULL;
-    *file_size = 0;
-
-    FILE *file = fopen(checkpoint, "rb");
-    if (!file) { fprintf(stderr, "Couldn't open file %s\n", checkpoint); exit(EXIT_FAILURE); }
-
-    uint32_t magic_number;
-    if (fread(&magic_number, sizeof(uint32_t), 1, file) != 1) { exit(EXIT_FAILURE); }
-    if (magic_number != 0x616b3432) { fprintf(stderr, "Bad magic number\n"); exit(EXIT_FAILURE); }
-
-    int version;
-    if (fread(&version, sizeof(int), 1, file) != 1) { exit(EXIT_FAILURE); }
-    if (version != 2) { fprintf(stderr, "Bad version %d, need version 2\n", version); exit(EXIT_FAILURE); }
-
-    if (fread(config, sizeof(Config), 1, file) != 1) { exit(EXIT_FAILURE); }
-
-    uint8_t shared_classifier;
-    if (fread(&shared_classifier, sizeof(uint8_t), 1, file) != 1) { exit(EXIT_FAILURE); }
-
-    int group_size;
-    if (fread(&group_size, sizeof(int), 1, file) != 1) { exit(EXIT_FAILURE); }
-    GS = group_size;
-
-    fseek(file, 0, SEEK_END);
-    *file_size = ftell(file);
-    fclose(file);
-}
-
-void build_transformer(Transformer *t, const char* checkpoint_path) {
-    read_checkpoint(checkpoint_path, &t->config, &t->fd, &t->data, &t->file_size);
-}
-
-void free_transformer(Transformer* t) {
-    if (t->fd != -1) { close(t->fd); }
-}
-
 // ----------------------------------------------------------------------------
 // The Byte Pair Encoding (BPE) Tokenizer
 
@@ -226,29 +177,8 @@ void encode(Tokenizer* t, char *text, int8_t bos, int8_t eos, int *tokens, int *
 // step; argmax / top-p selection happens in ss_final() on the device.
 
 typedef struct {
-    float prob;
-    int index;
-} ProbIndex;
-
-typedef struct {
-    int vocab_size;
-    ProbIndex* probindex;
-    float temperature;
-    float topp;
     unsigned long long rng_state;
 } Sampler;
-
-void build_sampler(Sampler* sampler, int vocab_size, float temperature, float topp, unsigned long long rng_seed) {
-    sampler->vocab_size = vocab_size;
-    sampler->temperature = temperature;
-    sampler->topp = topp;
-    sampler->rng_state = rng_seed;
-    sampler->probindex = (ProbIndex*) malloc(sampler->vocab_size * sizeof(ProbIndex));
-}
-
-void free_sampler(Sampler* sampler) {
-    free(sampler->probindex);
-}
 
 unsigned int random_u32(unsigned long long *state) {
     *state ^= *state >> 12;
@@ -272,10 +202,8 @@ long time_in_ms() {
 // ----------------------------------------------------------------------------
 // generation loop
 //
-// newgen() is a template over the engine type, so it drives FastForward
-// (xrt::ip) and RunForward (xrt::kernel) identically. It has to be included
-// after Tokenizer / Sampler / decode / safe_printf / encode / random_f32 /
-// time_in_ms are declared.
+// newgen() is templated on the engine; it must be included after Tokenizer,
+// Sampler, decode, safe_printf, encode, random_f32 and time_in_ms.
 
 #include "generate_loop.h"
 
@@ -288,117 +216,75 @@ void error_usage() {
     fprintf(stderr, "Example: fastforward stories110M_q8.bin llama_pen.xclbin -n 256 -i \"Once upon a time\"\n");
     fprintf(stderr, "Options:\n");
     fprintf(stderr, "  -t <float>  temperature (default 1.0, 0 = greedy)\n");
-    fprintf(stderr, "  -p <float>  top-p  [IGNORED: ss_final() hardcodes 0.9]\n");
+    fprintf(stderr, "  -p <float>  top-p  [IGNORED: the kernel hardcodes 0.9]\n");
     fprintf(stderr, "  -s <int>    rng seed\n");
     fprintf(stderr, "  -n <int>    number of steps (default 256)\n");
     fprintf(stderr, "  -i <string> input prompt\n");
     fprintf(stderr, "  -z <string> tokenizer path (default tokenizer.bin)\n");
-    fprintf(stderr, "  -m <string> mode: generate\n");
     fprintf(stderr, "  -d <int>    XRT device index (default 0)\n");
-    fprintf(stderr, "  -e <string> engine: ip (FastForward, default) | kernel (RunForward)\n");
-    fprintf(stderr, "  -g <int>    memory bank for xrt::ip buffers (default 0, ip engine only)\n");
-    fprintf(stderr, "  -G <int>    second bank for a duplicated weight blob (-1 = share, default)\n");
     exit(EXIT_FAILURE);
 }
 
 int main(int argc, char *argv[]) {
-    const char *checkpoint_path = NULL;
+    if (argc < 3) error_usage();
+    const char *checkpoint_path = argv[1];
+    const std::string xclbin_file = argv[2];
     const char *tokenizer_path  = "tokenizer.bin";
     float temperature = 1.0f;
-    float topp        = 0.9f;
+    float topp        = llama::kKernelTopP;
     int   steps       = 256;
     char *prompt      = NULL;
     unsigned long long rng_seed = 0;
-    const char *mode   = "generate";
-    const char *engine = "ip";
-    std::string xclbin_file;
-    int device_index  = 0;
-    int mem_group     = 0;
-    int alt_mem_group = -1;
-
-    if (argc >= 3) {
-        checkpoint_path = argv[1];
-        xclbin_file     = argv[2];
-    } else {
-        error_usage();
-    }
+    int   device_index = 0;
 
     for (int i = 3; i < argc; i += 2) {
-        if (i + 1 >= argc)        { error_usage(); }
-        if (argv[i][0] != '-')    { error_usage(); }
-        if (strlen(argv[i]) != 2) { error_usage(); }
+        if (i + 1 >= argc || argv[i][0] != '-' || strlen(argv[i]) != 2) error_usage();
         switch (argv[i][1]) {
-            case 't': temperature   = atof(argv[i + 1]); break;
-            case 'p': topp          = atof(argv[i + 1]); break;
-            case 's': rng_seed      = atoi(argv[i + 1]); break;
-            case 'n': steps         = atoi(argv[i + 1]); break;
-            case 'i': prompt        = argv[i + 1];       break;
-            case 'z': tokenizer_path= argv[i + 1];       break;
-            case 'm': mode          = argv[i + 1];       break;
-            case 'd': device_index  = atoi(argv[i + 1]); break;
-            case 'e': engine        = argv[i + 1];       break;
-            case 'g': mem_group     = atoi(argv[i + 1]); break;
-            case 'G': alt_mem_group = atoi(argv[i + 1]); break;
+            case 't': temperature    = atof(argv[i + 1]); break;
+            case 'p': topp           = atof(argv[i + 1]); break;
+            case 's': rng_seed       = atoi(argv[i + 1]); break;
+            case 'n': steps          = atoi(argv[i + 1]); break;
+            case 'i': prompt         = argv[i + 1];       break;
+            case 'z': tokenizer_path = argv[i + 1];       break;
+            case 'd': device_index   = atoi(argv[i + 1]); break;
             default:  error_usage();
         }
     }
 
-    if (rng_seed <= 0) rng_seed = (unsigned int)time(NULL);
+    if (rng_seed == 0) rng_seed = (unsigned int)time(NULL);
     if (temperature < 0.0f) temperature = 0.0f;
-    if (topp < 0.0f || 1.0f < topp) topp = 0.9f;
     if (steps < 0) steps = 0;
-
-    if (topp != llama_hw::KERNEL_TOPP) {
+    if (topp != llama::kKernelTopP)
         fprintf(stderr, "[host] note: -p %.3f ignored; the kernel hardcodes top-p = %.3f\n",
-                topp, llama_hw::KERNEL_TOPP);
-    }
-
-    Transformer transformer;
-    build_transformer(&transformer, checkpoint_path);
-    if (steps == 0 || steps > transformer.config.seq_len) steps = transformer.config.seq_len;
-
-    Tokenizer tokenizer;
-    build_tokenizer(&tokenizer, tokenizer_path, transformer.config.vocab_size);
-
-    Sampler sampler;
-    build_sampler(&sampler, transformer.config.vocab_size, temperature, topp, rng_seed);
-
-    std::cout<< " ███████╗ █████╗ ███████╗████████╗    ███████╗ ██████╗ ██████╗ ██╗    ██╗ █████╗ ██████╗ ██████╗ "<<std::endl;
-    std::cout<< " ██╔════╝██╔══██╗██╔════╝╚══██╔══╝    ██╔════╝██╔═══██╗██╔══██╗██║    ██║██╔══██╗██╔══██╗██╔══██╗"<<std::endl;
-    std::cout<< " █████╗  ███████║███████╗   ██║       █████╗  ██║   ██║██████╔╝██║ █╗ ██║███████║██████╔╝██║  ██║"<<std::endl;
-    std::cout<< " ██╔══╝  ██╔══██║╚════██║   ██║       ██╔══╝  ██║   ██║██╔══██╗██║███╗██║██╔══██║██╔══██╗██║  ██║"<<std::endl;
-    std::cout<< " ██║     ██║  ██║███████║   ██║       ██║     ╚██████╔╝██║  ██║╚███╔███╔╝██║  ██║██║  ██║██████╔╝"<<std::endl;
-    std::cout<< " ╚═╝     ╚═╝  ╚═╝╚══════╝   ╚═╝       ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ "<<std::endl;
-
-    if (strcmp(mode, "generate") != 0) {
-        fprintf(stderr, "unknown mode: %s\n", mode);
-        error_usage();
-    }
+                topp, llama::kKernelTopP);
 
     int rc = 0;
     try {
-        if (strcmp(engine, "kernel") == 0) {
-            std::cout << "Init RunForward (xrt::kernel)\n";
-            RunForward f(device_index, xclbin_file, checkpoint_path);
-            f.set_temperature(temperature);
-            newgen(&transformer, &tokenizer, &sampler, prompt, steps, f);
-        } else if (strcmp(engine, "ip") == 0) {
-            std::cout << "Init FastForward (xrt::ip)\n";
-            FastForward f(device_index, xclbin_file, checkpoint_path, mem_group, alt_mem_group);
-            f.set_temperature(temperature);
-            newgen(&transformer, &tokenizer, &sampler, prompt, steps, f);
-        } else {
-            fprintf(stderr, "unknown engine: %s (expected 'ip' or 'kernel')\n", engine);
-            error_usage();
-        }
+        // Validates the checkpoint against the kernel's geometry before we
+        // touch the device.
+        const llama::Checkpoint ck = llama::scan_checkpoint(checkpoint_path);
+        if (steps == 0 || steps > ck.cfg.seq_len) steps = ck.cfg.seq_len;
+
+        Tokenizer tokenizer;
+        build_tokenizer(&tokenizer, tokenizer_path, ck.cfg.vocab_size);
+        Sampler sampler{rng_seed};
+
+        std::cout<< " ███████╗ █████╗ ███████╗████████╗    ███████╗ ██████╗ ██████╗ ██╗    ██╗ █████╗ ██████╗ ██████╗ "<<std::endl;
+        std::cout<< " ██╔════╝██╔══██╗██╔════╝╚══██╔══╝    ██╔════╝██╔═══██╗██╔══██╗██║    ██║██╔══██╗██╔══██╗██╔══██╗"<<std::endl;
+        std::cout<< " █████╗  ███████║███████╗   ██║       █████╗  ██║   ██║██████╔╝██║ █╗ ██║███████║██████╔╝██║  ██║"<<std::endl;
+        std::cout<< " ██╔══╝  ██╔══██║╚════██║   ██║       ██╔══╝  ██║   ██║██╔══██╗██║███╗██║██╔══██║██╔══██╗██║  ██║"<<std::endl;
+        std::cout<< " ██║     ██║  ██║███████║   ██║       ██║     ╚██████╔╝██║  ██║╚███╔███╔╝██║  ██║██║  ██║██████╔╝"<<std::endl;
+        std::cout<< " ╚═╝     ╚═╝  ╚═╝╚══════╝   ╚═╝       ╚═╝      ╚═════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ "<<std::endl;
+
+        llama::TransformerCU cu(xclbin_file, checkpoint_path, device_index);
+        cu.set_temperature(temperature);
+        newgen(&tokenizer, &sampler, prompt, steps, cu);
+
+        free_tokenizer(&tokenizer);
     } catch (const std::exception& e) {
         fprintf(stderr, "\n[host] fatal: %s\n", e.what());
         rc = 1;
     }
-
-    free_sampler(&sampler);
-    free_tokenizer(&tokenizer);
-    free_transformer(&transformer);
     return rc;
 }
 #endif
