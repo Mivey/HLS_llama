@@ -291,6 +291,18 @@ void mm2s_input_data(hls::stream<T> &out, T *in, const int COUNT, const int CURR
 }
 
 template<typename T>//
+void mm2s_input_data(hls::stream<T> &out, const T *in, const int COUNT){
+  
+	
+  AXI4_to_STREAM:
+  for (int i = 0; i < COUNT; i++) {
+    #pragma HLS PIPELINE II=1
+    #pragma HLS LOOP_TRIPCOUNT min=(1331712) max=(1818048)
+    out.write(in[i]);
+  }
+}
+
+template<typename T>//
 void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, T *in, const int COUNT, const int CURR_LAYER, const int offset){
   
 	// const int COUNT = MODEL_ELEMENTS * ((MODEL_ELEMENTS * 4 + MODEL_HIDDEN_DIM * 3) * MODEL_NUM_LAYERS + MODEL_TOKENS) * 17 / (16 * MAX_QUANT_ELEM);
@@ -320,22 +332,22 @@ void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, T *in, const int CO
 }
 
 template<typename T, int PORT, int NPORT>//
-void mm2ds_get_data(hls::stream<T> &out, T *in, const int N_FRAMES, const int offset){
+void mm2ds_get_data(hls::stream<T> &out, const T *in, const int N_FRAMES, const int offset){
 	
 	const int STRIDE = TXFR_FRAME * NPORT; // 204 * 2
 	
 	// #pragma HLS BIND_OP variable=tot_off op=mul impl=dsp latency=2 // WTF
-	T* base = in + offset + PORT * TXFR_FRAME;
+	const T* base = in + offset + PORT * TXFR_FRAME;
 	
 	AXI4_TXFR:
 	for (int i = 0; i < N_FRAMES; i++) {
-		T* frame = base + i * STRIDE;
+		const T* frame = base + i * STRIDE;
 
 		FRAME_READ:
 		for (int j = 0; j < TXFR_FRAME; j++) {
 			#pragma HLS PIPELINE II=1
-			T beat = frame[j];
-			out.write(beat);
+			// const T beat = frame[j];
+			out.write(frame[j]);
 		}
 	}
 }
@@ -390,7 +402,7 @@ void mm2ds_split_data(hls::stream<T> &sf, hls::stream<T> &w, hls::stream<T> &in,
 }
 
 template<typename T, int PORT, int NPORT>//
-void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, T *in, const int N_FRAMES, const int offset){
+void mm2ds_input_data(hls::stream<T> &sf, hls::stream<T> &w, const T *in, const int N_FRAMES, const int offset){
   
 	#pragma HLS DATAFLOW
 	hls::stream<T> dout;
@@ -774,7 +786,9 @@ void swiglu_kernel(s_fdata_v_t &output, fdata_v_t *w1w3);
 void transformer_cu(  
     fdata_v_t *tokens, 
     // mfdata_v_t *w_sf_0, idata_v_t *w_0, mfdata_v_t *w_sf_1, idata_v_t *w_1, 
-		wide_t *w_0, wide_t *w_1,
+		// wide_t *w_0, wide_t *w_1,
+    s_wide_t &s_w_0, s_wide_t &s_w_1, 
+    s_wide_t &s_sf_0, s_wide_t &s_sf_1,
     fdata_v_t *weights, mfdata_v_t *key_cache, mfdata_v_t *value_cache, 
     const int POS, 
 		// int QKV_W, const int QKV_sf_W,

@@ -6,7 +6,7 @@
   "cpuInstance": "cortex-a72",
   "cpuType": "cortex-a72",
   "os": "linux",
-  "sysroot": "/home/lolwut/project/2026/pl/llama_kernel_sysroot/sysroots/cortexa72-cortexa53-amd-linux",
+  "sysroot": "/home/lolwut/project/2026/HLS/HLS_llama/System_Assets/sysroot/sysroots/cortexa72-cortexa53-amd-linux",
   "configuration": {
     "componentType": "HOST",
     "hostToolchainConfigurations": [

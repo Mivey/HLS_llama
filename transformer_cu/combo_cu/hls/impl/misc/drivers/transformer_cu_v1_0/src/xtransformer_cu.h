@@ -102,10 +102,6 @@ void XTransformer_cu_DisableAutoRestart(XTransformer_cu *InstancePtr);
 
 void XTransformer_cu_Set_tokens(XTransformer_cu *InstancePtr, u64 Data);
 u64 XTransformer_cu_Get_tokens(XTransformer_cu *InstancePtr);
-void XTransformer_cu_Set_w_0(XTransformer_cu *InstancePtr, u64 Data);
-u64 XTransformer_cu_Get_w_0(XTransformer_cu *InstancePtr);
-void XTransformer_cu_Set_w_1(XTransformer_cu *InstancePtr, u64 Data);
-u64 XTransformer_cu_Get_w_1(XTransformer_cu *InstancePtr);
 void XTransformer_cu_Set_weights(XTransformer_cu *InstancePtr, u64 Data);
 u64 XTransformer_cu_Get_weights(XTransformer_cu *InstancePtr);
 void XTransformer_cu_Set_key_cache(XTransformer_cu *InstancePtr, u64 Data);

@@ -2,23 +2,10 @@
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
-      "-fhlstoplevel=transformer_cu",
-      "-c",
-      "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/sampler.cpp"
-    ],
-    "file": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/sampler.cpp"
-  },
-  {
-    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
-    "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
-      "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-hls-syn-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=transformer_cu",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/matmult.cpp"
@@ -28,23 +15,10 @@
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
-      "-fhlstoplevel=transformer_cu",
-      "-c",
-      "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/mha_forward.cpp"
-    ],
-    "file": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/mha_forward.cpp"
-  },
-  {
-    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
-    "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
-      "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-hls-syn-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=transformer_cu",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/rmsnorm.cpp"
@@ -54,10 +28,10 @@
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-hls-syn-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=transformer_cu",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/transformer_kernel.cpp"
@@ -67,10 +41,10 @@
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-hls-syn-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=transformer_cu",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/mha.cpp"
@@ -80,10 +54,10 @@
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-hls-syn-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=transformer_cu",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/swiglu_kernel.cpp"
@@ -93,10 +67,23 @@
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls",
-      "-hls-syn-headers-dir=/tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-hls-syn-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=transformer_cu",
+      "-c",
+      "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/GeMV.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/GeMV.cpp"
+  },
+  {
+    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
+    "arguments": [
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
       "-fhlstoplevel=transformer_cu",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/quantizer.cpp"
@@ -106,10 +93,10 @@
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls-tb",
-      "-hls-sim-headers-dir=/tools/Xilinx/2025.2/Vitis/include",
+      "-hls-sim-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/include",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/testbench/tb_main.cpp"
     ],
@@ -118,10 +105,10 @@
   {
     "directory": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu",
     "arguments": [
-      "/tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
-      "--gcc-toolchain=/tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
       "-fhls-tb",
-      "-hls-sim-headers-dir=/tools/Xilinx/2025.2/Vitis/include",
+      "-hls-sim-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/include",
       "-c",
       "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/testbench/top_tb.cpp"
     ],

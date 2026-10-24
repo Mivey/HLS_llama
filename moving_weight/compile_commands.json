@@ -1,0 +1,15 @@
+[
+  {
+    "directory": "/home/lolwut/project/2026/HLS/HLS_llama/moving_weight",
+    "arguments": [
+      "/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/vcxx/libexec/clang++",
+      "--gcc-toolchain=/home/lolwut/Tools/Xilinx/2025.2/Vitis/tps/lnx64/gcc-8.3.0",
+      "-fhls",
+      "-hls-syn-headers-dir=/home/lolwut/Tools/Xilinx/2025.2/Vitis/common/technology/autopilot",
+      "-fhlstoplevel=data_mover_cu",
+      "-c",
+      "/home/lolwut/project/2026/HLS/HLS_llama/moving_weight/data_mover.cpp"
+    ],
+    "file": "/home/lolwut/project/2026/HLS/HLS_llama/moving_weight/data_mover.cpp"
+  }
+]

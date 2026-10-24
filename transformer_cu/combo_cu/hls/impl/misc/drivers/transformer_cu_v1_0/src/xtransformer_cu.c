@@ -105,44 +105,6 @@ u64 XTransformer_cu_Get_tokens(XTransformer_cu *InstancePtr) {
     return Data;
 }
 
-void XTransformer_cu_Set_w_0(XTransformer_cu *InstancePtr, u64 Data) {
-    Xil_AssertVoid(InstancePtr != NULL);
-    Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
-
-    XTransformer_cu_WriteReg(InstancePtr->Control_BaseAddress, XTRANSFORMER_CU_CONTROL_ADDR_W_0_DATA, (u32)(Data));
-    XTransformer_cu_WriteReg(InstancePtr->Control_BaseAddress, XTRANSFORMER_CU_CONTROL_ADDR_W_0_DATA + 4, (u32)(Data >> 32));
-}
-
-u64 XTransformer_cu_Get_w_0(XTransformer_cu *InstancePtr) {
-    u64 Data;
-
-    Xil_AssertNonvoid(InstancePtr != NULL);
-    Xil_AssertNonvoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
-
-    Data = XTransformer_cu_ReadReg(InstancePtr->Control_BaseAddress, XTRANSFORMER_CU_CONTROL_ADDR_W_0_DATA);
-    Data += (u64)XTransformer_cu_ReadReg(InstancePtr->Control_BaseAddress, XTRANSFORMER_CU_CONTROL_ADDR_W_0_DATA + 4) << 32;
-    return Data;
-}
-
-void XTransformer_cu_Set_w_1(XTransformer_cu *InstancePtr, u64 Data) {
-    Xil_AssertVoid(InstancePtr != NULL);
-    Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
-
-    XTransformer_cu_WriteReg(InstancePtr->Control_BaseAddress, XTRANSFORMER_CU_CONTROL_ADDR_W_1_DATA, (u32)(Data));
-    XTransformer_cu_WriteReg(InstancePtr->Control_BaseAddress, XTRANSFORMER_CU_CONTROL_ADDR_W_1_DATA + 4, (u32)(Data >> 32));
-}
-
-u64 XTransformer_cu_Get_w_1(XTransformer_cu *InstancePtr) {
-    u64 Data;
-
-    Xil_AssertNonvoid(InstancePtr != NULL);
-    Xil_AssertNonvoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);
-
-    Data = XTransformer_cu_ReadReg(InstancePtr->Control_BaseAddress, XTRANSFORMER_CU_CONTROL_ADDR_W_1_DATA);
-    Data += (u64)XTransformer_cu_ReadReg(InstancePtr->Control_BaseAddress, XTRANSFORMER_CU_CONTROL_ADDR_W_1_DATA + 4) << 32;
-    return Data;
-}
-
 void XTransformer_cu_Set_weights(XTransformer_cu *InstancePtr, u64 Data) {
     Xil_AssertVoid(InstancePtr != NULL);
     Xil_AssertVoid(InstancePtr->IsReady == XIL_COMPONENT_IS_READY);

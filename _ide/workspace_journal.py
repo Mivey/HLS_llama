@@ -1,19 +1,12 @@
-# 2026-04-26T20:59:00.604158229
+# 2026-10-24T10:11:19.369173642
 import vitis
 
 client = vitis.create_client()
 client.set_workspace(path="HLS_llama")
 
-comp = client.get_component(name="transformer_cu")
-comp.run(operation="SYNTHESIS")
+proj = client.get_sys_project(name="llama_project")
 
-comp.run(operation="SYNTHESIS")
+status = proj.clean(target="hw")
 
-cfg = client.get_config_file(path="/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/hls_config.cfg")
-
-cfg.set_value(section="hls", key="clock", value="3.2ns")
-
-comp.run(operation="SYNTHESIS")
-
-vitis.dispose()
+proj.build(target = "hw",build_comps = False)
 

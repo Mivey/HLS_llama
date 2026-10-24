@@ -1,0 +1,62 @@
+{
+  "modelVersion": "1.0",
+  "projectName": "ip_ff",
+  "platform": "/home/lolwut/project/2026/HLS/HLS_llama/System_Assets/vivado/testy/ff_vma_path.xsa",
+  "externalComponentRefs": [],
+  "components": [
+    {
+      "name": "hw_link",
+      "type": "HW_LINKER",
+      "configuration": {
+        "componentType": "HW_LINKER",
+        "containers": [
+          {
+            "name": "integration_platform",
+            "kernels": {},
+            "userXoKernels": {
+              "transformer_cu": "/home/lolwut/project/2026/HLS/HLS_llama/transformer_cu/combo_cu/transformer_cu.xo"
+            },
+            "aieComponents": [],
+            "userAieLibadfList": [],
+            "userVssList": [],
+            "cfgFiles": [
+              "fast_llama-link.cfg"
+            ]
+          }
+        ],
+        "vppLinkerConfigurations": [
+          {
+            "configId": "hw_link.default",
+            "options": [],
+            "containerOptions": {},
+            "buildDatafiles": []
+          }
+        ]
+      },
+      "useSysrootToolchain": false,
+      "templateFlow": "VITIS"
+    }
+  ],
+  "buildConfigurations": [
+    {
+      "id": "default",
+      "name": "Default",
+      "supportedTargets": [
+        "HW"
+      ],
+      "componentConfigMap": {
+        "hw_link": "hw_link.default"
+      }
+    }
+  ],
+  "activeBuildConfigId": "default",
+  "prePackageCommand": "",
+  "postPackageCommand": "",
+  "preLinkerCommand": "",
+  "postLinkerCommand": "",
+  "hostMode": "x86",
+  "isDirty": true,
+  "applicationFlow": "VITIS_INT_FLOW",
+  "templateFlow": "VITIS",
+  "buildOutputType": "VMA"
+}

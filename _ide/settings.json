@@ -5,6 +5,11 @@
 		"-I/tools/Xilinx/2025.2/Vitis/lnx64/tools/auto_cc/include",
 		"-I/home/lolwut/tools/Xilinx/2025.2/Vitis/include",
 		"-I/home/lolwut/tools/Xilinx/2025.2/Vitis/include/etc",
-		"-I/home/lolwut/tools/Xilinx/2025.2/Vitis/lnx64/tools/auto_cc/include"
-	]
+		"-I/home/lolwut/tools/Xilinx/2025.2/Vitis/lnx64/tools/auto_cc/include",
+		"-I/home/lolwut/Tools/Xilinx/2025.2/Vitis/include",
+		"-I/home/lolwut/Tools/Xilinx/2025.2/Vitis/include/etc",
+		"-I/home/lolwut/Tools/Xilinx/2025.2/Vitis/lnx64/tools/auto_cc/include"
+	],
+	"vitis.build.application –PlatformBuildDependency": "always",
+	"git.ignoreLimitWarning": true
 }
